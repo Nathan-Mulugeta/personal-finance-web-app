@@ -168,14 +168,32 @@ export async function recordPayment(recordId, paymentData) {
     throw new Error('Original transaction not found')
   }
 
+  // Get settings to determine payment category
+  const { getSettings } = await import('./settings')
+  const settings = await getSettings()
+  const borrowingPaymentCategoryId = settings.find(s => s.setting_key === 'BorrowingPaymentCategoryID')?.setting_value
+  const lendingPaymentCategoryId = settings.find(s => s.setting_key === 'LendingPaymentCategoryID')?.setting_value
+
+  // Determine category and type based on record type
+  let paymentCategoryId = null
+  let paymentType = 'Expense'
+
+  if (record.type === 'Borrowing') {
+    paymentCategoryId = borrowingPaymentCategoryId || originalTransaction.category_id
+    paymentType = 'Expense' // Paying back borrowing is an expense
+  } else if (record.type === 'Lending') {
+    paymentCategoryId = lendingPaymentCategoryId || originalTransaction.category_id
+    paymentType = 'Income' // Receiving payment for lending is income
+  }
+
   // Create payment transaction
   const paymentTransaction = await transactionsApi.createTransaction({
     accountId: originalTransaction.account_id,
-    categoryId: originalTransaction.category_id,
-    amount: -Math.abs(amount), // Negative for payment
+    categoryId: paymentCategoryId || null,
+    amount: record.type === 'Borrowing' ? -Math.abs(amount) : Math.abs(amount), // Negative for borrowing payment, positive for lending payment
     currency: record.currency,
     description: `Payment for ${record.type.toLowerCase()} to ${record.entity_name}${notes ? `: ${notes}` : ''}`,
-    type: 'Expense',
+    type: paymentType,
     status: 'Cleared',
   })
 

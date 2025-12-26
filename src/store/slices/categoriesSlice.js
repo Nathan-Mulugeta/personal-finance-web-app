@@ -114,15 +114,21 @@ const categoriesSlice = createSlice({
       })
       // Fetch category tree
       .addCase(fetchCategoryTree.pending, (state) => {
-        state.loading = true
+        if (!state.isInitialized) {
+          state.loading = true
+        } else {
+          state.backgroundLoading = true
+        }
         state.error = null
       })
       .addCase(fetchCategoryTree.fulfilled, (state, action) => {
         state.loading = false
+        state.backgroundLoading = false
         state.categoryTree = action.payload
       })
       .addCase(fetchCategoryTree.rejected, (state, action) => {
         state.loading = false
+        state.backgroundLoading = false
         state.error = action.payload
       })
       // Fetch category
@@ -146,8 +152,7 @@ const categoriesSlice = createSlice({
       .addCase(createCategory.fulfilled, (state, action) => {
         state.loading = false
         state.categories.push(action.payload)
-        // Rebuild tree
-        state.categoryTree = []
+        // Tree will be rebuilt by the refresh call
       })
       .addCase(createCategory.rejected, (state, action) => {
         state.loading = false
@@ -167,8 +172,7 @@ const categoriesSlice = createSlice({
         if (state.currentCategory?.category_id === action.payload.category_id) {
           state.currentCategory = action.payload
         }
-        // Rebuild tree
-        state.categoryTree = []
+        // Tree will be rebuilt by the refresh call
       })
       .addCase(updateCategory.rejected, (state, action) => {
         state.loading = false
@@ -185,8 +189,7 @@ const categoriesSlice = createSlice({
         if (state.currentCategory?.category_id === action.payload) {
           state.currentCategory = null
         }
-        // Rebuild tree
-        state.categoryTree = []
+        // Tree will be rebuilt by the refresh call
       })
       .addCase(deleteCategory.rejected, (state, action) => {
         state.loading = false

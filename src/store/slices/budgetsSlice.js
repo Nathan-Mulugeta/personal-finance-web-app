@@ -74,7 +74,9 @@ const initialState = {
   currentBudget: null,
   effectiveBudgets: {},
   loading: false,
+  backgroundLoading: false,
   error: null,
+  isInitialized: false,
 }
 
 const budgetsSlice = createSlice({
@@ -92,15 +94,22 @@ const budgetsSlice = createSlice({
     builder
       // Fetch budgets
       .addCase(fetchBudgets.pending, (state) => {
-        state.loading = true
+        if (!state.isInitialized) {
+          state.loading = true
+        } else {
+          state.backgroundLoading = true
+        }
         state.error = null
       })
       .addCase(fetchBudgets.fulfilled, (state, action) => {
         state.loading = false
+        state.backgroundLoading = false
         state.budgets = action.payload
+        state.isInitialized = true
       })
       .addCase(fetchBudgets.rejected, (state, action) => {
         state.loading = false
+        state.backgroundLoading = false
         state.error = action.payload
       })
       // Fetch budget

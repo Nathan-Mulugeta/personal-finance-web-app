@@ -20,3 +20,38 @@ export function calculateAccountBalance(openingBalance, transactions) {
   return balance
 }
 
+/**
+ * Calculate balances for all accounts from transactions
+ * @param {Array} accounts - Array of account objects
+ * @param {Array} transactions - Array of all transactions
+ * @returns {Object} Map of account_id to balance object
+ */
+export function calculateAllAccountBalances(accounts, transactions) {
+  const balances = {}
+  
+  accounts.forEach((account) => {
+    const accountTransactions = transactions.filter(
+      (txn) =>
+        txn.account_id === account.account_id &&
+        !txn.deleted_at &&
+        txn.status !== 'Cancelled'
+    )
+    
+    const balance = calculateAccountBalance(
+      account.opening_balance,
+      accountTransactions
+    )
+    
+    balances[account.account_id] = {
+      account_id: account.account_id,
+      name: account.name,
+      opening_balance: account.opening_balance,
+      current_balance: balance,
+      currency: account.currency,
+      last_updated: new Date().toISOString(),
+    }
+  })
+  
+  return balances
+}
+

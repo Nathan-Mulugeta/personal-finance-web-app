@@ -96,7 +96,9 @@ const initialState = {
   currentRecord: null,
   summary: null,
   loading: false,
+  backgroundLoading: false,
   error: null,
+  isInitialized: false,
 }
 
 const borrowingsLendingsSlice = createSlice({
@@ -114,15 +116,22 @@ const borrowingsLendingsSlice = createSlice({
     builder
       // Fetch records
       .addCase(fetchBorrowingLendingRecords.pending, (state) => {
-        state.loading = true
+        if (!state.isInitialized) {
+          state.loading = true
+        } else {
+          state.backgroundLoading = true
+        }
         state.error = null
       })
       .addCase(fetchBorrowingLendingRecords.fulfilled, (state, action) => {
         state.loading = false
+        state.backgroundLoading = false
         state.records = action.payload
+        state.isInitialized = true
       })
       .addCase(fetchBorrowingLendingRecords.rejected, (state, action) => {
         state.loading = false
+        state.backgroundLoading = false
         state.error = action.payload
       })
       // Fetch record

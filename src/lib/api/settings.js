@@ -102,6 +102,8 @@ export async function initializeDefaultSettings(userId) {
     { setting_key: 'BaseCurrency', setting_value: 'ETB' },
     { setting_key: 'BorrowingCategoryID', setting_value: '' },
     { setting_key: 'LendingCategoryID', setting_value: '' },
+    { setting_key: 'BorrowingPaymentCategoryID', setting_value: '' },
+    { setting_key: 'LendingPaymentCategoryID', setting_value: '' },
   ]
 
   const { error } = await supabase

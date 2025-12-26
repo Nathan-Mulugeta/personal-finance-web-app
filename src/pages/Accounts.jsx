@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -49,26 +49,26 @@ import {
 import { fetchSettings } from '../store/slices/settingsSlice';
 import { accountSchema } from '../schemas/accountSchema';
 import { ACCOUNT_TYPES, ACCOUNT_STATUSES } from '../lib/api/accounts';
-import * as reportingApi from '../lib/api/reporting';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
 import { formatCurrency } from '../utils/currencyConversion';
-import TrendingUpIcon from '@mui/icons-material/TrendingUp';
-import CurrencyExchangeIcon from '@mui/icons-material/CurrencyExchange';
 
 function Accounts() {
   const dispatch = useDispatch();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const { accounts, loading, backgroundLoading, isInitialized, error } =
+  const { accounts, loading, backgroundLoading, error, balances: accountBalances } =
     useSelector((state) => state.accounts);
   const { settings } = useSelector((state) => state.settings);
+  const { exchangeRates } = useSelector((state) => state.exchangeRates);
+  const appInitialized = useSelector((state) => state.appInit.isInitialized);
   const [openDialog, setOpenDialog] = useState(false);
   const [editingAccount, setEditingAccount] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [actionError, setActionError] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
-  const [balances, setBalances] = useState({});
-  const [summaryData, setSummaryData] = useState(null);
-  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
 
   const {
     register,
@@ -91,105 +91,104 @@ function Accounts() {
   const watchedType = watch('type');
   const watchedStatus = watch('status');
 
-  useEffect(() => {
-    // Only fetch if not already initialized
-    if (!isInitialized) {
-      dispatch(fetchAccounts({ status: 'Active' }));
-    } else {
-      // Background refresh
-      dispatch(fetchAccounts({ status: 'Active' }));
-    }
-    dispatch(fetchSettings());
-  }, [dispatch, isInitialized]);
+  const settingsInitialized = useSelector((state) => state.settings.isInitialized);
 
   useEffect(() => {
-    // Fetch balances for all accounts
-    const fetchBalances = async () => {
-      const balancePromises = accounts.map(async (account) => {
-        try {
-          const balance = await dispatch(
-            fetchAccountBalance(account.account_id)
-          ).unwrap();
-          return { accountId: account.account_id, balance };
-        } catch (err) {
-          console.error(
-            `Error fetching balance for ${account.account_id}:`,
-            err
-          );
-          return { accountId: account.account_id, balance: null };
+    // Only fetch if app initialization hasn't completed (data will be loaded during app initialization)
+    if (!appInitialized) {
+      dispatch(fetchAccounts({ status: 'Active' }));
+    }
+    // Settings are also loaded during initialization, but fetch if not initialized
+    if (!settingsInitialized) {
+      dispatch(fetchSettings());
+    }
+  }, [dispatch, appInitialized, settingsInitialized]);
+
+  // Calculate summary data from cached data
+  const summaryData = useMemo(() => {
+    if (accounts.length === 0) {
+      return null;
+    }
+
+    // Use cached balances from Redux
+    const balances = accountBalances || {};
+    
+    // Calculate currency totals
+    const currencyTotals = {};
+    accounts.forEach((account) => {
+      const balance = balances[account.account_id];
+      if (balance) {
+        const currency = account.currency;
+        if (!currencyTotals[currency]) {
+          currencyTotals[currency] = 0;
         }
-      });
-      const results = await Promise.all(balancePromises);
-      const balanceMap = {};
-      results.forEach(({ accountId, balance }) => {
-        balanceMap[accountId] = balance;
-      });
-      setBalances(balanceMap);
-    };
-
-    if (accounts.length > 0) {
-      fetchBalances();
-    }
-  }, [accounts, dispatch]);
-
-  useEffect(() => {
-    // Fetch summary data with currency conversions
-    const fetchSummary = async () => {
-      if (accounts.length === 0) {
-        setSummaryData(null);
-        return;
+        currencyTotals[currency] += balance.current_balance || 0;
       }
+    });
 
-      setSummaryLoading(true);
-      try {
-        const summary = await reportingApi.getAllAccountBalances();
-        setSummaryData(summary);
-      } catch (err) {
-        console.error('Error fetching summary:', err);
-        // Calculate per-currency totals from local balances as fallback
-        const currencyTotals = {};
-        accounts.forEach((account) => {
-          const balance = balances[account.account_id];
-          if (balance) {
-            const currency = account.currency;
-            if (!currencyTotals[currency]) {
-              currencyTotals[currency] = 0;
-            }
-            currencyTotals[currency] += balance.current_balance || 0;
+    const baseCurrency =
+      settings.find((s) => s.setting_key === 'BaseCurrency')?.setting_value || 'USD';
+
+    // Create accounts array with balances and conversions
+    const accountBalancesArray = accounts.map((account) => {
+      const balance = balances[account.account_id];
+      const currentBalance = balance?.current_balance || account.opening_balance || 0;
+      
+      let convertedBalance = null;
+      let exchangeRate = null;
+
+      if (account.currency === baseCurrency) {
+        convertedBalance = currentBalance;
+        exchangeRate = 1;
+      } else {
+        // Try to get latest exchange rate from cache (sorted by date)
+        const matchingRates = exchangeRates?.filter(
+          (er) =>
+            er.from_currency === account.currency.toUpperCase() &&
+            er.to_currency === baseCurrency.toUpperCase()
+        ) || [];
+        const rate = matchingRates.sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+        
+        if (rate) {
+          convertedBalance = currentBalance * rate.rate;
+          exchangeRate = rate.rate;
+        } else {
+          // Try reverse rate (sorted by date)
+          const reverseMatchingRates = exchangeRates?.filter(
+            (er) =>
+              er.from_currency === baseCurrency.toUpperCase() &&
+              er.to_currency === account.currency.toUpperCase()
+          ) || [];
+          const reverseRate = reverseMatchingRates.sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+          
+          if (reverseRate) {
+            convertedBalance = currentBalance / reverseRate.rate;
+            exchangeRate = 1 / reverseRate.rate;
           }
-        });
-        const baseCurrency =
-          settings.find((s) => s.setting_key === 'BaseCurrency')
-            ?.setting_value || 'USD';
-
-        // Create accounts array for display
-        const accountBalances = accounts.map((account) => {
-          const balance = balances[account.account_id];
-          return {
-            ...account,
-            current_balance: balance?.current_balance || 0,
-            currency: account.currency,
-            convertedBalance:
-              account.currency === baseCurrency
-                ? balance?.current_balance || 0
-                : null,
-          };
-        });
-
-        setSummaryData({
-          totalBalance: currencyTotals[baseCurrency] || 0,
-          baseCurrency,
-          accounts: accountBalances,
-        });
-      } finally {
-        setSummaryLoading(false);
+        }
       }
-    };
 
-    if (accounts.length > 0 && Object.keys(balances).length > 0) {
-      fetchSummary();
-    }
-  }, [accounts, balances, settings]);
+      return {
+        ...account,
+        current_balance: currentBalance,
+        currency: account.currency,
+        convertedBalance,
+        exchangeRate,
+      };
+    });
+
+    // Calculate total balance in base currency
+    const totalBalance = accountBalancesArray.reduce((sum, acc) => {
+      return sum + (acc.convertedBalance ?? 0);
+    }, 0);
+
+    return {
+      totalBalance,
+      baseCurrency,
+      accounts: accountBalancesArray,
+    };
+  }, [accounts, accountBalances, settings, exchangeRates]);
+
 
   const handleOpenDialog = (account = null) => {
     if (account) {
@@ -212,17 +211,23 @@ function Accounts() {
         status: 'Active',
       });
     }
+    setActionError(null);
+    setIsSubmitting(false);
     setOpenDialog(true);
   };
 
   const handleCloseDialog = () => {
     setOpenDialog(false);
     setEditingAccount(null);
+    setActionError(null);
+    setIsSubmitting(false);
     reset();
     dispatch(clearError());
   };
 
   const onSubmit = async (data) => {
+    setIsSubmitting(true);
+    setActionError(null);
     try {
       if (editingAccount) {
         await dispatch(
@@ -233,30 +238,41 @@ function Accounts() {
         ).unwrap();
       } else {
         await dispatch(createAccount(data)).unwrap();
+        // Account is already added to state with balance calculated
+        // No need to refetch - it will be included in next initialization
       }
       handleCloseDialog();
-      // Refresh in background
-      dispatch(fetchAccounts({ status: 'Active' }));
     } catch (err) {
-      // Error is handled by Redux state
       // Ignore browser extension errors (harmless)
       if (err?.message?.includes('Extension context invalidated')) {
+        setIsSubmitting(false);
         return;
       }
       console.error('Error saving account:', err);
+      const errorMessage = err?.message || 'Failed to save account. Please try again.';
+      setActionError(errorMessage);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleDelete = async () => {
     if (!deleteConfirm) return;
 
+    setIsDeleting(true);
+    setDeleteError(null);
     try {
       await dispatch(deleteAccount(deleteConfirm.account_id)).unwrap();
       setDeleteConfirm(null);
+      setDeleteError(null);
       // Refresh in background
       dispatch(fetchAccounts({ status: 'Active' }));
     } catch (err) {
       console.error('Error deleting account:', err);
+      const errorMessage = err?.message || 'Failed to delete account. Please try again.';
+      setDeleteError(errorMessage);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -310,193 +326,152 @@ function Accounts() {
 
       {/* Summary Section */}
       {accounts.length > 0 && (
-        <Grid container spacing={3} sx={{ mb: 4 }}>
-          {/* Total Balance in Base Currency */}
-          <Grid item xs={12} md={4}>
-            <Card elevation={2}>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                  <TrendingUpIcon
-                    sx={{ mr: 1, fontSize: 28, color: 'primary.main' }}
-                  />
-                  <Typography variant="h6" fontWeight="bold">
-                    Total Balance
-                  </Typography>
-                </Box>
-                {summaryLoading || !summaryData ? (
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      py: 3,
-                    }}
-                  >
-                    <CircularProgress size={24} sx={{ mr: 2 }} />
-                    <Typography variant="body2" color="text.secondary">
-                      Calculating...
-                    </Typography>
-                  </Box>
-                ) : (
-                  <>
-                    <Typography
-                      variant="h4"
-                      fontWeight="bold"
-                      sx={{ mb: 1 }}
-                      color={
-                        (summaryData.totalBalance || 0) >= 0
-                          ? 'success.main'
-                          : 'error.main'
+        <Box sx={{ mb: 4 }}>
+          {/* Header Row with Overall Balances and Total */}
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              mb: 3,
+            }}
+          >
+            <Typography variant="h5" fontWeight="bold">
+              Overall Balances
+            </Typography>
+            {summaryData && (
+              <Typography
+                variant="h5"
+                fontWeight="bold"
+                color={
+                  (summaryData.totalBalance || 0) >= 0
+                    ? 'success.main'
+                    : 'error.main'
+                }
+              >
+                {formatCurrency(
+                  summaryData.totalBalance || 0,
+                  summaryData.baseCurrency || 'USD'
+                )}
+              </Typography>
+            )}
+          </Box>
+
+          {/* Currency Summary Cards */}
+          {!summaryData ? (
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                py: 3,
+              }}
+            >
+              <Typography variant="body2" color="text.secondary">
+                No accounts available
+              </Typography>
+            </Box>
+          ) : (
+            <Grid container spacing={2}>
+              {(() => {
+                // Group accounts by currency and calculate totals
+                const currencyGroups = {};
+                summaryData.accounts?.forEach((account) => {
+                  const currency =
+                    account.currency || account.account_id?.currency;
+                  const balance = account.current_balance || 0;
+                  if (!currencyGroups[currency]) {
+                    currencyGroups[currency] = {
+                      currency,
+                      total: 0,
+                      count: 0,
+                    };
+                  }
+                  currencyGroups[currency].total += balance;
+                  currencyGroups[currency].count += 1;
+                });
+
+                // If no accounts in summaryData, calculate from local state
+                if (
+                  !summaryData.accounts ||
+                  summaryData.accounts.length === 0
+                ) {
+                  accounts.forEach((account) => {
+                    const balance = accountBalances[account.account_id];
+                    if (balance) {
+                      const currency = account.currency;
+                      if (!currencyGroups[currency]) {
+                        currencyGroups[currency] = {
+                          currency,
+                          total: 0,
+                          count: 0,
+                        };
                       }
+                      currencyGroups[currency].total +=
+                        balance.current_balance || 0;
+                      currencyGroups[currency].count += 1;
+                    }
+                  });
+                }
+
+                const currencyArray = Object.values(currencyGroups);
+
+                if (currencyArray.length === 0) {
+                  return (
+                    <Grid item xs={12}>
+                      <Typography variant="body2" color="text.secondary">
+                        No balances available
+                      </Typography>
+                    </Grid>
+                  );
+                }
+
+                return currencyArray.map((group) => (
+                  <Grid item xs={12} sm={6} md={4} key={group.currency}>
+                    <Paper
+                      elevation={0}
+                      sx={{
+                        p: 2,
+                        borderRadius: 2,
+                        backgroundColor: 'background.paper',
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        transition: 'all 0.2s',
+                        '&:hover': {
+                          borderColor: 'primary.main',
+                          boxShadow: 2,
+                        },
+                      }}
                     >
-                      {formatCurrency(
-                        summaryData.totalBalance || 0,
-                        summaryData.baseCurrency || 'USD'
-                      )}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      in {summaryData.baseCurrency || 'USD'}
-                    </Typography>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Per Currency Totals */}
-          <Grid item xs={12} md={8}>
-            <Card elevation={2}>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                  <CurrencyExchangeIcon
-                    sx={{ mr: 1, fontSize: 28, color: 'primary.main' }}
-                  />
-                  <Typography variant="h6" fontWeight="bold">
-                    Balances by Currency
-                  </Typography>
-                </Box>
-                {summaryLoading || !summaryData ? (
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      py: 3,
-                    }}
-                  >
-                    <CircularProgress size={24} sx={{ mr: 2 }} />
-                    <Typography variant="body2" color="text.secondary">
-                      Loading balances...
-                    </Typography>
-                  </Box>
-                ) : (
-                  <Grid container spacing={2}>
-                    {(() => {
-                      // Group accounts by currency and calculate totals
-                      const currencyGroups = {};
-                      summaryData.accounts?.forEach((account) => {
-                        const currency =
-                          account.currency || account.account_id?.currency;
-                        const balance = account.current_balance || 0;
-                        if (!currencyGroups[currency]) {
-                          currencyGroups[currency] = {
-                            currency,
-                            total: 0,
-                            count: 0,
-                          };
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        display="block"
+                        gutterBottom
+                        fontWeight="medium"
+                      >
+                        {group.currency}
+                      </Typography>
+                      <Typography
+                        variant="h6"
+                        fontWeight="bold"
+                        color={
+                          group.total >= 0 ? 'success.main' : 'error.main'
                         }
-                        currencyGroups[currency].total += balance;
-                        currencyGroups[currency].count += 1;
-                      });
-
-                      // If no accounts in summaryData, calculate from local state
-                      if (
-                        !summaryData.accounts ||
-                        summaryData.accounts.length === 0
-                      ) {
-                        accounts.forEach((account) => {
-                          const balance = balances[account.account_id];
-                          if (balance) {
-                            const currency = account.currency;
-                            if (!currencyGroups[currency]) {
-                              currencyGroups[currency] = {
-                                currency,
-                                total: 0,
-                                count: 0,
-                              };
-                            }
-                            currencyGroups[currency].total +=
-                              balance.current_balance || 0;
-                            currencyGroups[currency].count += 1;
-                          }
-                        });
-                      }
-
-                      const currencyArray = Object.values(currencyGroups);
-
-                      if (currencyArray.length === 0) {
-                        return (
-                          <Grid item xs={12}>
-                            <Typography variant="body2" color="text.secondary">
-                              No balances available
-                            </Typography>
-                          </Grid>
-                        );
-                      }
-
-                      return currencyArray.map((group) => (
-                        <Grid item xs={6} sm={4} key={group.currency}>
-                          <Paper
-                            elevation={0}
-                            sx={{
-                              p: 2,
-                              borderRadius: 2,
-                              backgroundColor: 'background.paper',
-                              border: '1px solid',
-                              borderColor: 'divider',
-                              transition: 'all 0.2s',
-                              '&:hover': {
-                                borderColor: 'primary.main',
-                                boxShadow: 2,
-                              },
-                            }}
-                          >
-                            <Typography
-                              variant="caption"
-                              color="text.secondary"
-                              display="block"
-                              gutterBottom
-                              fontWeight="medium"
-                            >
-                              {group.currency}
-                            </Typography>
-                            <Typography
-                              variant="h6"
-                              fontWeight="bold"
-                              color={
-                                group.total >= 0 ? 'success.main' : 'error.main'
-                              }
-                              sx={{ mb: 0.5 }}
-                            >
-                              {formatCurrency(group.total, group.currency)}
-                            </Typography>
-                            <Typography
-                              variant="caption"
-                              color="text.secondary"
-                            >
-                              {group.count} account
-                              {group.count !== 1 ? 's' : ''}
-                            </Typography>
-                          </Paper>
-                        </Grid>
-                      ));
-                    })()}
+                        sx={{ mb: 0.5 }}
+                      >
+                        {formatCurrency(group.total, group.currency)}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {group.count} account{group.count !== 1 ? 's' : ''}
+                      </Typography>
+                    </Paper>
                   </Grid>
-                )}
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
+                ));
+              })()}
+            </Grid>
+          )}
+        </Box>
       )}
 
       {accounts.length === 0 ? (
@@ -527,7 +502,7 @@ function Accounts() {
           {/* Mobile Card View */}
           <Box sx={{ display: { xs: 'block', md: 'none' } }}>
             {accounts.map((account) => {
-              const balance = balances[account.account_id];
+              const balance = accountBalances[account.account_id];
               return (
                 <Card key={account.account_id} sx={{ mb: 2 }}>
                   <CardContent>
@@ -583,7 +558,7 @@ function Accounts() {
                         <IconButton
                           size="small"
                           onClick={() => setDeleteConfirm(account)}
-                          color="error"
+                          sx={{ color: 'softRed.main' }}
                           disabled={account.status === 'Closed'}
                         >
                           <DeleteIcon fontSize="small" />
@@ -630,8 +605,19 @@ function Accounts() {
                             )}
                           </Typography>
                         ) : (
-                          <Typography variant="body2" color="text.secondary">
-                            Loading...
+                          <Typography
+                            variant="body2"
+                            fontWeight="medium"
+                            color={
+                              (account.opening_balance || 0) >= 0
+                                ? 'success.main'
+                                : 'error.main'
+                            }
+                          >
+                            {formatCurrency(
+                              account.opening_balance || 0,
+                              account.currency
+                            )}
                           </Typography>
                         )}
                       </Box>
@@ -661,7 +647,7 @@ function Accounts() {
               </TableHead>
               <TableBody>
                 {accounts.map((account) => {
-                  const balance = balances[account.account_id];
+                  const balance = accountBalances[account.account_id];
                   return (
                     <TableRow key={account.account_id} hover>
                       <TableCell>
@@ -694,8 +680,19 @@ function Accounts() {
                             )}
                           </Typography>
                         ) : (
-                          <Typography variant="body2" color="text.secondary">
-                            Loading...
+                          <Typography
+                            variant="body1"
+                            fontWeight="medium"
+                            color={
+                              (account.opening_balance || 0) >= 0
+                                ? 'success.main'
+                                : 'error.main'
+                            }
+                          >
+                            {formatCurrency(
+                              account.opening_balance || 0,
+                              account.currency
+                            )}
                           </Typography>
                         )}
                       </TableCell>
@@ -749,6 +746,11 @@ function Accounts() {
             {editingAccount ? 'Edit Account' : 'Create New Account'}
           </DialogTitle>
           <DialogContent>
+            {actionError && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {actionError}
+              </Alert>
+            )}
             <Grid container spacing={2} sx={{ mt: 1 }}>
               <Grid item xs={12}>
                 <TextField
@@ -838,9 +840,22 @@ function Accounts() {
             </Grid>
           </DialogContent>
           <DialogActions>
-            <Button onClick={handleCloseDialog}>Cancel</Button>
-            <Button type="submit" variant="contained">
-              {editingAccount ? 'Update' : 'Create'}
+            <Button onClick={handleCloseDialog} disabled={isSubmitting}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={isSubmitting}
+              startIcon={isSubmitting ? <CircularProgress size={20} color="inherit" /> : null}
+            >
+              {isSubmitting
+                ? editingAccount
+                  ? 'Updating...'
+                  : 'Creating...'
+                : editingAccount
+                ? 'Update'
+                : 'Create'}
             </Button>
           </DialogActions>
         </form>
@@ -849,7 +864,10 @@ function Accounts() {
       {/* Delete Confirmation Dialog */}
       <Dialog
         open={!!deleteConfirm}
-        onClose={() => setDeleteConfirm(null)}
+        onClose={() => {
+          setDeleteConfirm(null);
+          setDeleteError(null);
+        }}
         fullScreen={isMobile}
       >
         <DialogTitle>Delete Account</DialogTitle>
@@ -858,15 +876,34 @@ function Accounts() {
             Are you sure you want to delete{' '}
             <strong>{deleteConfirm?.name}</strong>?
           </Typography>
-          <Alert severity="error" sx={{ mt: 2 }}>
+          {deleteError && (
+            <Alert severity="error" sx={{ mt: 2 }}>
+              {deleteError}
+            </Alert>
+          )}
+          <Alert severity="warning" sx={{ mt: 2 }}>
             This action cannot be undone. You cannot delete accounts with
             existing transactions.
           </Alert>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteConfirm(null)}>Cancel</Button>
-          <Button onClick={handleDelete} color="error" variant="contained">
-            Delete
+          <Button
+            onClick={() => {
+              setDeleteConfirm(null);
+              setDeleteError(null);
+            }}
+            disabled={isDeleting}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleDelete}
+            color="error"
+            variant="contained"
+            disabled={isDeleting}
+            startIcon={isDeleting ? <CircularProgress size={20} color="inherit" /> : null}
+          >
+            {isDeleting ? 'Deleting...' : 'Delete'}
           </Button>
         </DialogActions>
       </Dialog>

@@ -25,7 +25,9 @@ export async function createTransaction(transactionData) {
   } = transactionData
 
   // Validation
-  if (!accountId || !categoryId || amount === undefined || !currency) {
+  // Allow null categoryId for Transfer Out/In transactions
+  const isTransferType = type === 'Transfer Out' || type === 'Transfer In'
+  if (!accountId || (!isTransferType && !categoryId) || amount === undefined || !currency) {
     throw new Error('Account ID, category ID, amount, and currency are required')
   }
   if (!TRANSACTION_TYPES.includes(type)) {
@@ -56,17 +58,19 @@ export async function createTransaction(transactionData) {
     throw new Error(`Currency must match account currency: ${account.currency}`)
   }
 
-  // Verify category exists and is active
-  const { data: category } = await supabase
-    .from('categories')
-    .select('*')
-    .eq('category_id', categoryId)
-    .eq('user_id', user.id)
-    .eq('status', 'Active')
-    .single()
+  // Verify category exists and is active (skip for transfer types with null category)
+  if (categoryId && !isTransferType) {
+    const { data: category } = await supabase
+      .from('categories')
+      .select('*')
+      .eq('category_id', categoryId)
+      .eq('user_id', user.id)
+      .eq('status', 'Active')
+      .single()
 
-  if (!category) {
-    throw new Error('Category not found or is not active')
+    if (!category) {
+      throw new Error('Category not found or is not active')
+    }
   }
 
   const transactionId = generateId('TXN')
@@ -115,14 +119,26 @@ async function autoCreateBorrowingLending(transaction, userId) {
   const lendingCategoryId = settings.find(s => s.setting_key === 'LendingCategoryID')?.setting_value
 
   // Check if transaction category matches borrowing or lending category
-  if (!borrowingCategoryId && !lendingCategoryId) {
+  // Handle empty strings and null values
+  const hasBorrowingCategory = borrowingCategoryId && borrowingCategoryId.trim() !== ''
+  const hasLendingCategory = lendingCategoryId && lendingCategoryId.trim() !== ''
+  
+  if (!hasBorrowingCategory && !hasLendingCategory) {
     return // No categories configured
   }
 
+  // Skip if transaction has no category
+  if (!transaction.category_id) {
+    return
+  }
+
   let recordType = null
-  if (transaction.category_id === borrowingCategoryId) {
+  // Compare category IDs (both should be strings)
+  const transactionCategoryId = String(transaction.category_id)
+  
+  if (hasBorrowingCategory && transactionCategoryId === String(borrowingCategoryId)) {
     recordType = 'Borrowing'
-  } else if (transaction.category_id === lendingCategoryId) {
+  } else if (hasLendingCategory && transactionCategoryId === String(lendingCategoryId)) {
     recordType = 'Lending'
   }
 
@@ -334,10 +350,15 @@ export async function getTransactionById(transactionId) {
     .eq('transaction_id', transactionId)
     .eq('user_id', user.id)
     .is('deleted_at', null)
-    .single()
 
   if (error) throw error
-  return data
+  
+  // Return null if no transaction found, otherwise return the first (and should be only) transaction
+  if (!data || data.length === 0) {
+    return null
+  }
+  
+  return data[0]
 }
 
 // Update transaction
@@ -407,17 +428,32 @@ export async function updateTransaction(transactionId, updates) {
   if (updates.description !== undefined) updateData.description = updates.description
   if (updates.type !== undefined) updateData.type = updates.type
   if (updates.status !== undefined) updateData.status = updates.status
+  if (updates.linkedTransactionId !== undefined) updateData.linked_transaction_id = updates.linkedTransactionId
+
+  // If no fields to update, return the existing transaction
+  if (Object.keys(updateData).length === 0) {
+    return transaction
+  }
 
   const { data, error } = await supabase
     .from('transactions')
     .update(updateData)
     .eq('transaction_id', transactionId)
     .eq('user_id', user.id)
-    .select()
-    .single()
+    .select('*')
 
   if (error) throw error
-  return data
+  
+  if (!data || data.length === 0) {
+    throw new Error('Transaction not found or could not be updated')
+  }
+  
+  if (data.length > 1) {
+    // This shouldn't happen, but handle it just in case
+    return data[0]
+  }
+  
+  return data[0]
 }
 
 // Soft delete transaction

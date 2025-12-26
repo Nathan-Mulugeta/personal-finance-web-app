@@ -51,7 +51,9 @@ const initialState = {
   transfers: [],
   currentTransfer: null,
   loading: false,
+  backgroundLoading: false,
   error: null,
+  isInitialized: false,
 }
 
 const transfersSlice = createSlice({
@@ -69,15 +71,22 @@ const transfersSlice = createSlice({
     builder
       // Fetch transfers
       .addCase(fetchTransfers.pending, (state) => {
-        state.loading = true
+        if (!state.isInitialized) {
+          state.loading = true
+        } else {
+          state.backgroundLoading = true
+        }
         state.error = null
       })
       .addCase(fetchTransfers.fulfilled, (state, action) => {
         state.loading = false
+        state.backgroundLoading = false
         state.transfers = action.payload
+        state.isInitialized = true
       })
       .addCase(fetchTransfers.rejected, (state, action) => {
         state.loading = false
+        state.backgroundLoading = false
         state.error = action.payload
       })
       // Fetch transfer

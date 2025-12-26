@@ -8,6 +8,7 @@ import {
   Card,
   CardContent,
   Chip,
+  CircularProgress,
   Collapse,
   Dialog,
   DialogTitle,
@@ -61,7 +62,11 @@ function Categories() {
   );
   const [openDialog, setOpenDialog] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [actionError, setActionError] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState(new Set());
   const [filters, setFilters] = useState({
@@ -91,12 +96,8 @@ function Categories() {
   const watchedParentCategoryId = watch('parentCategoryId');
 
   useEffect(() => {
-    // Only fetch if not initialized, otherwise use cached data
+    // Only fetch if not initialized (data loaded during app initialization)
     if (!isInitialized) {
-      dispatch(fetchCategories({ status: filters.status || undefined }));
-      dispatch(fetchCategoryTree({ status: filters.status || undefined }));
-    } else {
-      // Background refresh
       dispatch(fetchCategories({ status: filters.status || undefined }));
       dispatch(fetchCategoryTree({ status: filters.status || undefined }));
     }
@@ -129,17 +130,23 @@ function Categories() {
         status: 'Active',
       });
     }
+    setActionError(null);
+    setIsSubmitting(false);
     setOpenDialog(true);
   };
 
   const handleCloseDialog = () => {
     setOpenDialog(false);
     setEditingCategory(null);
+    setActionError(null);
+    setIsSubmitting(false);
     reset();
     dispatch(clearError());
   };
 
   const onSubmit = async (data) => {
+    setIsSubmitting(true);
+    setActionError(null);
     try {
       if (editingCategory) {
         await dispatch(
@@ -162,15 +169,22 @@ function Categories() {
       );
     } catch (err) {
       console.error('Error saving category:', err);
+      const errorMessage = err?.message || 'Failed to save category. Please try again.';
+      setActionError(errorMessage);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleDelete = async () => {
     if (!deleteConfirm) return;
 
+    setIsDeleting(true);
+    setDeleteError(null);
     try {
       await dispatch(deleteCategory(deleteConfirm.category_id)).unwrap();
       setDeleteConfirm(null);
+      setDeleteError(null);
       // Refresh categories and tree
       dispatch(fetchCategories({ status: filters.status || undefined }));
       dispatch(
@@ -181,6 +195,10 @@ function Categories() {
       );
     } catch (err) {
       console.error('Error deleting category:', err);
+      const errorMessage = err?.message || 'Failed to delete category. Please try again.';
+      setDeleteError(errorMessage);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -214,12 +232,34 @@ function Categories() {
   const getTypeColor = (type) => {
     switch (type) {
       case 'Income':
-        return 'success';
+        return 'success'; // Keep for Chip color prop, will override with sx
       case 'Expense':
-        return 'error';
+        return 'error'; // Keep for Chip color prop, will override with sx
       default:
         return 'default';
     }
+  };
+
+  const getTypeChipSx = (type) => {
+    if (type === 'Income') {
+      return {
+        backgroundColor: theme.palette.softGreen.main,
+        color: 'white',
+        '&:hover': {
+          backgroundColor: theme.palette.softGreen.dark || theme.palette.softGreen.main,
+        },
+      };
+    }
+    if (type === 'Expense') {
+      return {
+        backgroundColor: theme.palette.softRed.main,
+        color: 'white',
+        '&:hover': {
+          backgroundColor: theme.palette.softRed.dark || theme.palette.softRed.main,
+        },
+      };
+    }
+    return {};
   };
 
   // Get available parent categories (excluding self and descendants when editing)
@@ -270,24 +310,12 @@ function Categories() {
       const isExpanded = expandedCategories.has(category.category_id);
 
       return (
-        <Box key={category.category_id} sx={{ mb: 0.5 }}>
+        <Box key={category.category_id} sx={{ mb: 1 }}>
           <Paper
             elevation={level === 0 ? 1 : 0}
             sx={{
-              borderRadius: 1,
-              border: '1px solid',
-              borderColor: level === 0 ? 'divider' : 'transparent',
-              backgroundColor:
-                level === 0
-                  ? 'background.paper'
-                  : level === 1
-                  ? 'action.hover'
-                  : 'transparent',
-              transition: 'all 0.2s ease',
               '&:hover': {
                 backgroundColor: 'action.hover',
-                boxShadow: level === 0 ? 2 : 0,
-                borderColor: 'primary.light',
               },
             }}
           >
@@ -295,10 +323,10 @@ function Categories() {
               sx={{
                 display: 'flex',
                 alignItems: 'center',
-                pl: { xs: level === 0 ? 1 : level * 2 + 0.5, sm: level === 0 ? 2 : level * 2.5 + 1 },
-                pr: { xs: 0.5, sm: 1.5 },
-                py: { xs: 1, sm: 1.25 },
-                minHeight: { xs: 48, sm: 56 },
+                pl: { xs: level === 0 ? 2 : level * 2 + 2, sm: level === 0 ? 2 : level * 3 + 2 },
+                pr: { xs: 1, sm: 2 },
+                py: 1.5,
+                minHeight: 56,
               }}
             >
               {/* Expand/Collapse Icon */}
@@ -319,10 +347,8 @@ function Categories() {
                       toggleExpand(category.category_id);
                     }}
                     sx={{
-                      color: 'text.secondary',
                       '&:hover': {
-                        backgroundColor: 'action.selected',
-                        color: 'primary.main',
+                        backgroundColor: 'action.hover',
                       },
                     }}
                   >
@@ -333,7 +359,7 @@ function Categories() {
                     )}
                   </IconButton>
                 ) : (
-                  <Box sx={{ width: 24, height: 24 }} />
+                  <Box sx={{ width: 40, height: 40 }} />
                 )}
               </Box>
 
@@ -348,26 +374,13 @@ function Categories() {
                   flex: 1,
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 1.5,
+                  gap: 1,
                   cursor: hasChildren ? 'pointer' : 'default',
-                  py: 0.5,
-                  px: 1,
-                  borderRadius: 1,
-                  transition: 'background-color 0.2s',
-                  '&:hover': hasChildren
-                    ? {
-                        backgroundColor: 'action.selected',
-                      }
-                    : {},
                 }}
               >
                 <Typography
                   variant="body1"
-                  fontWeight={level === 0 ? 600 : 500}
-                  sx={{
-                    color: 'text.primary',
-                    fontSize: { xs: level === 0 ? '0.875rem' : '0.8125rem', sm: level === 0 ? '1rem' : '0.9375rem' },
-                  }}
+                  fontWeight={level === 0 ? 500 : 400}
                 >
                   {category.name}
                 </Typography>
@@ -375,22 +388,14 @@ function Categories() {
                   <Chip
                     label={category.type}
                     color={getTypeColor(category.type)}
+                    sx={getTypeChipSx(category.type)}
                     size="small"
-                    sx={{
-                      height: { xs: 20, sm: 24 },
-                      fontSize: { xs: '0.6875rem', sm: '0.75rem' },
-                      fontWeight: 500,
-                    }}
                   />
                   {category.status === 'Archived' && (
                     <Chip
                       label={category.status}
                       color={getStatusColor(category.status)}
                       size="small"
-                      sx={{
-                        height: { xs: 20, sm: 24 },
-                        fontSize: { xs: '0.6875rem', sm: '0.75rem' },
-                      }}
                     />
                   )}
                 </Box>
@@ -400,7 +405,7 @@ function Categories() {
               <Box
                 sx={{
                   display: 'flex',
-                  gap: 0.5,
+                  gap: 0,
                   alignItems: 'center',
                   ml: 'auto',
                 }}
@@ -411,10 +416,8 @@ function Categories() {
                     size="small"
                     onClick={() => handleOpenDialog(null, category.category_id)}
                     sx={{
-                      color: 'primary.main',
                       '&:hover': {
-                        backgroundColor: 'primary.light',
-                        color: 'primary.contrastText',
+                        backgroundColor: 'action.hover',
                       },
                     }}
                   >
@@ -426,10 +429,8 @@ function Categories() {
                     size="small"
                     onClick={() => handleOpenDialog(category)}
                     sx={{
-                      color: 'primary.main',
                       '&:hover': {
-                        backgroundColor: 'primary.light',
-                        color: 'primary.contrastText',
+                        backgroundColor: 'action.hover',
                       },
                     }}
                   >
@@ -442,10 +443,8 @@ function Categories() {
                     onClick={() => setDeleteConfirm(category)}
                     disabled={category.status === 'Archived'}
                     sx={{
-                      color: 'error.main',
                       '&:hover:not(:disabled)': {
-                        backgroundColor: 'error.light',
-                        color: 'error.contrastText',
+                        backgroundColor: 'action.hover',
                       },
                       '&:disabled': {
                         opacity: 0.3,
@@ -464,11 +463,11 @@ function Categories() {
             <Collapse in={isExpanded} timeout="auto" unmountOnExit>
               <Box
                 sx={{
-                  ml: level === 0 ? 2.5 : 2,
-                  pl: 2.5,
-                  borderLeft: '2px solid',
+                  ml: level === 0 ? 3 : 2,
+                  pl: 2,
+                  borderLeft: '1px solid',
                   borderColor: 'divider',
-                  mt: 0.5,
+                  mt: 1,
                 }}
               >
                 {renderCategoryTree(category.children, level + 1)}
@@ -480,7 +479,7 @@ function Categories() {
     });
   };
 
-  if (loading && categories.length === 0) {
+  if (loading && !isInitialized && categories.length === 0) {
     return <LoadingSpinner />;
   }
 
@@ -500,10 +499,10 @@ function Categories() {
           gap: { xs: 2, sm: 0 },
         }}
       >
-        <Typography variant="h4" fontWeight={700} sx={{ fontSize: { xs: '1.5rem', sm: '2rem' } }}>
+        <Typography variant="h4" sx={{ fontSize: { xs: '1.5rem', sm: '2rem' } }}>
           Categories
         </Typography>
-        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', width: { xs: '100%', sm: 'auto' } }}>
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', width: { xs: '100%', sm: 'auto' } }}>
           <Button
             variant={activeFilterCount > 0 ? 'contained' : 'outlined'}
             startIcon={<FilterListIcon />}
@@ -512,7 +511,6 @@ function Categories() {
             size="small"
             sx={{
               textTransform: 'none',
-              fontWeight: 500,
               flex: { xs: '1 1 auto', sm: 'none' },
             }}
           >
@@ -525,7 +523,6 @@ function Categories() {
             size="small"
             sx={{
               textTransform: 'none',
-              fontWeight: 500,
               flex: { xs: '1 1 auto', sm: 'none' },
             }}
           >
@@ -538,9 +535,9 @@ function Categories() {
 
       {/* Filters Section */}
       <Collapse in={filtersOpen}>
-        <Card elevation={1} sx={{ mb: 3, border: '1px solid', borderColor: 'divider' }}>
+        <Card elevation={1} sx={{ mb: 3 }}>
           <CardContent>
-            <Typography variant="subtitle2" fontWeight={600} gutterBottom sx={{ mb: 2 }}>
+            <Typography variant="subtitle2" fontWeight={500} gutterBottom sx={{ mb: 2 }}>
               Filter Categories
             </Typography>
             <Grid container spacing={2} alignItems="center">
@@ -583,13 +580,17 @@ function Categories() {
       </Collapse>
 
       {categoryTree.length === 0 ? (
-        <Card elevation={2}>
+        <Card elevation={1}>
           <CardContent>
             <Box sx={{ textAlign: 'center', py: 6 }}>
               <CategoryIcon
-                sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }}
+                sx={{ 
+                  fontSize: 64, 
+                  color: 'text.secondary',
+                  mb: 2,
+                }}
               />
-              <Typography variant="h6" color="text.secondary" gutterBottom>
+              <Typography variant="h6" color="text.primary" gutterBottom>
                 No categories yet
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
@@ -614,10 +615,9 @@ function Categories() {
               justifyContent: 'space-between',
               alignItems: 'center',
               mb: 2,
-              px: 1,
             }}
           >
-            <Typography variant="h6" fontWeight={600} color="text.primary">
+            <Typography variant="h6" fontWeight={500}>
               Category Hierarchy
             </Typography>
             <Typography variant="body2" color="text.secondary">
@@ -627,13 +627,7 @@ function Categories() {
               )}
             </Typography>
           </Box>
-          <Box
-            sx={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 0.5,
-            }}
-          >
+          <Box>
             {renderCategoryTree(categoryTree)}
           </Box>
         </Box>
@@ -652,6 +646,11 @@ function Categories() {
             {editingCategory ? 'Edit Category' : 'Create New Category'}
           </DialogTitle>
           <DialogContent>
+            {actionError && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {actionError}
+              </Alert>
+            )}
             <Grid container spacing={2} sx={{ mt: 1 }}>
               <Grid item xs={12}>
                 <TextField
@@ -752,9 +751,22 @@ function Categories() {
             </Grid>
           </DialogContent>
           <DialogActions>
-            <Button onClick={handleCloseDialog}>Cancel</Button>
-            <Button type="submit" variant="contained">
-              {editingCategory ? 'Update' : 'Create'}
+            <Button onClick={handleCloseDialog} disabled={isSubmitting}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={isSubmitting}
+              startIcon={isSubmitting ? <CircularProgress size={20} color="inherit" /> : null}
+            >
+              {isSubmitting
+                ? editingCategory
+                  ? 'Updating...'
+                  : 'Creating...'
+                : editingCategory
+                ? 'Update'
+                : 'Create'}
             </Button>
           </DialogActions>
         </form>
@@ -763,7 +775,10 @@ function Categories() {
       {/* Delete Confirmation Dialog */}
       <Dialog 
         open={!!deleteConfirm} 
-        onClose={() => setDeleteConfirm(null)}
+        onClose={() => {
+          setDeleteConfirm(null);
+          setDeleteError(null);
+        }}
         fullScreen={isMobile}
       >
         <DialogTitle>Delete Category</DialogTitle>
@@ -772,7 +787,12 @@ function Categories() {
             Are you sure you want to delete{' '}
             <strong>{deleteConfirm?.name}</strong>?
           </Typography>
-          <Alert severity="error" sx={{ mt: 2 }}>
+          {deleteError && (
+            <Alert severity="error" sx={{ mt: 2 }}>
+              {deleteError}
+            </Alert>
+          )}
+          <Alert severity="warning" sx={{ mt: 2 }}>
             This action cannot be undone. You cannot delete categories with:
             <ul style={{ marginTop: 8, marginBottom: 0 }}>
               <li>Existing transactions</li>
@@ -781,9 +801,23 @@ function Categories() {
           </Alert>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteConfirm(null)}>Cancel</Button>
-          <Button onClick={handleDelete} color="error" variant="contained">
-            Delete
+          <Button
+            onClick={() => {
+              setDeleteConfirm(null);
+              setDeleteError(null);
+            }}
+            disabled={isDeleting}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleDelete}
+            color="error"
+            variant="contained"
+            disabled={isDeleting}
+            startIcon={isDeleting ? <CircularProgress size={20} color="inherit" /> : null}
+          >
+            {isDeleting ? 'Deleting...' : 'Delete'}
           </Button>
         </DialogActions>
       </Dialog>

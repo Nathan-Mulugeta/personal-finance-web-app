@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
 import * as accountsApi from '../../lib/api/accounts'
+import { calculateAccountBalance, calculateAllAccountBalances } from '../../utils/accountBalance'
 
 // Async thunks
 export const fetchAccounts = createAsyncThunk(
@@ -69,6 +70,57 @@ export const fetchAccountBalance = createAsyncThunk(
   }
 )
 
+// Recalculate balance for a specific account from transactions
+export const recalculateAccountBalance = createAsyncThunk(
+  'accounts/recalculateAccountBalance',
+  async ({ accountId, transactions }, { getState, rejectWithValue }) => {
+    try {
+      const state = getState()
+      const account = state.accounts.accounts.find(acc => acc.account_id === accountId)
+      if (!account) {
+        return rejectWithValue('Account not found')
+      }
+      
+      const accountTransactions = (transactions || state.transactions.allTransactions || []).filter(
+        (txn) =>
+          txn.account_id === accountId &&
+          !txn.deleted_at &&
+          txn.status !== 'Cancelled'
+      )
+      
+      const balance = calculateAccountBalance(account.opening_balance, accountTransactions)
+      
+      return {
+        account_id: account.account_id,
+        name: account.name,
+        opening_balance: account.opening_balance,
+        current_balance: balance,
+        currency: account.currency,
+        last_updated: new Date().toISOString(),
+      }
+    } catch (error) {
+      return rejectWithValue(error.message)
+    }
+  }
+)
+
+// Recalculate all account balances from transactions
+export const recalculateAllBalances = createAsyncThunk(
+  'accounts/recalculateAllBalances',
+  async (_, { getState, rejectWithValue }) => {
+    try {
+      const state = getState()
+      const accounts = state.accounts.accounts
+      const transactions = state.transactions.allTransactions || []
+      
+      const balances = calculateAllAccountBalances(accounts, transactions)
+      return balances
+    } catch (error) {
+      return rejectWithValue(error.message)
+    }
+  }
+)
+
 const initialState = {
   accounts: [],
   currentAccount: null,
@@ -88,6 +140,16 @@ const accountsSlice = createSlice({
     },
     clearCurrentAccount: (state) => {
       state.currentAccount = null
+    },
+    // Calculate balances from transactions
+    calculateBalancesFromTransactions: (state, action) => {
+      const { transactions } = action.payload
+      const balances = calculateAllAccountBalances(state.accounts, transactions)
+      state.balances = balances
+    },
+    // Set balances directly (used during initialization)
+    setBalances: (state, action) => {
+      state.balances = action.payload
     },
   },
   extraReducers: (builder) => {
@@ -132,7 +194,20 @@ const accountsSlice = createSlice({
       })
       .addCase(createAccount.fulfilled, (state, action) => {
         state.loading = false
-        state.accounts.push(action.payload)
+        const newAccount = action.payload
+        state.accounts.push(newAccount)
+        
+        // Calculate and store balance immediately for new account
+        // For new accounts with no transactions, balance equals opening balance
+        const balance = calculateAccountBalance(newAccount.opening_balance, [])
+        state.balances[newAccount.account_id] = {
+          account_id: newAccount.account_id,
+          name: newAccount.name,
+          opening_balance: newAccount.opening_balance,
+          current_balance: balance,
+          currency: newAccount.currency,
+          last_updated: new Date().toISOString(),
+        }
       })
       .addCase(createAccount.rejected, (state, action) => {
         state.loading = false
@@ -177,9 +252,29 @@ const accountsSlice = createSlice({
       .addCase(fetchAccountBalance.fulfilled, (state, action) => {
         state.balances[action.payload.account_id] = action.payload
       })
+      // Recalculate account balance
+      .addCase(recalculateAccountBalance.fulfilled, (state, action) => {
+        state.balances[action.payload.account_id] = action.payload
+      })
+      // Recalculate all balances
+      .addCase(recalculateAllBalances.fulfilled, (state, action) => {
+        state.balances = action.payload
+      })
+      // Listen to transaction actions to recalculate balances
+      .addMatcher(
+        (action) => 
+          action.type === 'transactions/createTransaction/fulfilled' ||
+          action.type === 'transactions/updateTransaction/fulfilled' ||
+          action.type === 'transactions/deleteTransaction/fulfilled' ||
+          action.type === 'transactions/batchCreateTransactions/fulfilled',
+        (state, action) => {
+          // Balance will be recalculated by the component/listener
+          // This matcher is here for future use if needed
+        }
+      )
   },
 })
 
-export const { clearError, clearCurrentAccount } = accountsSlice.actions
+export const { clearError, clearCurrentAccount, calculateBalancesFromTransactions, setBalances } = accountsSlice.actions
 export default accountsSlice.reducer
 

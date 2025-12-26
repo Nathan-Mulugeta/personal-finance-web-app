@@ -68,10 +68,12 @@ export async function createTransfer(transferData) {
   const transferDate = date ? new Date(date) : new Date()
 
   // Create transfer out transaction
+  // Use null category if not provided (transfers don't require categories)
+  // Amount is positive - type determines direction
   const transferOut = await transactionsApi.createTransaction({
     accountId: fromAccountId,
-    categoryId: categoryId || (await getDefaultTransferCategory(user.id, 'Expense')),
-    amount: -finalFromAmount, // Negative for outbound
+    categoryId: categoryId || null,
+    amount: finalFromAmount, // Positive amount - type determines direction
     currency: fromAccount.currency,
     description: description || `Transfer to ${toAccount.name}`,
     type: 'Transfer Out',
@@ -81,10 +83,12 @@ export async function createTransfer(transferData) {
   })
 
   // Create transfer in transaction
+  // Use null category if not provided (transfers don't require categories)
+  // Amount is positive - type determines direction
   const transferIn = await transactionsApi.createTransaction({
     accountId: toAccountId,
-    categoryId: categoryId || (await getDefaultTransferCategory(user.id, 'Income')),
-    amount: finalToAmount, // Positive for inbound
+    categoryId: categoryId || null,
+    amount: finalToAmount, // Positive amount - type determines direction
     currency: toAccount.currency,
     description: description || `Transfer from ${fromAccount.name}`,
     type: 'Transfer In',
@@ -123,26 +127,6 @@ export async function createTransfer(transferData) {
       rate: finalToAmount / finalFromAmount,
     } : null,
   }
-}
-
-// Helper to get default transfer category
-async function getDefaultTransferCategory(userId, type) {
-  // Try to find a "Transfer" category
-  const { data: categories } = await supabase
-    .from('categories')
-    .select('category_id')
-    .eq('user_id', userId)
-    .eq('type', type)
-    .ilike('name', '%transfer%')
-    .eq('status', 'Active')
-    .limit(1)
-
-  if (categories && categories.length > 0) {
-    return categories[0].category_id
-  }
-
-  // If no transfer category, return null (will need to be handled by caller)
-  return null
 }
 
 // Get transfers
@@ -236,36 +220,53 @@ export async function deleteTransfer(transactionId) {
   const user = await getCurrentUser()
   if (!user) throw new Error('User not authenticated')
 
-  // Get transaction
-  const transaction = await transactionsApi.getTransactionById(transactionId)
+  // Get transaction - handle case where it might not exist or is already deleted
+  let transaction
+  try {
+    transaction = await transactionsApi.getTransactionById(transactionId)
+  } catch (error) {
+    // If transaction lookup fails, it might already be deleted
+    throw new Error('Transaction not found or has already been deleted')
+  }
+
   if (!transaction) {
-    throw new Error('Transaction not found')
+    throw new Error('Transaction not found or has already been deleted')
   }
 
   if (!transaction.transfer_id) {
     throw new Error('Transaction is not part of a transfer')
   }
 
-  // Get all transactions with this transfer_id
-  const { data: transferTransactions } = await supabase
+  const transferId = transaction.transfer_id
+
+  // Soft-delete all transactions with this transfer_id directly
+  // This avoids the double-deletion issue since deleteTransaction has its own logic for linked transactions
+  const { error: deleteError } = await supabase
     .from('transactions')
-    .select('transaction_id')
-    .eq('transfer_id', transaction.transfer_id)
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('transfer_id', transferId)
     .eq('user_id', user.id)
     .is('deleted_at', null)
 
-  // Delete all transactions
-  for (const txn of transferTransactions || []) {
-    await transactionsApi.deleteTransaction(txn.transaction_id)
+  if (deleteError) {
+    throw new Error(`Failed to delete transfer transactions: ${deleteError.message}`)
   }
 
-  // Delete exchange rates
-  const { error } = await supabase
-    .from('exchange_rates')
-    .delete()
-    .eq('transfer_id', transaction.transfer_id)
-    .eq('user_id', user.id)
+  // Delete exchange rates (non-blocking - continue even if this fails)
+  try {
+    const { error: exchangeRateError } = await supabase
+      .from('exchange_rates')
+      .delete()
+      .eq('transfer_id', transferId)
+      .eq('user_id', user.id)
 
-  if (error) throw error
+    if (exchangeRateError) {
+      console.warn('Failed to delete exchange rates:', exchangeRateError)
+      // Don't throw - exchange rate deletion is not critical
+    }
+  } catch (error) {
+    console.warn('Error deleting exchange rates:', error)
+    // Don't throw - exchange rate deletion is not critical
+  }
 }
 

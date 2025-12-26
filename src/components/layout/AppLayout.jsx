@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom'
 import { Box, Drawer, useMediaQuery, useTheme } from '@mui/material'
 import Sidebar from './Sidebar'
 import Header from './Header'
+import { useDataRefresh } from '../../hooks/useDataRefresh'
 
 const DRAWER_WIDTH = 240
 
@@ -10,6 +11,9 @@ function AppLayout() {
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
   const [mobileOpen, setMobileOpen] = useState(false)
+  
+  // Handle data refresh (focus, periodic, reactive)
+  useDataRefresh()
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen)

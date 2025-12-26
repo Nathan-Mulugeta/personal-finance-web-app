@@ -8,6 +8,7 @@ import {
   Card,
   CardContent,
   Chip,
+  CircularProgress,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -50,7 +51,7 @@ import {
   clearError,
   filterTransactions,
 } from '../store/slices/transactionsSlice';
-import { fetchAccounts } from '../store/slices/accountsSlice';
+import { fetchAccounts, recalculateAccountBalance } from '../store/slices/accountsSlice';
 import { fetchCategories } from '../store/slices/categoriesSlice';
 import { transactionSchema } from '../schemas/transactionSchema';
 import {
@@ -73,7 +74,11 @@ function Transactions() {
   const { categories } = useSelector((state) => state.categories);
   const [openDialog, setOpenDialog] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [actionError, setActionError] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [filters, setFilters] = useState({
@@ -111,15 +116,22 @@ function Transactions() {
   const watchedType = watch('type');
   const watchedStatus = watch('status');
 
-  // Load all data on mount - only once
+  const accountsInitialized = useSelector((state) => state.accounts.isInitialized);
+  const categoriesInitialized = useSelector((state) => state.categories.isInitialized);
+
+  // Load all data on mount - only if not initialized (data loaded during app initialization)
   useEffect(() => {
-    dispatch(fetchAccounts({ status: 'Active' }));
-    dispatch(fetchCategories({ status: 'Active' }));
-    // Load ALL transactions without filters for caching
+    if (!accountsInitialized) {
+      dispatch(fetchAccounts({ status: 'Active' }));
+    }
+    if (!categoriesInitialized) {
+      dispatch(fetchCategories({ status: 'Active' }));
+    }
+    // Load ALL transactions without filters for caching if not initialized
     if (!isInitialized) {
       dispatch(fetchTransactions());
     }
-  }, [dispatch, isInitialized]);
+  }, [dispatch, isInitialized, accountsInitialized, categoriesInitialized]);
   
   // Apply filter immediately when data is first loaded
   useEffect(() => {
@@ -196,6 +208,10 @@ function Transactions() {
         date: format(new Date(), 'yyyy-MM-dd'),
       });
     }
+    setActionError(null);
+    setIsSubmitting(false);
+    setDeleteError(null);
+    setIsDeleting(false);
     setOpenDialog(true);
   };
 
@@ -203,6 +219,10 @@ function Transactions() {
     setOpenDialog(false);
     setEditingTransaction(null);
     setDeleteConfirm(false);
+    setActionError(null);
+    setIsSubmitting(false);
+    setDeleteError(null);
+    setIsDeleting(false);
     reset();
     dispatch(clearError());
   };
@@ -211,24 +231,45 @@ function Transactions() {
     // Don't submit if in delete confirmation mode
     if (deleteConfirm) return;
     
+    setIsSubmitting(true);
+    setActionError(null);
     try {
+      let transaction
       if (editingTransaction) {
-        await dispatch(
+        transaction = await dispatch(
           updateTransaction({
             transactionId: editingTransaction.transaction_id,
             updates: data,
           })
         ).unwrap();
       } else {
-        await dispatch(createTransaction(data)).unwrap();
+        transaction = await dispatch(createTransaction(data)).unwrap();
       }
+      
       handleCloseDialog();
+      
+      // Recalculate balance for the affected account after transaction is added/updated
+      // Use setTimeout to ensure transaction is in state
+      setTimeout(() => {
+        const accountId = transaction?.account_id || data.accountId
+        if (accountId) {
+          dispatch(recalculateAccountBalance({ 
+            accountId,
+            transactions: undefined // Will use state.transactions.allTransactions
+          }))
+        }
+      }, 100)
+      
       // Re-apply current filters to update the view
       dispatch(filterTransactions(filters));
       // Refresh all transactions in background
       dispatch(fetchTransactions());
     } catch (err) {
       console.error('Error saving transaction:', err);
+      const errorMessage = err?.message || 'Failed to save transaction. Please try again.';
+      setActionError(errorMessage);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -239,8 +280,22 @@ function Transactions() {
   const handleDeleteConfirm = async () => {
     if (!editingTransaction) return;
 
+    setIsDeleting(true);
+    setDeleteError(null);
     try {
-      await dispatch(deleteTransaction(editingTransaction.transaction_id)).unwrap();
+      const deletedTransactionId = await dispatch(deleteTransaction(editingTransaction.transaction_id)).unwrap();
+      
+      // Recalculate balance for the affected account
+      // Use setTimeout to ensure transaction is removed from state
+      setTimeout(() => {
+        if (editingTransaction?.account_id) {
+          dispatch(recalculateAccountBalance({ 
+            accountId: editingTransaction.account_id,
+            transactions: undefined // Will use state.transactions.allTransactions
+          }))
+        }
+      }, 100)
+      
       setDeleteConfirm(false);
       handleCloseDialog();
       // Re-apply current filters to update the view
@@ -249,6 +304,10 @@ function Transactions() {
       dispatch(fetchTransactions());
     } catch (err) {
       console.error('Error deleting transaction:', err);
+      const errorMessage = err?.message || 'Failed to delete transaction. Please try again.';
+      setDeleteError(errorMessage);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -760,25 +819,25 @@ function Transactions() {
                   >
                     {(() => {
                       try {
-                        // Use created_at if available for more accurate timestamp
-                        const dateStr = transaction.created_at 
-                          ? transaction.created_at.split('T')[0]
-                          : transaction.date;
-                        const timeStr = transaction.created_at 
-                          ? transaction.created_at.split('T')[1]?.substring(0, 5)
-                          : null;
-                        const date = parseISO(dateStr);
+                        let dateTime;
                         
-                        if (isToday(date) && timeStr) {
-                          // Format with time from created_at
-                          const [hours, minutes] = timeStr.split(':');
-                          const dateTime = new Date(date);
-                          dateTime.setHours(parseInt(hours), parseInt(minutes));
-                          return format(dateTime, 'MMM dd, yyyy h:mm a');
+                        // Use created_at if available for more accurate timestamp
+                        if (transaction.created_at) {
+                          // Parse ISO string and convert to local timezone
+                          dateTime = parseISO(transaction.created_at);
+                        } else {
+                          // Use transaction date (date only, no time)
+                          dateTime = parseISO(transaction.date);
                         }
-                        return isToday(date)
-                          ? format(date, 'MMM dd, yyyy h:mm a')
-                          : format(date, 'MMM dd, yyyy');
+                        
+                        // Check if it's today
+                        if (isToday(dateTime)) {
+                          // Show date and time for today's transactions
+                          return format(dateTime, 'MMM dd, yyyy h:mm a');
+                        } else {
+                          // Show date only for older transactions
+                          return format(dateTime, 'MMM dd, yyyy');
+                        }
                       } catch {
                         return transaction.date;
                       }
@@ -851,6 +910,16 @@ function Transactions() {
               : 'Create New Transaction'}
           </DialogTitle>
           <DialogContent>
+            {actionError && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {actionError}
+              </Alert>
+            )}
+            {deleteError && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {deleteError}
+              </Alert>
+            )}
             {deleteConfirm && editingTransaction ? (
               <Box>
                 <Alert severity="warning" sx={{ mb: 2 }}>
@@ -1042,25 +1111,41 @@ function Transactions() {
               <Box>
                 {deleteConfirm ? (
                   <>
-                    <Button onClick={() => setDeleteConfirm(false)} sx={{ mr: 1 }}>
+                    <Button
+                      onClick={() => setDeleteConfirm(false)}
+                      sx={{ mr: 1 }}
+                      disabled={isDeleting}
+                    >
                       Cancel
                     </Button>
                     <Button
                       onClick={handleDeleteConfirm}
                       color="error"
                       variant="contained"
-                      startIcon={<DeleteIcon />}
+                      disabled={isDeleting}
+                      startIcon={isDeleting ? <CircularProgress size={20} color="inherit" /> : <DeleteIcon />}
                     >
-                      Confirm Delete
+                      {isDeleting ? 'Deleting...' : 'Confirm Delete'}
                     </Button>
                   </>
                 ) : (
                   <>
-                    <Button onClick={handleCloseDialog} sx={{ mr: 1 }}>
+                    <Button onClick={handleCloseDialog} sx={{ mr: 1 }} disabled={isSubmitting}>
                       Cancel
                     </Button>
-                    <Button type="submit" variant="contained">
-                      {editingTransaction ? 'Update' : 'Create'}
+                    <Button
+                      type="submit"
+                      variant="contained"
+                      disabled={isSubmitting}
+                      startIcon={isSubmitting ? <CircularProgress size={20} color="inherit" /> : null}
+                    >
+                      {isSubmitting
+                        ? editingTransaction
+                          ? 'Updating...'
+                          : 'Creating...'
+                        : editingTransaction
+                        ? 'Update'
+                        : 'Create'}
                     </Button>
                   </>
                 )}

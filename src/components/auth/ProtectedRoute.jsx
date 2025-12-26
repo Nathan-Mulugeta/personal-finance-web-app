@@ -3,12 +3,15 @@ import { Navigate } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import { supabase } from '../../lib/supabase'
 import { setUser, setSession, setLoading } from '../../store/slices/authSlice'
+import { initializeApp } from '../../store/slices/appInitSlice'
 import LoadingSpinner from '../common/LoadingSpinner'
 
 function ProtectedRoute({ children }) {
   const dispatch = useDispatch()
   const user = useSelector((state) => state.auth.user)
   const loading = useSelector((state) => state.auth.loading)
+  const isInitialized = useSelector((state) => state.appInit.isInitialized)
+  const isInitializing = useSelector((state) => state.appInit.isLoading)
 
   useEffect(() => {
     const checkUser = async () => {
@@ -60,7 +63,14 @@ function ProtectedRoute({ children }) {
     }
   }, [dispatch])
 
-  if (loading) {
+  // Initialize app data when user is authenticated but app is not initialized
+  useEffect(() => {
+    if (user && !isInitialized && !isInitializing) {
+      dispatch(initializeApp())
+    }
+  }, [user, isInitialized, isInitializing, dispatch])
+
+  if (loading || (user && !isInitialized)) {
     return <LoadingSpinner fullScreen />
   }
 

@@ -13,10 +13,13 @@ export const transferSchema = z.object({
 }).refine(
   (data) => {
     // Either amount (same currency) or both fromAmount and toAmount (multi-currency)
-    return (data.amount !== undefined) || (data.fromAmount !== undefined && data.toAmount !== undefined)
+    return (data.amount !== undefined && data.amount !== null && !isNaN(data.amount)) || 
+           (data.fromAmount !== undefined && data.fromAmount !== null && !isNaN(data.fromAmount) &&
+            data.toAmount !== undefined && data.toAmount !== null && !isNaN(data.toAmount))
   },
   {
     message: 'Either amount (same currency) or both fromAmount and toAmount (multi-currency) are required',
+    path: ['root'],
   }
 )
 

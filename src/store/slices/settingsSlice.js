@@ -38,7 +38,9 @@ export const updateSettings = createAsyncThunk(
 const initialState = {
   settings: [],
   loading: false,
+  backgroundLoading: false,
   error: null,
+  isInitialized: false,
 }
 
 const settingsSlice = createSlice({
@@ -53,15 +55,22 @@ const settingsSlice = createSlice({
     builder
       // Fetch settings
       .addCase(fetchSettings.pending, (state) => {
-        state.loading = true
+        if (!state.isInitialized) {
+          state.loading = true
+        } else {
+          state.backgroundLoading = true
+        }
         state.error = null
       })
       .addCase(fetchSettings.fulfilled, (state, action) => {
         state.loading = false
+        state.backgroundLoading = false
         state.settings = action.payload
+        state.isInitialized = true
       })
       .addCase(fetchSettings.rejected, (state, action) => {
         state.loading = false
+        state.backgroundLoading = false
         state.error = action.payload
       })
       // Update setting
