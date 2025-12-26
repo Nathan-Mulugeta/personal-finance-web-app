@@ -74,7 +74,9 @@ const initialState = {
   currentAccount: null,
   balances: {},
   loading: false,
+  backgroundLoading: false,
   error: null,
+  isInitialized: false,
 }
 
 const accountsSlice = createSlice({
@@ -92,15 +94,22 @@ const accountsSlice = createSlice({
     builder
       // Fetch accounts
       .addCase(fetchAccounts.pending, (state) => {
-        state.loading = true
+        if (!state.isInitialized) {
+          state.loading = true
+        } else {
+          state.backgroundLoading = true
+        }
         state.error = null
       })
       .addCase(fetchAccounts.fulfilled, (state, action) => {
         state.loading = false
+        state.backgroundLoading = false
         state.accounts = action.payload
+        state.isInitialized = true
       })
       .addCase(fetchAccounts.rejected, (state, action) => {
         state.loading = false
+        state.backgroundLoading = false
         state.error = action.payload
       })
       // Fetch account

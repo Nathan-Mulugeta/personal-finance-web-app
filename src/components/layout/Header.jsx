@@ -38,30 +38,46 @@ function Header({ onMenuClick }) {
   }
 
   return (
-    <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
+    <AppBar 
+      position="fixed" 
+      sx={{ 
+        zIndex: (theme) => theme.zIndex.drawer + 1,
+        backgroundColor: 'white',
+        color: 'text.primary',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24)',
+      }}
+    >
       <Toolbar>
         <IconButton
-          color="inherit"
           edge="start"
           onClick={onMenuClick}
-          sx={{ mr: 2 }}
+          sx={{ mr: 2, color: 'text.primary' }}
         >
           <MenuIcon />
         </IconButton>
-        <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
+        <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1, color: 'text.primary' }}>
           Personal Finance
         </Typography>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Typography variant="body2">
+          <Typography 
+            variant="body2" 
+            sx={{ 
+              color: 'text.secondary',
+              display: { xs: 'none', sm: 'block' },
+              maxWidth: { sm: 150, md: 'none' },
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
             {user?.email}
           </Typography>
           <IconButton
             size="large"
             edge="end"
             onClick={handleMenuOpen}
-            color="inherit"
+            sx={{ color: 'text.primary' }}
           >
-            <Avatar sx={{ width: 32, height: 32 }}>
+            <Avatar sx={{ width: 32, height: 32, bgcolor: 'action.hover' }}>
               <AccountCircleIcon />
             </Avatar>
           </IconButton>

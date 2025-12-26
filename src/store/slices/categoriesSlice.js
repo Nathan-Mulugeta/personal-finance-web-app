@@ -74,7 +74,9 @@ const initialState = {
   categoryTree: [],
   currentCategory: null,
   loading: false,
+  backgroundLoading: false,
   error: null,
+  isInitialized: false,
 }
 
 const categoriesSlice = createSlice({
@@ -92,15 +94,22 @@ const categoriesSlice = createSlice({
     builder
       // Fetch categories
       .addCase(fetchCategories.pending, (state) => {
-        state.loading = true
+        if (!state.isInitialized) {
+          state.loading = true
+        } else {
+          state.backgroundLoading = true
+        }
         state.error = null
       })
       .addCase(fetchCategories.fulfilled, (state, action) => {
         state.loading = false
+        state.backgroundLoading = false
         state.categories = action.payload
+        state.isInitialized = true
       })
       .addCase(fetchCategories.rejected, (state, action) => {
         state.loading = false
+        state.backgroundLoading = false
         state.error = action.payload
       })
       // Fetch category tree

@@ -51,10 +51,11 @@ function AppLayout() {
         component="main"
         sx={{
           flexGrow: 1,
-          p: 3,
+          p: { xs: 1.5, sm: 2, md: 3 },
           width: { md: `calc(100% - ${DRAWER_WIDTH}px)` },
           minHeight: '100vh',
           backgroundColor: theme.palette.background.default,
+          mt: { xs: '56px', sm: '64px' }, // Account for fixed AppBar height (56px on mobile, 64px on desktop)
         }}
       >
         <Outlet />

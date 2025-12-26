@@ -71,6 +71,8 @@ export async function createTransaction(transactionData) {
 
   const transactionId = generateId('TXN')
   const transactionDate = date ? new Date(date) : new Date()
+  // Preserve the actual creation timestamp
+  const now = new Date()
 
   const { data, error } = await supabase
     .from('transactions')
@@ -87,6 +89,7 @@ export async function createTransaction(transactionData) {
       status,
       transfer_id: transferId,
       linked_transaction_id: linkedTransactionId,
+      created_at: now.toISOString(),
     })
     .select()
     .single()
@@ -225,6 +228,7 @@ export async function batchCreateTransactions(transactionsArray) {
 
   // Prepare transactions for insert
   const transactionDate = new Date()
+  const now = new Date()
   const transactionsToInsert = transactionsArray.map(txn => {
     const txnDate = txn.date ? new Date(txn.date) : transactionDate
     return {
@@ -240,6 +244,7 @@ export async function batchCreateTransactions(transactionsArray) {
       status: txn.status || 'Cleared',
       transfer_id: txn.transferId || null,
       linked_transaction_id: txn.linkedTransactionId || null,
+      created_at: now.toISOString(),
     }
   })
 
@@ -309,7 +314,10 @@ export async function getTransactions(filters = {}) {
     query = query.range(filters.offset, filters.offset + (filters.limit || 100) - 1)
   }
 
-  const { data, error } = await query.order('date', { ascending: false })
+  // Order by date descending, then by created_at descending (newest first)
+  const { data, error } = await query
+    .order('date', { ascending: false })
+    .order('created_at', { ascending: false, nullsFirst: false })
 
   if (error) throw error
   return data || []
