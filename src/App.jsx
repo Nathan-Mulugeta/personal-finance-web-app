@@ -13,7 +13,6 @@ import BorrowingsLendings from './pages/BorrowingsLendings';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import ExchangeRates from './pages/ExchangeRates';
-import QuickAdd from './pages/QuickAdd';
 
 function App() {
   return (
@@ -21,15 +20,6 @@ function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
       <Route path="/auth/callback" element={<AuthCallback />} />
-      {/* Quick-Add route - protected but without AppLayout for minimal UI */}
-      <Route
-        path="/quick-add"
-        element={
-          <ProtectedRoute>
-            <QuickAdd />
-          </ProtectedRoute>
-        }
-      />
       <Route
         path="/"
         element={

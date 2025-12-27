@@ -20,18 +20,9 @@ import {
   Alert,
   useMediaQuery,
   useTheme,
-  IconButton,
-  Tooltip,
-  Snackbar,
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import SettingsIcon from '@mui/icons-material/Settings';
-import PhoneAndroidIcon from '@mui/icons-material/PhoneAndroid';
-import ContentCopyIcon from '@mui/icons-material/ContentCopy';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import VisibilityIcon from '@mui/icons-material/Visibility';
-import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
-import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import {
   fetchSettings,
   updateSetting,
@@ -39,13 +30,12 @@ import {
   clearError,
 } from '../store/slices/settingsSlice';
 import { fetchCategories } from '../store/slices/categoriesSlice';
-import { fetchAccounts } from '../store/slices/accountsSlice';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
 import { usePageRefresh } from '../hooks/usePageRefresh';
 import { refreshAllData } from '../utils/refreshAllData';
 import { persistor } from '../store';
-import * as settingsApi from '../lib/api/settings';
+import RefreshIcon from '@mui/icons-material/Refresh';
 
 function Settings() {
   const dispatch = useDispatch();
@@ -54,29 +44,14 @@ function Settings() {
   const { settings, loading, backgroundLoading, isInitialized, error } =
     useSelector((state) => state.settings);
   const { categories } = useSelector((state) => state.categories);
-  const { accounts } = useSelector((state) => state.accounts);
   const categoriesInitialized = useSelector(
     (state) => state.categories.isInitialized
-  );
-  const accountsInitialized = useSelector(
-    (state) => state.accounts.isInitialized
   );
   const [openDialog, setOpenDialog] = useState(false);
   const [editingKey, setEditingKey] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionError, setActionError] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  
-  // Quick-Add settings state
-  const [quickAddAccountId, setQuickAddAccountId] = useState('');
-  const [quickAddApiKey, setQuickAddApiKey] = useState('');
-  const [showApiKey, setShowApiKey] = useState(false);
-  const [isGeneratingApiKey, setIsGeneratingApiKey] = useState(false);
-  const [isSavingQuickAdd, setIsSavingQuickAdd] = useState(false);
-  const [quickAddError, setQuickAddError] = useState(null);
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState('');
-  const [shortcutCategoryId, setShortcutCategoryId] = useState('');
 
   const {
     register,
@@ -102,33 +77,11 @@ function Settings() {
 
   // Refresh data on navigation
   usePageRefresh({
-    dataTypes: ['settings', 'categories', 'accounts'],
+    dataTypes: ['settings', 'categories'],
     filters: {
       categories: { status: 'Active' },
     },
   });
-  
-  // Load accounts if not initialized
-  useEffect(() => {
-    if (!accountsInitialized) {
-      dispatch(fetchAccounts());
-    }
-  }, [dispatch, accountsInitialized]);
-  
-  // Initialize quick-add settings from Redux state
-  useEffect(() => {
-    if (settings.length > 0) {
-      const quickAddAccount = settings.find(
-        (s) => s.setting_key === 'QuickAddDefaultAccountId'
-      )?.setting_value || '';
-      const apiKey = settings.find(
-        (s) => s.setting_key === 'QuickAddApiKey'
-      )?.setting_value || '';
-      
-      setQuickAddAccountId(quickAddAccount);
-      setQuickAddApiKey(apiKey);
-    }
-  }, [settings]);
 
   // Initialize form with current settings
   useEffect(() => {
@@ -260,86 +213,6 @@ function Settings() {
     return categories.filter(
       (cat) => cat.type === 'Expense' && cat.status === 'Active'
     );
-  };
-  
-  // Get active accounts for quick-add dropdown
-  const getActiveAccounts = () => {
-    return accounts.filter((acc) => acc.status === 'Active');
-  };
-  
-  // Get account name helper
-  const getAccountName = (accountId) => {
-    if (!accountId) return 'Not set';
-    const account = accounts.find((acc) => acc.account_id === accountId);
-    return account ? `${account.name} (${account.currency})` : 'Unknown';
-  };
-  
-  // Handle quick-add default account change
-  const handleQuickAddAccountChange = async (accountId) => {
-    setIsSavingQuickAdd(true);
-    setQuickAddError(null);
-    try {
-      await settingsApi.setQuickAddDefaultAccount(accountId);
-      setQuickAddAccountId(accountId);
-      // Refresh settings to sync Redux state
-      dispatch(fetchSettings({ forceFull: true }));
-      setSnackbarMessage('Default account updated');
-      setSnackbarOpen(true);
-    } catch (err) {
-      console.error('Error saving quick-add account:', err);
-      setQuickAddError(err?.message || 'Failed to save default account');
-    } finally {
-      setIsSavingQuickAdd(false);
-    }
-  };
-  
-  // Handle API key generation
-  const handleGenerateApiKey = async () => {
-    setIsGeneratingApiKey(true);
-    setQuickAddError(null);
-    try {
-      const newApiKey = await settingsApi.generateQuickAddApiKey();
-      setQuickAddApiKey(newApiKey);
-      // Refresh settings to sync Redux state
-      dispatch(fetchSettings({ forceFull: true }));
-      setSnackbarMessage('API key generated');
-      setSnackbarOpen(true);
-    } catch (err) {
-      console.error('Error generating API key:', err);
-      setQuickAddError(err?.message || 'Failed to generate API key');
-    } finally {
-      setIsGeneratingApiKey(false);
-    }
-  };
-  
-  // Copy API key to clipboard
-  const handleCopyApiKey = () => {
-    if (quickAddApiKey) {
-      navigator.clipboard.writeText(quickAddApiKey);
-      setSnackbarMessage('API key copied to clipboard');
-      setSnackbarOpen(true);
-    }
-  };
-  
-  // Get the quick-add shortcut URL
-  const getShortcutUrl = () => {
-    const baseUrl = `${window.location.origin}/quick-add`;
-    if (shortcutCategoryId) {
-      return `${baseUrl}?category=${shortcutCategoryId}`;
-    }
-    return baseUrl;
-  };
-  
-  // Copy shortcut URL to clipboard
-  const handleCopyShortcutUrl = () => {
-    navigator.clipboard.writeText(getShortcutUrl());
-    setSnackbarMessage('Shortcut URL copied to clipboard');
-    setSnackbarOpen(true);
-  };
-  
-  // Open shortcut URL in new tab
-  const handleOpenShortcutUrl = () => {
-    window.open(getShortcutUrl(), '_blank');
   };
 
   const handleManualRefresh = async () => {
@@ -529,170 +402,7 @@ function Settings() {
             </Alert>
           </Box>
         </Grid>
-        
-        {/* Quick-Add Configuration */}
-        <Grid item xs={12}>
-          <Box
-            sx={{
-              border: '1px solid',
-              borderColor: 'divider',
-              borderRadius: 1,
-              backgroundColor: 'background.paper',
-              overflow: 'hidden',
-            }}
-          >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, p: { xs: 1.5, sm: 2 }, borderBottom: '1px solid', borderColor: 'divider', backgroundColor: 'action.hover' }}>
-              <PhoneAndroidIcon sx={{ fontSize: { xs: 20, sm: 24 }, color: 'primary.main' }} />
-              <Typography variant="h6" sx={{ fontSize: { xs: '0.9375rem', sm: '1.125rem' }, fontWeight: 600 }}>
-                Quick-Add Configuration
-              </Typography>
-            </Box>
-            
-            {quickAddError && (
-              <Alert severity="error" sx={{ m: 2 }} onClose={() => setQuickAddError(null)}>
-                {quickAddError}
-              </Alert>
-            )}
-            
-            <Grid container>
-              {/* Default Account */}
-              <Grid item xs={12} md={6} sx={{ p: { xs: 1.5, sm: 2 }, borderBottom: { xs: '1px solid', md: 'none' }, borderRight: { md: '1px solid' }, borderColor: 'divider' }}>
-                <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.8125rem' }, mb: 1 }}>
-                  Default Account for Quick-Add
-                </Typography>
-                <FormControl fullWidth size="small">
-                  <Select
-                    value={quickAddAccountId}
-                    onChange={(e) => handleQuickAddAccountChange(e.target.value)}
-                    displayEmpty
-                    disabled={isSavingQuickAdd}
-                  >
-                    <MenuItem value="">
-                      <em>Not set</em>
-                    </MenuItem>
-                    {getActiveAccounts().map((account) => (
-                      <MenuItem key={account.account_id} value={account.account_id}>
-                        {account.name} ({account.currency})
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1, fontSize: { xs: '0.6875rem', sm: '0.75rem' } }}>
-                  This account will be used when adding expenses via quick-add or mobile widgets.
-                </Typography>
-              </Grid>
-              
-              {/* API Key */}
-              <Grid item xs={12} md={6} sx={{ p: { xs: 1.5, sm: 2 } }}>
-                <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.8125rem' }, mb: 1 }}>
-                  API Key (for Tasker/External Apps)
-                </Typography>
-                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    value={quickAddApiKey ? (showApiKey ? quickAddApiKey : '••••••••••••••••') : 'Not generated'}
-                    InputProps={{
-                      readOnly: true,
-                      sx: { fontFamily: 'monospace', fontSize: '0.875rem' },
-                    }}
-                  />
-                  {quickAddApiKey && (
-                    <>
-                      <Tooltip title={showApiKey ? 'Hide API key' : 'Show API key'}>
-                        <IconButton size="small" onClick={() => setShowApiKey(!showApiKey)}>
-                          {showApiKey ? <VisibilityOffIcon /> : <VisibilityIcon />}
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Copy to clipboard">
-                        <IconButton size="small" onClick={handleCopyApiKey}>
-                          <ContentCopyIcon />
-                        </IconButton>
-                      </Tooltip>
-                    </>
-                  )}
-                </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.6875rem', sm: '0.75rem' } }}>
-                    Use this key in Tasker or other apps to add expenses.
-                  </Typography>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={handleGenerateApiKey}
-                    disabled={isGeneratingApiKey}
-                    startIcon={isGeneratingApiKey ? <CircularProgress size={14} /> : <RefreshIcon sx={{ fontSize: 14 }} />}
-                    sx={{ textTransform: 'none', minWidth: 'auto', ml: 1 }}
-                  >
-                    {quickAddApiKey ? 'Regenerate' : 'Generate'}
-                  </Button>
-                </Box>
-              </Grid>
-            </Grid>
-            
-            {/* Quick-Add Shortcut Generator */}
-            <Box sx={{ p: { xs: 1.5, sm: 2 }, borderTop: '1px solid', borderColor: 'divider', backgroundColor: 'action.hover' }}>
-              <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.8125rem' }, mb: 1.5 }}>
-                <strong>Create Shortcut:</strong> Select a category to generate a shortcut URL for your phone's home screen.
-              </Typography>
-              
-              {/* Category Selector */}
-              <FormControl fullWidth size="small" sx={{ mb: 1.5 }}>
-                <InputLabel>Category for Shortcut</InputLabel>
-                <Select
-                  value={shortcutCategoryId}
-                  onChange={(e) => setShortcutCategoryId(e.target.value)}
-                  label="Category for Shortcut"
-                >
-                  <MenuItem value="">
-                    <em>No category (show all)</em>
-                  </MenuItem>
-                  {getExpenseCategories().map((category) => (
-                    <MenuItem key={category.category_id} value={category.category_id}>
-                      {category.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              
-              {/* Generated URL with actions */}
-              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  value={getShortcutUrl()}
-                  InputProps={{
-                    readOnly: true,
-                    sx: { fontFamily: 'monospace', fontSize: { xs: '0.75rem', sm: '0.8125rem' } },
-                  }}
-                />
-                <Tooltip title="Copy URL">
-                  <IconButton size="small" onClick={handleCopyShortcutUrl}>
-                    <ContentCopyIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-                <Tooltip title="Open in new tab">
-                  <IconButton size="small" onClick={handleOpenShortcutUrl}>
-                    <OpenInNewIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-              </Box>
-              
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1.5, fontSize: { xs: '0.6875rem', sm: '0.75rem' } }}>
-                <strong>How to add to home screen:</strong> Open the URL in Chrome on your Android phone, tap the menu (⋮), then select "Add to Home Screen".
-              </Typography>
-            </Box>
-          </Box>
-        </Grid>
       </Grid>
-      
-      {/* Snackbar for notifications */}
-      <Snackbar
-        open={snackbarOpen}
-        autoHideDuration={3000}
-        onClose={() => setSnackbarOpen(false)}
-        message={snackbarMessage}
-      />
 
       {/* Edit Settings Dialog */}
       <Dialog

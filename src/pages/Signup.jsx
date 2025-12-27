@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import {
   Container,
   Paper,
@@ -14,8 +14,6 @@ import { supabase } from '../lib/supabase'
 
 function Signup() {
   const navigate = useNavigate()
-  const location = useLocation()
-  const from = location.state?.from?.pathname || '/home'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -68,7 +66,7 @@ function Signup() {
           setError('An account with this email already exists. Please sign in instead.')
         } else if (data.session) {
           // User is immediately signed in (email confirmation disabled in Supabase)
-          navigate(from, { replace: true })
+          navigate('/dashboard')
         } else {
           // Email confirmation required
           setEmailSent(true)

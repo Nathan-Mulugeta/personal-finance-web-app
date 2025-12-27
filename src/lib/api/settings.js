@@ -144,54 +144,6 @@ export async function updateSettings(settingsObject) {
   return results
 }
 
-// Quick-Add Settings Functions
-
-// Get quick-add settings (default account and API key)
-export async function getQuickAddSettings() {
-  const user = await getCurrentUser()
-  if (!user) throw new Error('User not authenticated')
-
-  const { data, error } = await supabase
-    .from('settings')
-    .select('*')
-    .eq('user_id', user.id)
-    .in('setting_key', ['QuickAddDefaultAccountId', 'QuickAddApiKey'])
-
-  if (error) throw error
-  
-  const defaultAccountId = data?.find(s => s.setting_key === 'QuickAddDefaultAccountId')?.setting_value || ''
-  const apiKey = data?.find(s => s.setting_key === 'QuickAddApiKey')?.setting_value || ''
-  
-  return { defaultAccountId, apiKey }
-}
-
-// Set quick-add default account
-export async function setQuickAddDefaultAccount(accountId) {
-  return updateSetting('QuickAddDefaultAccountId', accountId || '')
-}
-
-// Generate a new quick-add API key
-export async function generateQuickAddApiKey() {
-  // Generate a secure random API key
-  const array = new Uint8Array(32)
-  crypto.getRandomValues(array)
-  const apiKey = 'qa_' + Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('')
-  
-  await updateSetting('QuickAddApiKey', apiKey)
-  return apiKey
-}
-
-// Get existing API key or generate a new one
-export async function getOrCreateQuickAddApiKey() {
-  const { apiKey } = await getQuickAddSettings()
-  
-  if (apiKey) {
-    return apiKey
-  }
-  
-  return generateQuickAddApiKey()
-}
-
 // Initialize default settings
 export async function initializeDefaultSettings(userId) {
   // Verify user is authenticated and userId matches the current session

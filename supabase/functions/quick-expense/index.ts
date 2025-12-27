@@ -1,222 +1,416 @@
-// Supabase Edge Function for Quick-Add Expense
-// This function allows adding expenses from external apps like Tasker
-// without needing full browser authentication.
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+// Generate ID matching the frontend pattern: PREFIX_timestamp_random
+function generateId(prefix: string): string {
+  const timestamp = Date.now();
+  const random = Math.floor(Math.random() * 1000)
+    .toString()
+    .padStart(3, '0');
+  return `${prefix}_${timestamp}_${random}`;
+}
 
+// CORS headers for preflight requests
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, content-type',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+};
+
+// Helper to create JSON response
+function jsonResponse(data: object, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
 }
 
-interface QuickExpenseRequest {
-  amount: number
-  category_id: string
-  description?: string
-  api_key?: string
+// Helper to create error response
+function errorResponse(message: string, status = 400) {
+  return jsonResponse({ error: message }, status);
 }
 
-// Generate a transaction ID
-function generateTransactionId(): string {
-  const timestamp = Date.now()
-  const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0')
-  return `TXN_${timestamp}_${random}`
-}
-
-serve(async (req) => {
+Deno.serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  // Only allow GET and POST
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    return errorResponse('Method not allowed', 405);
   }
 
   try {
-    // Only accept POST requests
-    if (req.method !== 'POST') {
-      return new Response(
-        JSON.stringify({ error: 'Method not allowed' }),
-        { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+    // Validate API key
+    const authHeader = req.headers.get('Authorization');
+    const expectedKey = Deno.env.get('QUICK_EXPENSE_API_KEY');
+
+    if (!expectedKey) {
+      console.error('QUICK_EXPENSE_API_KEY not configured');
+      return errorResponse('Server configuration error', 500);
     }
 
-    // Parse request body
-    const body: QuickExpenseRequest = await req.json()
-    const { amount, category_id, description = '', api_key } = body
-
-    // Validate required fields
-    if (!amount || amount <= 0) {
-      return new Response(
-        JSON.stringify({ error: 'Valid amount is required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return errorResponse('Missing or invalid Authorization header', 401);
     }
 
-    if (!category_id) {
-      return new Response(
-        JSON.stringify({ error: 'Category ID is required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+    const providedKey = authHeader.replace('Bearer ', '');
+    if (providedKey !== expectedKey) {
+      return errorResponse('Invalid API key', 401);
     }
 
-    // Create Supabase client with service role for database operations
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey)
+    // Get user ID from environment
+    const userId = Deno.env.get('QUICK_EXPENSE_USER_ID');
+    if (!userId) {
+      console.error('QUICK_EXPENSE_USER_ID not configured');
+      return errorResponse('Server configuration error', 500);
+    }
 
-    let userId: string | null = null
+    // Create Supabase client with service role (bypasses RLS)
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Try to authenticate via API key first
-    if (api_key) {
-      // Find user by API key
-      const { data: settingData, error: settingError } = await supabaseAdmin
-        .from('settings')
-        .select('user_id')
-        .eq('setting_key', 'QuickAddApiKey')
-        .eq('setting_value', api_key)
-        .single()
+    // Handle GET requests (query actions)
+    if (req.method === 'GET') {
+      const url = new URL(req.url);
+      const action = url.searchParams.get('action');
 
-      if (settingError || !settingData) {
-        return new Response(
-          JSON.stringify({ error: 'Invalid API key' }),
-          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
+      if (!action) {
+        return errorResponse('action query parameter is required');
       }
 
-      userId = settingData.user_id
-    } else {
-      // Try to authenticate via Authorization header (JWT)
-      const authHeader = req.headers.get('Authorization')
-      if (authHeader) {
-        const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!
-        const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
-          global: {
-            headers: { Authorization: authHeader },
-          },
-        })
+      switch (action) {
+        case 'getAccountBalance': {
+          const accountID = url.searchParams.get('accountID');
+          if (!accountID) {
+            return errorResponse('accountID query parameter is required');
+          }
 
-        const { data: { user }, error: userError } = await supabaseClient.auth.getUser()
-        
-        if (userError || !user) {
-          return new Response(
-            JSON.stringify({ error: 'Invalid authorization token' }),
-            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          )
+          // Get account details
+          const { data: account, error: accountError } = await supabase
+            .from('accounts')
+            .select('account_id, name, currency, opening_balance')
+            .eq('account_id', accountID)
+            .eq('user_id', userId)
+            .single();
+
+          if (accountError || !account) {
+            return errorResponse('Account not found', 404);
+          }
+
+          // Calculate balance using the database function
+          const { data: balance, error: balanceError } = await supabase.rpc(
+            'calculate_account_balance',
+            {
+              p_account_id: accountID,
+              p_user_id: userId,
+            }
+          );
+
+          if (balanceError) {
+            console.error('Balance calculation error:', balanceError);
+            return errorResponse('Failed to calculate balance', 500);
+          }
+
+          // Format for Tasker: %http_data.data.CurrentBalance
+          return jsonResponse({
+            data: {
+              CurrentBalance: balance ?? account.opening_balance ?? 0,
+              Currency: account.currency,
+              AccountID: account.account_id,
+              Name: account.name,
+            },
+          });
         }
 
-        userId = user.id
+        case 'getCategories': {
+          const { data: categories, error: categoriesError } = await supabase
+            .from('categories')
+            .select('category_id, name, type, parent_category_id')
+            .eq('user_id', userId)
+            .eq('status', 'Active')
+            .order('name', { ascending: true });
+
+          if (categoriesError) {
+            console.error('Categories fetch error:', categoriesError);
+            return errorResponse('Failed to fetch categories', 500);
+          }
+
+          // Map to user's exact field names
+          // Format for Tasker: json.data array
+          const mappedCategories = (categories || []).map((cat) => ({
+            CategoryID: cat.category_id,
+            Name: cat.name,
+            Type: cat.type,
+            ParentCategoryID: cat.parent_category_id,
+          }));
+
+          return jsonResponse({
+            data: mappedCategories,
+          });
+        }
+
+        case 'getAccounts': {
+          const status = url.searchParams.get('status');
+
+          let query = supabase
+            .from('accounts')
+            .select('account_id, name, currency, status')
+            .eq('user_id', userId);
+
+          if (status) {
+            query = query.eq('status', status);
+          }
+
+          const { data: accounts, error: accountsError } = await query.order(
+            'name',
+            { ascending: true }
+          );
+
+          if (accountsError) {
+            console.error('Accounts fetch error:', accountsError);
+            return errorResponse('Failed to fetch accounts', 500);
+          }
+
+          // Map to user's exact field names
+          // Format for Tasker: json.data array
+          const mappedAccounts = (accounts || []).map((acc) => ({
+            AccountID: acc.account_id,
+            Name: acc.name,
+            Currency: acc.currency,
+            Status: acc.status,
+          }));
+
+          return jsonResponse({
+            data: mappedAccounts,
+          });
+        }
+
+        default:
+          return errorResponse(
+            `Unknown action: ${action}. Valid actions: getAccountBalance, getCategories, getAccounts`
+          );
       }
     }
 
-    if (!userId) {
-      return new Response(
-        JSON.stringify({ error: 'Authentication required. Provide api_key or Authorization header.' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
+    // Handle POST requests
+    const body = await req.json();
 
-    // Get user's quick-add default account
-    const { data: accountSetting, error: accountSettingError } = await supabaseAdmin
-      .from('settings')
-      .select('setting_value')
-      .eq('user_id', userId)
-      .eq('setting_key', 'QuickAddDefaultAccountId')
-      .single()
+    // Check for action-based routing (Tasker format)
+    const action = body.action;
 
-    if (accountSettingError || !accountSetting?.setting_value) {
-      return new Response(
-        JSON.stringify({ error: 'No default account configured. Please set one in Settings.' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
+    if (action === 'createTransaction') {
+      // Tasker format with PascalCase fields
+      const {
+        AccountID,
+        CategoryID,
+        Amount,
+        Currency,
+        Description = '',
+        Type = 'Expense',
+        Date: dateField,
+      } = body;
 
-    const accountId = accountSetting.setting_value
+      // Validate required fields
+      if (Amount === undefined || Amount === null) {
+        return errorResponse('Amount is required');
+      }
+      if (!CategoryID) {
+        return errorResponse('CategoryID is required');
+      }
+      if (!AccountID) {
+        return errorResponse('AccountID is required');
+      }
+      if (!Currency) {
+        return errorResponse('Currency is required');
+      }
 
-    // Get account details to verify it exists and get currency
-    const { data: account, error: accountError } = await supabaseAdmin
-      .from('accounts')
-      .select('*')
-      .eq('account_id', accountId)
-      .eq('user_id', userId)
-      .eq('status', 'Active')
-      .single()
+      // Validate type
+      const validTypes = [
+        'Income',
+        'Expense',
+        'Transfer',
+        'Transfer Out',
+        'Transfer In',
+      ];
+      if (!validTypes.includes(Type)) {
+        return errorResponse(
+          `Invalid Type. Must be one of: ${validTypes.join(', ')}`
+        );
+      }
 
-    if (accountError || !account) {
-      return new Response(
-        JSON.stringify({ error: 'Default account not found or is not active' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
+      // Prepare transaction data
+      const transactionId = generateId('TXN');
+      const transactionDate = dateField ? new Date(dateField) : new Date();
+      const now = new Date();
 
-    // Verify category exists and belongs to user
-    const { data: category, error: categoryError } = await supabaseAdmin
-      .from('categories')
-      .select('*')
-      .eq('category_id', category_id)
-      .eq('user_id', userId)
-      .eq('status', 'Active')
-      .single()
-
-    if (categoryError || !category) {
-      return new Response(
-        JSON.stringify({ error: 'Category not found or is not active' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    // Create the transaction
-    const transactionId = generateTransactionId()
-    const now = new Date()
-    const dateStr = now.toISOString().split('T')[0]
-
-    const { data: transaction, error: transactionError } = await supabaseAdmin
-      .from('transactions')
-      .insert({
+      const transactionData = {
         transaction_id: transactionId,
         user_id: userId,
-        account_id: accountId,
-        category_id: category_id,
-        date: dateStr,
-        amount: -Math.abs(amount), // Negative for expenses
-        currency: account.currency,
-        description: description,
-        type: 'Expense',
+        account_id: AccountID,
+        category_id: CategoryID,
+        date: transactionDate.toISOString().split('T')[0],
+        amount: Number(Amount),
+        currency: Currency.toUpperCase(),
+        description: Description,
+        type: Type,
         status: 'Cleared',
+        transfer_id: null,
+        linked_transaction_id: null,
         created_at: now.toISOString(),
-      })
-      .select()
-      .single()
+      };
 
-    if (transactionError) {
-      console.error('Transaction error:', transactionError)
-      return new Response(
-        JSON.stringify({ error: 'Failed to create transaction', details: transactionError.message }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      // Insert transaction
+      const { data, error } = await supabase
+        .from('transactions')
+        .insert(transactionData)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Database error:', error);
+        return errorResponse(error.message, 500);
+      }
+
+      // Success response matching Tasker expectations
+      return jsonResponse({
+        success: true,
+        data: {
+          TransactionID: data.transaction_id,
+          Amount: data.amount,
+          Currency: data.currency,
+        },
+        message: `Transaction of ${data.amount} ${data.currency} added successfully`,
+      });
     }
 
-    return new Response(
-      JSON.stringify({
+    if (action === 'createTransactionsBatch') {
+      const { transactions } = body;
+
+      // Validate transactions array
+      if (!transactions || !Array.isArray(transactions)) {
+        return errorResponse('transactions array is required');
+      }
+      if (transactions.length === 0) {
+        return errorResponse('transactions array cannot be empty');
+      }
+      if (transactions.length > 100) {
+        return errorResponse('Maximum 100 transactions per batch');
+      }
+
+      const validTypes = [
+        'Income',
+        'Expense',
+        'Transfer',
+        'Transfer Out',
+        'Transfer In',
+      ];
+
+      // Validate each transaction and prepare data
+      const transactionsToInsert = [];
+      const validationErrors = [];
+      const now = new Date();
+
+      for (let i = 0; i < transactions.length; i++) {
+        const txn = transactions[i];
+        const {
+          AccountID,
+          CategoryID,
+          Amount,
+          Currency,
+          Description = '',
+          Type = 'Expense',
+          Date: dateField,
+        } = txn;
+
+        const errors = [];
+
+        if (Amount === undefined || Amount === null) {
+          errors.push('Amount is required');
+        }
+        if (!CategoryID) {
+          errors.push('CategoryID is required');
+        }
+        if (!AccountID) {
+          errors.push('AccountID is required');
+        }
+        if (!Currency) {
+          errors.push('Currency is required');
+        }
+        if (Type && !validTypes.includes(Type)) {
+          errors.push(`Invalid Type: ${Type}`);
+        }
+
+        if (errors.length > 0) {
+          validationErrors.push({ index: i, errors });
+          continue;
+        }
+
+        const transactionId = generateId('TXN');
+        const transactionDate = dateField ? new Date(dateField) : new Date();
+
+        transactionsToInsert.push({
+          transaction_id: transactionId,
+          user_id: userId,
+          account_id: AccountID,
+          category_id: CategoryID,
+          date: transactionDate.toISOString().split('T')[0],
+          amount: Number(Amount),
+          currency: Currency.toUpperCase(),
+          description: Description,
+          type: Type,
+          status: 'Cleared',
+          transfer_id: null,
+          linked_transaction_id: null,
+          created_at: now.toISOString(),
+        });
+      }
+
+      // If any validation errors, return them
+      if (validationErrors.length > 0) {
+        return jsonResponse(
+          {
+            success: false,
+            error: `Validation failed for ${validationErrors.length} transaction(s)`,
+            validationErrors,
+          },
+          400
+        );
+      }
+
+      // Insert all transactions
+      const { data, error } = await supabase
+        .from('transactions')
+        .insert(transactionsToInsert)
+        .select();
+
+      if (error) {
+        console.error('Database error:', error);
+        return errorResponse(error.message, 500);
+      }
+
+      // Success response
+      return jsonResponse({
         success: true,
-        transaction: {
-          transaction_id: transaction.transaction_id,
-          amount: transaction.amount,
-          currency: transaction.currency,
-          category: category.name,
-          account: account.name,
-          date: transaction.date,
-          description: transaction.description,
+        data: {
+          inserted: data.length,
+          transactions: data.map((t) => ({
+            TransactionID: t.transaction_id,
+            Amount: t.amount,
+            Currency: t.currency,
+          })),
         },
-      }),
-      { status: 201, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+        message: `${data.length} transaction(s) added successfully`,
+      });
+    }
 
-  } catch (error) {
-    console.error('Edge function error:', error)
-    return new Response(
-      JSON.stringify({ error: 'Internal server error', details: error.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    // If no valid action specified, return error
+    return errorResponse(
+      'action is required in POST body. Valid actions: "createTransaction", "createTransactionsBatch"'
+    );
+  } catch (err) {
+    console.error('Unexpected error:', err);
+    return errorResponse('An unexpected error occurred', 500);
   }
-})
-
+});
