@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import { supabase } from '../../lib/supabase'
 import { setUser, setSession, setLoading } from '../../store/slices/authSlice'
@@ -8,6 +8,7 @@ import LoadingSpinner from '../common/LoadingSpinner'
 
 function ProtectedRoute({ children }) {
   const dispatch = useDispatch()
+  const location = useLocation()
   const user = useSelector((state) => state.auth.user)
   const loading = useSelector((state) => state.auth.loading)
   const isInitialized = useSelector((state) => state.appInit.isInitialized)
@@ -75,7 +76,8 @@ function ProtectedRoute({ children }) {
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />
+    // Pass the current location so we can redirect back after login
+    return <Navigate to="/login" state={{ from: location }} replace />
   }
 
   return children

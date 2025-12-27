@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import {
   Container,
@@ -16,18 +16,22 @@ import { setUser, setSession } from '../store/slices/authSlice'
 
 function Login() {
   const navigate = useNavigate()
+  const location = useLocation()
   const dispatch = useDispatch()
   const user = useSelector((state) => state.auth.user)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  
+  // Get the intended destination from location state, or default to /home
+  const from = location.state?.from?.pathname || '/home'
 
   useEffect(() => {
     if (user) {
-      navigate('/dashboard')
+      navigate(from, { replace: true })
     }
-  }, [user, navigate])
+  }, [user, navigate, from])
 
   const handleLogin = async (e) => {
     e.preventDefault()
@@ -44,7 +48,7 @@ function Login() {
 
       dispatch(setUser(data.user))
       dispatch(setSession(data.session))
-      navigate('/dashboard')
+      navigate(from, { replace: true })
     } catch (err) {
       setError(err.message)
     } finally {
