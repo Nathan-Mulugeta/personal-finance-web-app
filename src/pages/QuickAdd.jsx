@@ -1,11 +1,10 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   Box,
   Button,
   CircularProgress,
-  Collapse,
   FormControl,
   InputLabel,
   MenuItem,
@@ -16,8 +15,6 @@ import {
   IconButton,
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import AddIcon from '@mui/icons-material/Add';
 import CloseIcon from '@mui/icons-material/Close';
 import { fetchCategories } from '../store/slices/categoriesSlice';
@@ -47,12 +44,12 @@ function QuickAdd() {
   
   // Local state
   const [amount, setAmount] = useState('');
-  const [categoryId, setCategoryId] = useState('');
+  const [categoryId, setCategoryId] = useState(categoryFromUrl || '');
   const [description, setDescription] = useState('');
-  const [showDescription, setShowDescription] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
+  const amountInputRef = useRef(null);
   
   // Load data on mount
   useEffect(() => {
@@ -69,7 +66,7 @@ function QuickAdd() {
   
   // Set category from URL when categories are loaded
   useEffect(() => {
-    if (categoryFromUrl && categories.length > 0) {
+    if (categoryFromUrl && categories.length > 0 && !categoryId) {
       const foundCategory = categories.find(
         (cat) => cat.category_id === categoryFromUrl
       );
@@ -77,7 +74,18 @@ function QuickAdd() {
         setCategoryId(categoryFromUrl);
       }
     }
-  }, [categoryFromUrl, categories]);
+  }, [categoryFromUrl, categories, categoryId]);
+  
+  // Focus the amount input and open numeric keyboard when page loads
+  useEffect(() => {
+    if (!isLoading && amountInputRef.current) {
+      // Small delay to ensure the input is rendered
+      setTimeout(() => {
+        amountInputRef.current?.focus();
+        amountInputRef.current?.click();
+      }, 100);
+    }
+  }, [isLoading]);
   
   // Get quick-add default account from settings
   const defaultAccountId = useMemo(() => {
@@ -95,6 +103,9 @@ function QuickAdd() {
     );
   }, [defaultAccountId, accounts]);
   
+  // Check if we're ready to show the form
+  const isLoading = !categoriesInitialized || !accountsInitialized || !settingsInitialized;
+  
   // Get active expense categories with hierarchy
   const expenseCategories = useMemo(() => {
     const activeCategories = categories.filter(
@@ -102,9 +113,6 @@ function QuickAdd() {
     );
     return flattenCategoryTree(activeCategories);
   }, [categories]);
-  
-  // Check if we're ready to show the form
-  const isLoading = !categoriesInitialized || !accountsInitialized || !settingsInitialized;
   
   // Handle form submission
   const handleSubmit = async (e) => {
@@ -148,7 +156,6 @@ function QuickAdd() {
       setTimeout(() => {
         setAmount('');
         setDescription('');
-        setShowDescription(false);
         setSuccess(false);
       }, 1500);
     } catch (err) {
@@ -164,7 +171,10 @@ function QuickAdd() {
     setSuccess(false);
     setAmount('');
     setDescription('');
-    setShowDescription(false);
+    // Focus the amount input after reset
+    setTimeout(() => {
+      amountInputRef.current?.focus();
+    }, 100);
   };
   
   // Get category name for display
@@ -287,11 +297,19 @@ function QuickAdd() {
           <TextField
             fullWidth
             label="Amount"
-            type="number"
+            type="text"
             inputMode="decimal"
+            pattern="[0-9]*\.?[0-9]*"
             value={amount}
-            onChange={(e) => setAmount(e.target.value)}
+            onChange={(e) => {
+              // Only allow numbers and decimal point
+              const val = e.target.value;
+              if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                setAmount(val);
+              }
+            }}
             placeholder="0.00"
+            inputRef={amountInputRef}
             autoFocus
             InputProps={{
               startAdornment: defaultAccount ? (
@@ -351,32 +369,20 @@ function QuickAdd() {
           </FormControl>
         </Box>
         
-        {/* Description toggle and field */}
+        {/* Description field - always visible */}
         <Box sx={{ mb: 3 }}>
-          <Button
-            variant="text"
-            onClick={() => setShowDescription(!showDescription)}
-            endIcon={showDescription ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-            sx={{ mb: 1, textTransform: 'none' }}
-          >
-            {showDescription ? 'Hide description' : 'Add description (optional)'}
-          </Button>
-          <Collapse in={showDescription}>
-            <TextField
-              fullWidth
-              label="Description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="What was this expense for?"
-              multiline
-              rows={2}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: 2,
-                },
-              }}
-            />
-          </Collapse>
+          <TextField
+            fullWidth
+            label="Description (optional)"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="What was this expense for?"
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                borderRadius: 2,
+              },
+            }}
+          />
         </Box>
         
         {/* Submit button */}

@@ -1,87 +1,91 @@
-import { useEffect } from 'react'
-import { Navigate, useLocation } from 'react-router-dom'
-import { useDispatch, useSelector } from 'react-redux'
-import { supabase } from '../../lib/supabase'
-import { setUser, setSession, setLoading } from '../../store/slices/authSlice'
-import { initializeApp } from '../../store/slices/appInitSlice'
-import LoadingSpinner from '../common/LoadingSpinner'
+import { useEffect } from 'react';
+import { Navigate, useLocation } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
+import { supabase } from '../../lib/supabase';
+import { setUser, setSession, setLoading } from '../../store/slices/authSlice';
+import { initializeApp } from '../../store/slices/appInitSlice';
+import LoadingSpinner from '../common/LoadingSpinner';
 
 function ProtectedRoute({ children }) {
-  const dispatch = useDispatch()
-  const location = useLocation()
-  const user = useSelector((state) => state.auth.user)
-  const loading = useSelector((state) => state.auth.loading)
-  const isInitialized = useSelector((state) => state.appInit.isInitialized)
-  const isInitializing = useSelector((state) => state.appInit.isLoading)
+  const dispatch = useDispatch();
+  const location = useLocation();
+  const user = useSelector((state) => state.auth.user);
+  const loading = useSelector((state) => state.auth.loading);
+  const isInitialized = useSelector((state) => state.appInit.isInitialized);
+  const isInitializing = useSelector((state) => state.appInit.isLoading);
 
   useEffect(() => {
     const checkUser = async () => {
-      dispatch(setLoading(true))
+      dispatch(setLoading(true));
       try {
-        const { data: { session }, error } = await supabase.auth.getSession()
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.getSession();
         if (error) {
-          console.warn('Error checking session:', error.message)
-          dispatch(setLoading(false))
-          return
+          console.warn('Error checking session:', error.message);
+          dispatch(setLoading(false));
+          return;
         }
         if (session) {
-          dispatch(setUser(session.user))
-          dispatch(setSession(session))
+          dispatch(setUser(session.user));
+          dispatch(setSession(session));
         }
       } catch (error) {
-        console.warn('Error in checkUser:', error.message)
+        console.warn('Error in checkUser:', error.message);
       } finally {
-        dispatch(setLoading(false))
+        dispatch(setLoading(false));
       }
-    }
+    };
 
     if (!user) {
-      checkUser()
+      checkUser();
     }
-  }, [dispatch, user])
+  }, [dispatch, user]);
 
   useEffect(() => {
-    let subscription = null
+    let subscription = null;
     try {
-      const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const {
+        data: { subscription: authSubscription },
+      } = supabase.auth.onAuthStateChange((_event, session) => {
         if (session) {
-          dispatch(setUser(session.user))
-          dispatch(setSession(session))
+          dispatch(setUser(session.user));
+          dispatch(setSession(session));
         } else {
-          dispatch(setUser(null))
-          dispatch(setSession(null))
+          dispatch(setUser(null));
+          dispatch(setSession(null));
         }
-      })
-      subscription = authSubscription
+      });
+      subscription = authSubscription;
     } catch (error) {
-      console.warn('Error setting up auth state listener:', error.message)
+      console.warn('Error setting up auth state listener:', error.message);
     }
 
     return () => {
       if (subscription) {
-        subscription.unsubscribe()
+        subscription.unsubscribe();
       }
-    }
-  }, [dispatch])
+    };
+  }, [dispatch]);
 
   // Initialize app data when user is authenticated but app is not initialized
   useEffect(() => {
     if (user && !isInitialized && !isInitializing) {
-      dispatch(initializeApp())
+      dispatch(initializeApp());
     }
-  }, [user, isInitialized, isInitializing, dispatch])
+  }, [user, isInitialized, isInitializing, dispatch]);
 
   if (loading || (user && !isInitialized)) {
-    return <LoadingSpinner fullScreen />
+    return <LoadingSpinner fullScreen />;
   }
 
   if (!user) {
     // Pass the current location so we can redirect back after login
-    return <Navigate to="/login" state={{ from: location }} replace />
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  return children
+  return children;
 }
 
-export default ProtectedRoute
-
+export default ProtectedRoute;
