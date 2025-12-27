@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import {
   Container,
@@ -9,6 +9,7 @@ import {
   Typography,
   Box,
   Alert,
+  Divider,
 } from '@mui/material'
 import { supabase } from '../lib/supabase'
 import { setUser, setSession } from '../store/slices/authSlice'
@@ -51,45 +52,42 @@ function Login() {
     }
   }
 
-  const handleSignUp = async () => {
-    setLoading(true)
-    setError(null)
-
-    try {
-      const { data, error: authError } = await supabase.auth.signUp({
-        email,
-        password,
-      })
-
-      if (authError) throw authError
-
-      if (data.user) {
-        // User created, now sign in
-        await handleLogin({ preventDefault: () => {} })
-      }
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
   return (
     <Container component="main" maxWidth="xs">
       <Box
         sx={{
-          marginTop: 8,
+          minHeight: '100vh',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
+          justifyContent: 'center',
         }}
       >
-        <Paper sx={{ p: 4, width: '100%' }}>
-          <Typography component="h1" variant="h5" align="center" gutterBottom>
-            Personal Finance App
+        <Paper
+          elevation={2}
+          sx={{
+            p: 4,
+            width: '100%',
+            borderRadius: 2,
+          }}
+        >
+          <Typography
+            component="h1"
+            variant="h5"
+            align="center"
+            gutterBottom
+            sx={{ fontWeight: 500 }}
+          >
+            Sign in
           </Typography>
-          <Typography variant="body2" align="center" color="text.secondary" sx={{ mb: 3 }}>
-            Sign in to your account
+          
+          <Typography
+            variant="body2"
+            align="center"
+            color="text.secondary"
+            sx={{ mb: 3 }}
+          >
+            to continue to Personal Finance
           </Typography>
 
           {error && (
@@ -98,18 +96,19 @@ function Login() {
             </Alert>
           )}
 
-          <Box component="form" onSubmit={handleLogin} sx={{ mt: 1 }}>
+          <Box component="form" onSubmit={handleLogin}>
             <TextField
               margin="normal"
               required
               fullWidth
               id="email"
-              label="Email Address"
+              label="Email"
               name="email"
               autoComplete="email"
               autoFocus
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              disabled={loading}
             />
             <TextField
               margin="normal"
@@ -122,25 +121,43 @@ function Login() {
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              disabled={loading}
             />
+            
             <Button
               type="submit"
               fullWidth
               variant="contained"
-              sx={{ mt: 3, mb: 2 }}
+              size="large"
+              sx={{ mt: 3, mb: 2, py: 1.5 }}
               disabled={loading}
             >
-              Sign In
+              {loading ? 'Signing in...' : 'Sign in'}
             </Button>
-            <Button
-              type="button"
-              fullWidth
-              variant="outlined"
-              onClick={handleSignUp}
-              disabled={loading}
-            >
-              Sign Up
-            </Button>
+          </Box>
+
+          <Divider sx={{ my: 2 }} />
+
+          <Box sx={{ textAlign: 'center' }}>
+            <Typography variant="body2" color="text.secondary">
+              Don't have an account?{' '}
+              <Link
+                to="/signup"
+                style={{
+                  color: 'inherit',
+                  textDecoration: 'none',
+                }}
+              >
+                <Typography
+                  component="span"
+                  variant="body2"
+                  color="primary"
+                  sx={{ fontWeight: 500 }}
+                >
+                  Sign up
+                </Typography>
+              </Link>
+            </Typography>
           </Box>
         </Paper>
       </Box>
@@ -149,4 +166,3 @@ function Login() {
 }
 
 export default Login
-
