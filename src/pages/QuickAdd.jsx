@@ -51,6 +51,33 @@ function QuickAdd() {
   const [success, setSuccess] = useState(false);
   const amountInputRef = useRef(null);
   
+  // Check if we're ready to show the form (define before useEffects that depend on it)
+  const isLoading = !categoriesInitialized || !accountsInitialized || !settingsInitialized;
+  
+  // Get quick-add default account from settings
+  const defaultAccountId = useMemo(() => {
+    const setting = settings.find(
+      (s) => s.setting_key === 'QuickAddDefaultAccountId'
+    );
+    return setting?.setting_value || '';
+  }, [settings]);
+  
+  // Get the default account object
+  const defaultAccount = useMemo(() => {
+    if (!defaultAccountId) return null;
+    return accounts.find(
+      (acc) => acc.account_id === defaultAccountId && acc.status === 'Active'
+    );
+  }, [defaultAccountId, accounts]);
+  
+  // Get active expense categories with hierarchy
+  const expenseCategories = useMemo(() => {
+    const activeCategories = categories.filter(
+      (cat) => cat.type === 'Expense' && cat.status === 'Active'
+    );
+    return flattenCategoryTree(activeCategories);
+  }, [categories]);
+  
   // Load data on mount
   useEffect(() => {
     if (!categoriesInitialized) {
@@ -76,43 +103,15 @@ function QuickAdd() {
     }
   }, [categoryFromUrl, categories, categoryId]);
   
-  // Focus the amount input and open numeric keyboard when page loads
+  // Focus the amount input when page loads
   useEffect(() => {
     if (!isLoading && amountInputRef.current) {
       // Small delay to ensure the input is rendered
       setTimeout(() => {
         amountInputRef.current?.focus();
-        amountInputRef.current?.click();
       }, 100);
     }
   }, [isLoading]);
-  
-  // Get quick-add default account from settings
-  const defaultAccountId = useMemo(() => {
-    const setting = settings.find(
-      (s) => s.setting_key === 'QuickAddDefaultAccountId'
-    );
-    return setting?.setting_value || '';
-  }, [settings]);
-  
-  // Get the default account object
-  const defaultAccount = useMemo(() => {
-    if (!defaultAccountId) return null;
-    return accounts.find(
-      (acc) => acc.account_id === defaultAccountId && acc.status === 'Active'
-    );
-  }, [defaultAccountId, accounts]);
-  
-  // Check if we're ready to show the form
-  const isLoading = !categoriesInitialized || !accountsInitialized || !settingsInitialized;
-  
-  // Get active expense categories with hierarchy
-  const expenseCategories = useMemo(() => {
-    const activeCategories = categories.filter(
-      (cat) => cat.type === 'Expense' && cat.status === 'Active'
-    );
-    return flattenCategoryTree(activeCategories);
-  }, [categories]);
   
   // Handle form submission
   const handleSubmit = async (e) => {
