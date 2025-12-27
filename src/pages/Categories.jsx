@@ -52,9 +52,8 @@ function Categories() {
   const dispatch = useDispatch();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const { categories, loading, backgroundLoading, isInitialized, error } = useSelector(
-    (state) => state.categories
-  );
+  const { categories, loading, backgroundLoading, isInitialized, error } =
+    useSelector((state) => state.categories);
   const [openDialog, setOpenDialog] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -102,15 +101,19 @@ function Categories() {
   const categoryTree = useMemo(() => {
     // Filter categories based on current filters
     let filteredCategories = categories;
-    
+
     if (filters.type) {
-      filteredCategories = filteredCategories.filter(cat => cat.type === filters.type);
+      filteredCategories = filteredCategories.filter(
+        (cat) => cat.type === filters.type
+      );
     }
-    
+
     if (filters.status) {
-      filteredCategories = filteredCategories.filter(cat => cat.status === filters.status);
+      filteredCategories = filteredCategories.filter(
+        (cat) => cat.status === filters.status
+      );
     }
-    
+
     // Build tree from filtered categories
     return buildCategoryTree(filteredCategories);
   }, [categories, filters.type, filters.status]);
@@ -162,12 +165,13 @@ function Categories() {
         await dispatch(createCategory(data)).unwrap();
       }
       handleCloseDialog();
-      
+
       // Refresh all data to ensure all pages have fresh data
       await refreshAllData(dispatch);
     } catch (err) {
       console.error('Error saving category:', err);
-      const errorMessage = err?.message || 'Failed to save category. Please try again.';
+      const errorMessage =
+        err?.message || 'Failed to save category. Please try again.';
       setActionError(errorMessage);
     } finally {
       setIsSubmitting(false);
@@ -183,12 +187,13 @@ function Categories() {
       await dispatch(deleteCategory(deleteConfirm.category_id)).unwrap();
       setDeleteConfirm(null);
       setDeleteError(null);
-      
+
       // Refresh all data to ensure all pages have fresh data
       await refreshAllData(dispatch);
     } catch (err) {
       console.error('Error deleting category:', err);
-      const errorMessage = err?.message || 'Failed to delete category. Please try again.';
+      const errorMessage =
+        err?.message || 'Failed to delete category. Please try again.';
       setDeleteError(errorMessage);
     } finally {
       setIsDeleting(false);
@@ -261,7 +266,7 @@ function Categories() {
   // Get available parent categories (excluding self and descendants when editing)
   const getAvailableParents = () => {
     if (!watchedType) return [];
-    
+
     let available = categories.filter(
       (cat) =>
         cat.type === watchedType &&
@@ -529,9 +534,9 @@ function Categories() {
           gap: { xs: 1, sm: 0 },
         }}
       >
-        <Typography 
-          variant="h5" 
-          sx={{ 
+        <Typography
+          variant="h5"
+          sx={{
             fontSize: { xs: '1.25rem', sm: '1.5rem' },
             fontWeight: 500,
             color: 'text.primary',
@@ -539,7 +544,14 @@ function Categories() {
         >
           Categories
         </Typography>
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', width: { xs: '100%', sm: 'auto' } }}>
+        <Box
+          sx={{
+            display: 'flex',
+            gap: 1,
+            flexWrap: 'wrap',
+            width: { xs: '100%', sm: 'auto' },
+          }}
+        >
           <Button
             variant={activeFilterCount > 0 ? 'contained' : 'text'}
             startIcon={<FilterListIcon sx={{ fontSize: 18 }} />}
@@ -576,9 +588,9 @@ function Categories() {
 
       {/* Filters Section */}
       <Collapse in={filtersOpen}>
-        <Box 
-          sx={{ 
-            mb: 2, 
+        <Box
+          sx={{
+            mb: 2,
             p: { xs: 1.5, sm: 2 },
             borderBottom: '1px solid',
             borderColor: 'divider',
@@ -595,9 +607,15 @@ function Categories() {
                   onChange={(e) => handleFilterChange('type', e.target.value)}
                   sx={{ fontSize: '0.875rem' }}
                 >
-                  <MenuItem value="" sx={{ fontSize: '0.875rem' }}>All Types</MenuItem>
+                  <MenuItem value="" sx={{ fontSize: '0.875rem' }}>
+                    All Types
+                  </MenuItem>
                   {CATEGORY_TYPES.map((type) => (
-                    <MenuItem key={type} value={type} sx={{ fontSize: '0.875rem' }}>
+                    <MenuItem
+                      key={type}
+                      value={type}
+                      sx={{ fontSize: '0.875rem' }}
+                    >
                       {type}
                     </MenuItem>
                   ))}
@@ -614,7 +632,11 @@ function Categories() {
                   sx={{ fontSize: '0.875rem' }}
                 >
                   {CATEGORY_STATUSES.map((status) => (
-                    <MenuItem key={status} value={status} sx={{ fontSize: '0.875rem' }}>
+                    <MenuItem
+                      key={status}
+                      value={status}
+                      sx={{ fontSize: '0.875rem' }}
+                    >
                       {status}
                     </MenuItem>
                   ))}
@@ -626,9 +648,9 @@ function Categories() {
       </Collapse>
 
       {categoryTree.length === 0 ? (
-        <Box 
-          sx={{ 
-            textAlign: 'center', 
+        <Box
+          sx={{
+            textAlign: 'center',
             py: { xs: 4, sm: 6 },
             border: '1px solid',
             borderColor: 'divider',
@@ -637,22 +659,26 @@ function Categories() {
           }}
         >
           <CategoryIcon
-            sx={{ 
-              fontSize: { xs: 48, sm: 64 }, 
+            sx={{
+              fontSize: { xs: 48, sm: 64 },
               color: 'text.secondary',
               mb: 1.5,
               opacity: 0.5,
             }}
           />
-          <Typography 
-            variant="h6" 
-            color="text.secondary" 
+          <Typography
+            variant="h6"
+            color="text.secondary"
             gutterBottom
             sx={{ fontSize: { xs: '1rem', sm: '1.125rem' }, fontWeight: 500 }}
           >
             No categories yet
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontSize: '0.875rem' }}>
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ mb: 2, fontSize: '0.875rem' }}
+          >
             Create your first category to organize your transactions
           </Typography>
           <Button
@@ -691,9 +717,9 @@ function Categories() {
               backgroundColor: 'background.default',
             }}
           >
-            <Typography 
-              variant="caption" 
-              sx={{ 
+            <Typography
+              variant="caption"
+              sx={{
                 fontSize: '0.75rem',
                 fontWeight: 600,
                 color: 'text.secondary',
@@ -703,20 +729,19 @@ function Categories() {
             >
               Category
             </Typography>
-            <Typography 
-              variant="caption" 
-              sx={{ 
+            <Typography
+              variant="caption"
+              sx={{
                 fontSize: '0.75rem',
                 color: 'text.secondary',
               }}
             >
-              {countTotalCategories(categoryTree)} categor{countTotalCategories(categoryTree) === 1 ? 'y' : 'ies'}
+              {countTotalCategories(categoryTree)} categor
+              {countTotalCategories(categoryTree) === 1 ? 'y' : 'ies'}
             </Typography>
           </Box>
           {/* Category List */}
-          <Box>
-            {renderCategoryTree(categoryTree)}
-          </Box>
+          <Box>{renderCategoryTree(categoryTree)}</Box>
         </Box>
       )}
 
@@ -732,13 +757,13 @@ function Categories() {
           <DialogTitle>
             {editingCategory ? 'Edit Category' : 'Create New Category'}
           </DialogTitle>
-          <DialogContent>
+          <DialogContent sx={{ overflow: 'visible' }}>
             {actionError && (
               <Alert severity="error" sx={{ mb: 2 }}>
                 {actionError}
               </Alert>
             )}
-            <Grid container spacing={{ xs: 1.5, sm: 2 }} sx={{ mt: 1 }}>
+            <Grid container spacing={{ xs: 1.5, sm: 2 }} sx={{ mt: 2 }}>
               <Grid item xs={12}>
                 <TextField
                   fullWidth
@@ -805,7 +830,10 @@ function Categories() {
                   >
                     <MenuItem value="">None (Root Category)</MenuItem>
                     {getAvailableParents().map((category) => (
-                      <MenuItem key={category.category_id} value={category.category_id}>
+                      <MenuItem
+                        key={category.category_id}
+                        value={category.category_id}
+                      >
                         {category.name}
                       </MenuItem>
                     ))}
@@ -845,7 +873,11 @@ function Categories() {
               type="submit"
               variant="contained"
               disabled={isSubmitting}
-              startIcon={isSubmitting ? <CircularProgress size={20} color="inherit" /> : null}
+              startIcon={
+                isSubmitting ? (
+                  <CircularProgress size={20} color="inherit" />
+                ) : null
+              }
             >
               {isSubmitting
                 ? editingCategory
@@ -860,8 +892,8 @@ function Categories() {
       </Dialog>
 
       {/* Delete Confirmation Dialog */}
-      <Dialog 
-        open={!!deleteConfirm} 
+      <Dialog
+        open={!!deleteConfirm}
         onClose={() => {
           setDeleteConfirm(null);
           setDeleteError(null);
@@ -902,7 +934,9 @@ function Categories() {
             color="error"
             variant="contained"
             disabled={isDeleting}
-            startIcon={isDeleting ? <CircularProgress size={20} color="inherit" /> : null}
+            startIcon={
+              isDeleting ? <CircularProgress size={20} color="inherit" /> : null
+            }
           >
             {isDeleting ? 'Deleting...' : 'Delete'}
           </Button>
