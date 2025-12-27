@@ -146,6 +146,20 @@ export async function updateSettings(settingsObject) {
 
 // Initialize default settings
 export async function initializeDefaultSettings(userId) {
+  // Verify user is authenticated and userId matches the current session
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+  
+  if (sessionError || !session) {
+    console.warn('No active session when initializing settings')
+    return
+  }
+
+  // Ensure the userId matches the authenticated user
+  if (session.user.id !== userId) {
+    console.warn('User ID mismatch when initializing settings')
+    return
+  }
+
   // Pre-check: verify if any settings already exist for this user
   const { data: existingSettings, error: checkError } = await supabase
     .from('settings')
@@ -166,45 +180,45 @@ export async function initializeDefaultSettings(userId) {
     { setting_key: 'LendingPaymentCategoryID', setting_value: '' },
   ]
 
-  // Use upsert to avoid conflicts if settings already exist
-  const settingsToInsert = defaults.map(setting => ({
-    user_id: userId,
-    ...setting,
-  }))
+  // Insert settings one by one to handle any conflicts gracefully
+  for (const setting of defaults) {
+    try {
+      const { error } = await supabase
+        .from('settings')
+        .upsert({
+          user_id: userId,
+          setting_key: setting.setting_key,
+          setting_value: setting.setting_value,
+        }, { 
+          onConflict: 'user_id,setting_key',
+          ignoreDuplicates: true
+        })
 
-  try {
-    const { error } = await supabase
-      .from('settings')
-      .upsert(settingsToInsert, { 
-        onConflict: ['user_id', 'setting_key'],
-        ignoreDuplicates: false // Update if exists
-      })
-
-    // Handle 409 Conflict errors gracefully - means settings already exist
-    if (error) {
-      // If it's a conflict error (409), settings already exist, so we can safely ignore it
-      if (error.code === '23505' || error.status === 409 || 
-          error.message?.includes('duplicate') || 
-          error.message?.includes('unique') ||
-          error.message?.includes('conflict')) {
-        // Settings already exist, no need to throw
-        return
+      // Log but don't throw on errors - settings might already exist
+      if (error) {
+        // If it's a conflict/duplicate error, settings already exist
+        if (error.code === '23505' || error.status === 409 || 
+            error.message?.includes('duplicate') || 
+            error.message?.includes('unique') ||
+            error.message?.includes('conflict') ||
+            error.message?.includes('row-level security')) {
+          console.log(`Setting ${setting.setting_key} already exists or RLS prevented insert`)
+          continue
+        }
+        console.warn(`Error inserting setting ${setting.setting_key}:`, error.message)
       }
-      // For other errors, throw them
-      throw error
+    } catch (err) {
+      // Handle any errors gracefully - don't block app initialization
+      if (err.code === '23505' || err.status === 409 || 
+          err.message?.includes('duplicate') || 
+          err.message?.includes('unique') ||
+          err.message?.includes('conflict') ||
+          err.message?.includes('row-level security')) {
+        console.log(`Setting ${setting.setting_key} already exists or RLS prevented insert`)
+        continue
+      }
+      console.warn(`Error inserting setting ${setting.setting_key}:`, err.message)
     }
-  } catch (err) {
-    // Handle any other errors that might occur during upsert
-    // If it's a conflict, settings already exist, so we can safely ignore it
-    if (err.code === '23505' || err.status === 409 || 
-        err.message?.includes('duplicate') || 
-        err.message?.includes('unique') ||
-        err.message?.includes('conflict')) {
-      // Settings already exist, no need to throw
-      return
-    }
-    // Re-throw other errors
-    throw err
   }
 }
 
