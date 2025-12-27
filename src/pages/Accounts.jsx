@@ -59,8 +59,13 @@ function Accounts() {
   const dispatch = useDispatch();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const { accounts, loading, backgroundLoading, error, balances: accountBalances } =
-    useSelector((state) => state.accounts);
+  const {
+    accounts,
+    loading,
+    backgroundLoading,
+    error,
+    balances: accountBalances,
+  } = useSelector((state) => state.accounts);
   const { settings } = useSelector((state) => state.settings);
   const { exchangeRates } = useSelector((state) => state.exchangeRates);
   const appInitialized = useSelector((state) => state.appInit.isInitialized);
@@ -109,7 +114,7 @@ function Accounts() {
 
     // Use cached balances from Redux
     const balances = accountBalances || {};
-    
+
     // Calculate currency totals
     const currencyTotals = {};
     accounts.forEach((account) => {
@@ -124,13 +129,15 @@ function Accounts() {
     });
 
     const baseCurrency =
-      settings.find((s) => s.setting_key === 'BaseCurrency')?.setting_value || 'USD';
+      settings.find((s) => s.setting_key === 'BaseCurrency')?.setting_value ||
+      'USD';
 
     // Create accounts array with balances and conversions
     const accountBalancesArray = accounts.map((account) => {
       const balance = balances[account.account_id];
-      const currentBalance = balance?.current_balance || account.opening_balance || 0;
-      
+      const currentBalance =
+        balance?.current_balance || account.opening_balance || 0;
+
       let convertedBalance = null;
       let exchangeRate = null;
 
@@ -139,25 +146,31 @@ function Accounts() {
         exchangeRate = 1;
       } else {
         // Try to get latest exchange rate from cache (sorted by date)
-        const matchingRates = exchangeRates?.filter(
-          (er) =>
-            er.from_currency === account.currency.toUpperCase() &&
-            er.to_currency === baseCurrency.toUpperCase()
-        ) || [];
-        const rate = matchingRates.sort((a, b) => new Date(b.date) - new Date(a.date))[0];
-        
+        const matchingRates =
+          exchangeRates?.filter(
+            (er) =>
+              er.from_currency === account.currency.toUpperCase() &&
+              er.to_currency === baseCurrency.toUpperCase()
+          ) || [];
+        const rate = matchingRates.sort(
+          (a, b) => new Date(b.date) - new Date(a.date)
+        )[0];
+
         if (rate) {
           convertedBalance = currentBalance * rate.rate;
           exchangeRate = rate.rate;
         } else {
           // Try reverse rate (sorted by date)
-          const reverseMatchingRates = exchangeRates?.filter(
-            (er) =>
-              er.from_currency === baseCurrency.toUpperCase() &&
-              er.to_currency === account.currency.toUpperCase()
-          ) || [];
-          const reverseRate = reverseMatchingRates.sort((a, b) => new Date(b.date) - new Date(a.date))[0];
-          
+          const reverseMatchingRates =
+            exchangeRates?.filter(
+              (er) =>
+                er.from_currency === baseCurrency.toUpperCase() &&
+                er.to_currency === account.currency.toUpperCase()
+            ) || [];
+          const reverseRate = reverseMatchingRates.sort(
+            (a, b) => new Date(b.date) - new Date(a.date)
+          )[0];
+
           if (reverseRate) {
             convertedBalance = currentBalance / reverseRate.rate;
             exchangeRate = 1 / reverseRate.rate;
@@ -185,7 +198,6 @@ function Accounts() {
       accounts: accountBalancesArray,
     };
   }, [accounts, accountBalances, settings, exchangeRates]);
-
 
   const handleOpenDialog = (account = null) => {
     if (account) {
@@ -239,7 +251,7 @@ function Accounts() {
         // No need to refetch - it will be included in next initialization
       }
       handleCloseDialog();
-      
+
       // Refresh all data to ensure all pages have fresh data
       await refreshAllData(dispatch);
     } catch (err) {
@@ -249,7 +261,8 @@ function Accounts() {
         return;
       }
       console.error('Error saving account:', err);
-      const errorMessage = err?.message || 'Failed to save account. Please try again.';
+      const errorMessage =
+        err?.message || 'Failed to save account. Please try again.';
       setActionError(errorMessage);
     } finally {
       setIsSubmitting(false);
@@ -265,12 +278,13 @@ function Accounts() {
       await dispatch(deleteAccount(deleteConfirm.account_id)).unwrap();
       setDeleteConfirm(null);
       setDeleteError(null);
-      
+
       // Refresh all data to ensure all pages have fresh data
       await refreshAllData(dispatch);
     } catch (err) {
       console.error('Error deleting account:', err);
-      const errorMessage = err?.message || 'Failed to delete account. Please try again.';
+      const errorMessage =
+        err?.message || 'Failed to delete account. Please try again.';
       setDeleteError(errorMessage);
     } finally {
       setIsDeleting(false);
@@ -358,7 +372,10 @@ function Accounts() {
               mb: { xs: 1.5, sm: 2, md: 3 },
             }}
           >
-            <Typography variant="h5" sx={{ fontWeight: 500, color: 'text.primary' }}>
+            <Typography
+              variant="h5"
+              sx={{ fontWeight: 500, color: 'text.primary' }}
+            >
               Overall Balances
             </Typography>
             {summaryData && (
@@ -477,9 +494,7 @@ function Accounts() {
                       <Typography
                         variant="h6"
                         fontWeight="bold"
-                        color={
-                          group.total >= 0 ? 'success.main' : 'error.main'
-                        }
+                        color={group.total >= 0 ? 'success.main' : 'error.main'}
                         sx={{ mb: 0.5 }}
                       >
                         {formatCurrency(group.total, group.currency)}
@@ -527,7 +542,12 @@ function Accounts() {
               const balance = accountBalances[account.account_id];
               return (
                 <Card key={account.account_id} sx={{ mb: 1.5 }}>
-                  <CardContent sx={{ p: { xs: 1.5, sm: 2 }, '&:last-child': { pb: { xs: 1.5, sm: 2 } } }}>
+                  <CardContent
+                    sx={{
+                      p: { xs: 1.5, sm: 2 },
+                      '&:last-child': { pb: { xs: 1.5, sm: 2 } },
+                    }}
+                  >
                     <Box
                       sx={{
                         display: 'flex',
@@ -573,9 +593,9 @@ function Accounts() {
                         <IconButton
                           size="small"
                           onClick={() => handleOpenDialog(account)}
-                          sx={{ 
+                          sx={{
                             color: '#5f6368',
-                            '&:hover': { color: '#1a73e8' }
+                            '&:hover': { color: '#1a73e8' },
                           }}
                         >
                           <EditIcon fontSize="small" />
@@ -583,9 +603,9 @@ function Accounts() {
                         <IconButton
                           size="small"
                           onClick={() => setDeleteConfirm(account)}
-                          sx={{ 
+                          sx={{
                             color: '#5f6368',
-                            '&:hover': { color: '#d93025' }
+                            '&:hover': { color: '#d93025' },
                           }}
                           disabled={account.status === 'Closed'}
                         >
@@ -736,9 +756,9 @@ function Accounts() {
                           <IconButton
                             size="small"
                             onClick={() => handleOpenDialog(account)}
-                            sx={{ 
+                            sx={{
                               color: '#5f6368',
-                              '&:hover': { color: '#1a73e8' }
+                              '&:hover': { color: '#1a73e8' },
                             }}
                           >
                             <EditIcon fontSize="small" />
@@ -749,9 +769,9 @@ function Accounts() {
                             <IconButton
                               size="small"
                               onClick={() => setDeleteConfirm(account)}
-                              sx={{ 
+                              sx={{
                                 color: '#5f6368',
-                                '&:hover': { color: '#d93025' }
+                                '&:hover': { color: '#d93025' },
                               }}
                               disabled={account.status === 'Closed'}
                             >
@@ -781,13 +801,13 @@ function Accounts() {
           <DialogTitle>
             {editingAccount ? 'Edit Account' : 'Create New Account'}
           </DialogTitle>
-          <DialogContent>
+          <DialogContent sx={{ overflow: 'visible' }}>
             {actionError && (
               <Alert severity="error" sx={{ mb: 2 }}>
                 {actionError}
               </Alert>
             )}
-            <Grid container spacing={{ xs: 1.5, sm: 2 }} sx={{ mt: 1 }}>
+            <Grid container spacing={{ xs: 1.5, sm: 2 }} sx={{ mt: 2 }}>
               <Grid item xs={12}>
                 <TextField
                   fullWidth
@@ -883,7 +903,11 @@ function Accounts() {
               type="submit"
               variant="contained"
               disabled={isSubmitting}
-              startIcon={isSubmitting ? <CircularProgress size={20} color="inherit" /> : null}
+              startIcon={
+                isSubmitting ? (
+                  <CircularProgress size={20} color="inherit" />
+                ) : null
+              }
             >
               {isSubmitting
                 ? editingAccount
@@ -937,7 +961,9 @@ function Accounts() {
             color="error"
             variant="contained"
             disabled={isDeleting}
-            startIcon={isDeleting ? <CircularProgress size={20} color="inherit" /> : null}
+            startIcon={
+              isDeleting ? <CircularProgress size={20} color="inherit" /> : null
+            }
           >
             {isDeleting ? 'Deleting...' : 'Delete'}
           </Button>
