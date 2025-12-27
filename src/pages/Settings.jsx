@@ -4,8 +4,6 @@ import { useForm } from 'react-hook-form';
 import {
   Box,
   Button,
-  Card,
-  CardContent,
   CircularProgress,
   Dialog,
   DialogTitle,
@@ -16,7 +14,6 @@ import {
   Grid,
   InputLabel,
   MenuItem,
-  Paper,
   Select,
   TextField,
   Typography,
@@ -35,6 +32,10 @@ import {
 import { fetchCategories } from '../store/slices/categoriesSlice';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
+import { usePageRefresh } from '../hooks/usePageRefresh';
+import { refreshAllData } from '../utils/refreshAllData';
+import { persistor } from '../store';
+import RefreshIcon from '@mui/icons-material/Refresh';
 
 function Settings() {
   const dispatch = useDispatch();
@@ -50,6 +51,7 @@ function Settings() {
   const [editingKey, setEditingKey] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionError, setActionError] = useState(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const {
     register,
@@ -73,25 +75,13 @@ function Settings() {
   const watchedBorrowingPaymentCategoryId = watch('borrowingPaymentCategoryId');
   const watchedLendingPaymentCategoryId = watch('lendingPaymentCategoryId');
 
-  // Load data on mount - only if not initialized
-  useEffect(() => {
-    if (!categoriesInitialized) {
-      dispatch(fetchCategories({ status: 'Active' }));
-    }
-    if (!isInitialized) {
-      dispatch(fetchSettings());
-    }
-  }, [dispatch, isInitialized, categoriesInitialized]);
-
-  // Background refresh
-  useEffect(() => {
-    if (isInitialized && settings.length > 0) {
-      const refreshInterval = setInterval(() => {
-        dispatch(fetchSettings());
-      }, 60000);
-      return () => clearInterval(refreshInterval);
-    }
-  }, [dispatch, isInitialized, settings.length]);
+  // Refresh data on navigation
+  usePageRefresh({
+    dataTypes: ['settings', 'categories'],
+    filters: {
+      categories: { status: 'Active' },
+    },
+  });
 
   // Initialize form with current settings
   useEffect(() => {
@@ -185,8 +175,9 @@ function Settings() {
 
       await dispatch(updateSettings(updates)).unwrap();
       handleCloseDialog();
-      // Refresh in background
-      dispatch(fetchSettings());
+
+      // Refresh all data to ensure all pages have fresh data
+      await refreshAllData(dispatch);
     } catch (err) {
       console.error('Error updating settings:', err);
       const errorMessage =
@@ -224,6 +215,25 @@ function Settings() {
     );
   };
 
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true);
+    setActionError(null);
+    try {
+      // Purge persisted storage using redux-persist
+      await persistor.purge();
+      
+      // Reload the page to rehydrate with empty state and fetch fresh data
+      // This ensures all Redux state is reset properly
+      window.location.reload();
+    } catch (err) {
+      console.error('Error refreshing data:', err);
+      const errorMessage =
+        err?.message || 'Failed to refresh data. Please try again.';
+      setActionError(errorMessage);
+      setIsRefreshing(false);
+    }
+  };
+
   if (loading && settings.length === 0) {
     return <LoadingSpinner />;
   }
@@ -236,202 +246,161 @@ function Settings() {
           flexDirection: { xs: 'column', sm: 'row' },
           justifyContent: 'space-between',
           alignItems: { xs: 'flex-start', sm: 'center' },
-          mb: 3,
-          gap: { xs: 2, sm: 0 },
+          mb: { xs: 1.5, sm: 2, md: 3 },
+          gap: { xs: 1.5, sm: 0 },
         }}
       >
         <Typography
           variant="h4"
-          sx={{ fontSize: { xs: '1.5rem', sm: '2rem' } }}
+          sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' }, fontWeight: 500 }}
         >
           Settings
         </Typography>
-        <Button
-          variant="contained"
-          startIcon={<EditIcon />}
-          onClick={handleOpenDialog}
-          size="small"
-        >
-          Edit Settings
-        </Button>
+        <Box sx={{ display: 'flex', gap: 1, width: { xs: '100%', sm: 'auto' } }}>
+          <Button
+            variant="outlined"
+            startIcon={<RefreshIcon sx={{ fontSize: 18 }} />}
+            onClick={handleManualRefresh}
+            size="small"
+            disabled={isRefreshing}
+            sx={{ flex: { xs: '1 1 auto', sm: 'none' }, textTransform: 'none', minHeight: 36 }}
+          >
+            {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<EditIcon sx={{ fontSize: 18 }} />}
+            onClick={handleOpenDialog}
+            size="small"
+            sx={{ flex: { xs: '1 1 auto', sm: 'none' }, textTransform: 'none', minHeight: 36 }}
+          >
+            Edit Settings
+          </Button>
+        </Box>
       </Box>
 
       {error && <ErrorMessage error={error} />}
 
-      <Grid container spacing={3}>
+      <Grid container spacing={{ xs: 2, sm: 3 }}>
         <Grid item xs={12} md={6}>
-          <Card elevation={2}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                <SettingsIcon
-                  sx={{ mr: 1, fontSize: 28, color: 'primary.main' }}
-                />
-                <Typography variant="h6" fontWeight="bold">
-                  Application Settings
-                </Typography>
-              </Box>
-              <Box sx={{ mt: 2 }}>
-                <Paper
-                  elevation={0}
-                  sx={{
-                    p: 2,
-                    mb: 2,
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    borderRadius: 1,
-                  }}
-                >
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    gutterBottom
-                  >
-                    Base Currency
-                  </Typography>
-                  <Typography variant="h6" fontWeight="medium">
-                    {getSettingValue('BaseCurrency') || 'Not set'}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Default currency for displaying totals and conversions
-                  </Typography>
-                </Paper>
+          <Box
+            sx={{
+              border: '1px solid',
+              borderColor: 'divider',
+              borderRadius: 1,
+              backgroundColor: 'background.paper',
+              overflow: 'hidden',
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, p: { xs: 1.5, sm: 2 }, borderBottom: '1px solid', borderColor: 'divider', backgroundColor: 'action.hover' }}>
+              <SettingsIcon sx={{ fontSize: { xs: 20, sm: 24 }, color: 'primary.main' }} />
+              <Typography variant="h6" sx={{ fontSize: { xs: '0.9375rem', sm: '1.125rem' }, fontWeight: 600 }}>
+                Application Settings
+              </Typography>
+            </Box>
+            
+            {/* Base Currency */}
+            <Box sx={{ p: { xs: 1.5, sm: 2 }, borderBottom: '1px solid', borderColor: 'divider' }}>
+              <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.8125rem' }, mb: 0.5 }}>
+                Base Currency
+              </Typography>
+              <Typography variant="body1" fontWeight={500} sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}>
+                {getSettingValue('BaseCurrency') || 'Not set'}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.6875rem', sm: '0.75rem' } }}>
+                Default currency for displaying totals and conversions
+              </Typography>
+            </Box>
 
-                <Paper
-                  elevation={0}
-                  sx={{
-                    p: 2,
-                    mb: 2,
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    borderRadius: 1,
-                  }}
-                >
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    gutterBottom
-                  >
-                    Borrowing Category
-                  </Typography>
-                  <Typography variant="h6" fontWeight="medium">
-                    {getCategoryName(getSettingValue('BorrowingCategoryID'))}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Default category for borrowing transactions
-                  </Typography>
-                </Paper>
+            {/* Borrowing Category */}
+            <Box sx={{ p: { xs: 1.5, sm: 2 }, borderBottom: '1px solid', borderColor: 'divider' }}>
+              <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.8125rem' }, mb: 0.5 }}>
+                Borrowing Category
+              </Typography>
+              <Typography variant="body1" fontWeight={500} sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}>
+                {getCategoryName(getSettingValue('BorrowingCategoryID'))}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.6875rem', sm: '0.75rem' } }}>
+                Default category for borrowing transactions
+              </Typography>
+            </Box>
 
-                <Paper
-                  elevation={0}
-                  sx={{
-                    p: 2,
-                    mb: 2,
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    borderRadius: 1,
-                  }}
-                >
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    gutterBottom
-                  >
-                    Lending Category
-                  </Typography>
-                  <Typography variant="h6" fontWeight="medium">
-                    {getCategoryName(getSettingValue('LendingCategoryID'))}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Default category for lending transactions
-                  </Typography>
-                </Paper>
+            {/* Lending Category */}
+            <Box sx={{ p: { xs: 1.5, sm: 2 }, borderBottom: '1px solid', borderColor: 'divider' }}>
+              <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.8125rem' }, mb: 0.5 }}>
+                Lending Category
+              </Typography>
+              <Typography variant="body1" fontWeight={500} sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}>
+                {getCategoryName(getSettingValue('LendingCategoryID'))}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.6875rem', sm: '0.75rem' } }}>
+                Default category for lending transactions
+              </Typography>
+            </Box>
 
-                <Paper
-                  elevation={0}
-                  sx={{
-                    p: 2,
-                    mb: 2,
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    borderRadius: 1,
-                  }}
-                >
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    gutterBottom
-                  >
-                    Borrowing Payment Category
-                  </Typography>
-                  <Typography variant="h6" fontWeight="medium">
-                    {getCategoryName(
-                      getSettingValue('BorrowingPaymentCategoryID')
-                    )}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Category used when recording payments for borrowing
-                  </Typography>
-                </Paper>
+            {/* Borrowing Payment Category */}
+            <Box sx={{ p: { xs: 1.5, sm: 2 }, borderBottom: '1px solid', borderColor: 'divider' }}>
+              <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.8125rem' }, mb: 0.5 }}>
+                Borrowing Payment Category
+              </Typography>
+              <Typography variant="body1" fontWeight={500} sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}>
+                {getCategoryName(getSettingValue('BorrowingPaymentCategoryID'))}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.6875rem', sm: '0.75rem' } }}>
+                Category used when recording payments for borrowing
+              </Typography>
+            </Box>
 
-                <Paper
-                  elevation={0}
-                  sx={{
-                    p: 2,
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    borderRadius: 1,
-                  }}
-                >
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    gutterBottom
-                  >
-                    Lending Payment Category
-                  </Typography>
-                  <Typography variant="h6" fontWeight="medium">
-                    {getCategoryName(
-                      getSettingValue('LendingPaymentCategoryID')
-                    )}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Category used when recording payments for lending
-                  </Typography>
-                </Paper>
-              </Box>
-            </CardContent>
-          </Card>
+            {/* Lending Payment Category */}
+            <Box sx={{ p: { xs: 1.5, sm: 2 } }}>
+              <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.8125rem' }, mb: 0.5 }}>
+                Lending Payment Category
+              </Typography>
+              <Typography variant="body1" fontWeight={500} sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}>
+                {getCategoryName(getSettingValue('LendingPaymentCategoryID'))}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.6875rem', sm: '0.75rem' } }}>
+                Category used when recording payments for lending
+              </Typography>
+            </Box>
+          </Box>
         </Grid>
 
         <Grid item xs={12} md={6}>
-          <Card elevation={2}>
-            <CardContent>
-              <Typography variant="h6" fontWeight="bold" gutterBottom>
-                About Settings
+          <Box
+            sx={{
+              p: { xs: 1.5, sm: 2 },
+              border: '1px solid',
+              borderColor: 'divider',
+              borderRadius: 1,
+              backgroundColor: 'background.paper',
+            }}
+          >
+            <Typography variant="h6" sx={{ fontSize: { xs: '0.9375rem', sm: '1.125rem' }, fontWeight: 600, mb: 1 }}>
+              About Settings
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.8125rem', sm: '0.875rem' }, mb: 2 }}>
+              Configure your application preferences here. These settings
+              affect how your financial data is displayed and categorized.
+            </Typography>
+            <Alert severity="info" sx={{ '& .MuiAlert-message': { fontSize: { xs: '0.8125rem', sm: '0.875rem' } } }}>
+              <Typography variant="body2" sx={{ fontSize: 'inherit' }}>
+                <strong>Base Currency:</strong> This is the primary currency
+                used for displaying totals and performing currency conversions
+                across all accounts.
               </Typography>
-              <Typography variant="body2" color="text.secondary" paragraph>
-                Configure your application preferences here. These settings
-                affect how your financial data is displayed and categorized.
+              <Typography variant="body2" sx={{ mt: 1, fontSize: 'inherit' }}>
+                <strong>Borrowing/Lending Categories:</strong> These
+                categories are used as defaults when creating borrowing or
+                lending records from transactions.
               </Typography>
-              <Alert severity="info" sx={{ mt: 2 }}>
-                <Typography variant="body2">
-                  <strong>Base Currency:</strong> This is the primary currency
-                  used for displaying totals and performing currency conversions
-                  across all accounts.
-                </Typography>
-                <Typography variant="body2" sx={{ mt: 1 }}>
-                  <strong>Borrowing/Lending Categories:</strong> These
-                  categories are used as defaults when creating borrowing or
-                  lending records from transactions.
-                </Typography>
-                <Typography variant="body2" sx={{ mt: 1 }}>
-                  <strong>Payment Categories:</strong> These categories are used
-                  when recording payments for borrowing (Expense) or lending
-                  (Income) records.
-                </Typography>
-              </Alert>
-            </CardContent>
-          </Card>
+              <Typography variant="body2" sx={{ mt: 1, fontSize: 'inherit' }}>
+                <strong>Payment Categories:</strong> These categories are used
+                when recording payments for borrowing (Expense) or lending
+                (Income) records.
+              </Typography>
+            </Alert>
+          </Box>
         </Grid>
       </Grid>
 
@@ -451,7 +420,7 @@ function Settings() {
                 {actionError}
               </Alert>
             )}
-            <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid container spacing={2} sx={{ mt: { xs: 0.5, sm: 1 } }}>
               <Grid item xs={12}>
                 <TextField
                   fullWidth

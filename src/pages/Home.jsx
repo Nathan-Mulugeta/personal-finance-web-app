@@ -5,8 +5,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import {
   Box,
   Button,
-  Card,
-  CardContent,
   Chip,
   CircularProgress,
   Dialog,
@@ -20,7 +18,6 @@ import {
   InputAdornment,
   InputLabel,
   MenuItem,
-  Paper,
   Select,
   TextField,
   Typography,
@@ -52,6 +49,8 @@ import {
 import ErrorMessage from '../components/common/ErrorMessage';
 import { formatCurrency } from '../utils/currencyConversion';
 import { format, parseISO } from 'date-fns';
+import { usePageRefresh } from '../hooks/usePageRefresh';
+import { refreshAllData } from '../utils/refreshAllData';
 
 function Home() {
   const dispatch = useDispatch();
@@ -72,6 +71,15 @@ function Home() {
   const { allTransactions, error } = useSelector((state) => state.transactions);
   const { categories } = useSelector((state) => state.categories);
   const { accounts } = useSelector((state) => state.accounts);
+
+  // Refresh data on navigation
+  usePageRefresh({
+    dataTypes: ['transactions', 'accounts', 'categories'],
+    filters: {
+      accounts: { status: 'Active' },
+      categories: { status: 'Active' },
+    },
+  });
 
   const {
     register,
@@ -249,21 +257,8 @@ function Home() {
 
       handleCloseDialog();
 
-      // Recalculate balance for the affected account after transaction is updated
-      setTimeout(() => {
-        const accountId = transaction?.account_id || data.accountId;
-        if (accountId) {
-          dispatch(
-            recalculateAccountBalance({
-              accountId,
-              transactions: undefined, // Will use state.transactions.allTransactions
-            })
-          );
-        }
-      }, 100);
-
-      // Refresh all transactions in background
-      dispatch(fetchTransactions());
+      // Refresh all data to ensure all pages have fresh data
+      await refreshAllData(dispatch);
     } catch (err) {
       console.error('Error saving transaction:', err);
       const errorMessage =
@@ -302,8 +297,9 @@ function Home() {
 
       setDeleteConfirm(false);
       handleCloseDialog();
-      // Refresh all transactions in background
-      dispatch(fetchTransactions());
+
+      // Refresh all data to ensure all pages have fresh data
+      await refreshAllData(dispatch);
     } catch (err) {
       console.error('Error deleting transaction:', err);
       const errorMessage =
@@ -329,7 +325,7 @@ function Home() {
     <Box>
       <Typography
         variant="h4"
-        sx={{ fontSize: { xs: '1.5rem', sm: '2rem' }, mb: 4 }}
+        sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' }, mb: { xs: 1.5, sm: 2, md: 3 }, fontWeight: 500 }}
       >
         Home
       </Typography>
@@ -337,96 +333,109 @@ function Home() {
       {error && <ErrorMessage error={error} />}
 
       {/* Search Bar */}
-      <Card elevation={2} sx={{ mb: 4 }}>
-        <CardContent>
-          <TextField
-            inputRef={searchInputRef}
-            fullWidth
-            placeholder="Search transactions by category or description..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon color="action" />
-                </InputAdornment>
-              ),
-              endAdornment: searchQuery && (
-                <InputAdornment position="end">
-                  <IconButton
-                    onClick={handleClearSearch}
-                    edge="end"
-                    size="small"
-                    sx={{ mr: 0.5 }}
-                  >
-                    <ClearIcon fontSize="small" />
-                  </IconButton>
-                </InputAdornment>
-              ),
-            }}
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                fontSize: { xs: '1rem', sm: '1.125rem' },
-                py: { xs: 1, sm: 1.5 },
-              },
-            }}
-            autoFocus
-          />
-          {debouncedSearchQuery && (
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-              {searchResults.length} transaction
-              {searchResults.length !== 1 ? 's' : ''} found
-            </Typography>
-          )}
-        </CardContent>
-      </Card>
+      <Box
+        sx={{
+          mb: { xs: 2, sm: 3 },
+          p: { xs: 1.5, sm: 2 },
+          border: '1px solid',
+          borderColor: 'divider',
+          borderRadius: 1,
+          backgroundColor: 'background.paper',
+        }}
+      >
+        <TextField
+          inputRef={searchInputRef}
+          fullWidth
+          placeholder="Search transactions by category or description..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon color="action" />
+              </InputAdornment>
+            ),
+            endAdornment: searchQuery && (
+              <InputAdornment position="end">
+                <IconButton
+                  onClick={handleClearSearch}
+                  edge="end"
+                  size="small"
+                  sx={{ mr: 0.5 }}
+                >
+                  <ClearIcon fontSize="small" />
+                </IconButton>
+              </InputAdornment>
+            ),
+          }}
+          sx={{
+            '& .MuiOutlinedInput-root': {
+              fontSize: { xs: '0.875rem', sm: '1rem' },
+              py: { xs: 0.5, sm: 1 },
+            },
+          }}
+          autoFocus
+        />
+        {debouncedSearchQuery && (
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1, fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}>
+            {searchResults.length} transaction
+            {searchResults.length !== 1 ? 's' : ''} found
+          </Typography>
+        )}
+      </Box>
 
       {/* Search Results */}
       {debouncedSearchQuery && (
         <Box>
           {searchResults.length > 0 ? (
-            <Paper elevation={1}>
-              <List>
+            <Box
+              sx={{
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 1,
+                backgroundColor: 'background.paper',
+                overflow: 'hidden',
+              }}
+            >
+              <List disablePadding>
                 {searchResults.map((txn, index) => (
                   <Box key={txn.transaction_id}>
-                    <ListItemButton onClick={() => handleOpenDialog(txn)}>
-                      <ListItemIcon>
-                        <ReceiptIcon color="primary" />
+                    <ListItemButton
+                      onClick={() => handleOpenDialog(txn)}
+                      sx={{ py: { xs: 1, sm: 1.5 }, px: { xs: 1.5, sm: 2 } }}
+                    >
+                      <ListItemIcon sx={{ minWidth: { xs: 36, sm: 48 } }}>
+                        <ReceiptIcon color="primary" sx={{ fontSize: { xs: 20, sm: 24 } }} />
                       </ListItemIcon>
                       <ListItemText
                         primary={
                           <Box
+                            component="span"
                             sx={{
                               display: 'flex',
                               alignItems: 'center',
-                              gap: 1,
+                              gap: 0.75,
                               flexWrap: 'wrap',
                             }}
                           >
-                            <Typography variant="body1" fontWeight="medium">
+                            <Typography component="span" variant="body1" fontWeight="medium" sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}>
                               {txn.description || 'No description'}
                             </Typography>
                             <Chip
                               label={txn.type}
                               size="small"
-                              color={
-                                txn.type === 'Income' ? 'success' : 'error'
-                              }
+                              color={txn.type === 'Income' ? 'success' : 'error'}
+                              sx={{ height: 20, fontSize: '0.6875rem' }}
                             />
                           </Box>
                         }
                         secondary={
-                          <Box>
-                            <Typography variant="body2" color="text.secondary">
-                              {getCategoryName(txn.category_id)} •{' '}
-                              {getAccountName(txn.account_id)}
+                          <Box component="span">
+                            <Typography component="span" variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.8125rem' }, display: 'block' }}>
+                              {getCategoryName(txn.category_id)} • {getAccountName(txn.account_id)}
                             </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                              {format(parseISO(txn.date), 'MMM dd, yyyy')} •{' '}
-                              {formatCurrency(
-                                Math.abs(txn.amount),
-                                txn.currency
-                              )}
+                            <Typography component="span" variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.8125rem' }, display: 'block' }}>
+                              {format(parseISO(txn.date), 'MMM dd, yyyy')} • {formatCurrency(Math.abs(txn.amount), txn.currency)}
                             </Typography>
                           </Box>
                         }
@@ -436,44 +445,50 @@ function Home() {
                   </Box>
                 ))}
               </List>
-            </Paper>
+            </Box>
           ) : (
-            <Card>
-              <CardContent>
-                <Box sx={{ textAlign: 'center', py: 4 }}>
-                  <SearchIcon
-                    sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }}
-                  />
-                  <Typography variant="h6" color="text.secondary" gutterBottom>
-                    No transactions found
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Try searching by category name or transaction description
-                  </Typography>
-                </Box>
-              </CardContent>
-            </Card>
+            <Box
+              sx={{
+                textAlign: 'center',
+                py: { xs: 3, sm: 4 },
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 1,
+                backgroundColor: 'background.paper',
+              }}
+            >
+              <SearchIcon sx={{ fontSize: { xs: 48, sm: 64 }, color: 'text.secondary', mb: { xs: 1.5, sm: 2 } }} />
+              <Typography variant="h6" color="text.secondary" gutterBottom sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}>
+                No transactions found
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}>
+                Try searching by category name or transaction description
+              </Typography>
+            </Box>
           )}
         </Box>
       )}
 
       {/* Empty State */}
       {!debouncedSearchQuery && (
-        <Card>
-          <CardContent>
-            <Box sx={{ textAlign: 'center', py: 6 }}>
-              <SearchIcon
-                sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }}
-              />
-              <Typography variant="h6" color="text.secondary" gutterBottom>
-                Search transactions
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                Search by category name or transaction description
-              </Typography>
-            </Box>
-          </CardContent>
-        </Card>
+        <Box
+          sx={{
+            textAlign: 'center',
+            py: { xs: 4, sm: 6 },
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 1,
+            backgroundColor: 'background.paper',
+          }}
+        >
+          <SearchIcon sx={{ fontSize: { xs: 48, sm: 64 }, color: 'text.secondary', mb: { xs: 1.5, sm: 2 } }} />
+          <Typography variant="h6" color="text.secondary" gutterBottom sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}>
+            Search transactions
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: { xs: 2, sm: 3 }, fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}>
+            Search by category name or transaction description
+          </Typography>
+        </Box>
       )}
 
       {/* Edit Transaction Dialog */}
@@ -483,16 +498,24 @@ function Home() {
         maxWidth="sm"
         fullWidth
         fullScreen={isMobile}
+        PaperProps={{
+          sx: isMobile ? {
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100%',
+            maxHeight: '100%',
+          } : {},
+        }}
       >
-        <form onSubmit={handleSubmit(onSubmit)}>
-          <DialogTitle>
+        <form onSubmit={handleSubmit(onSubmit)} style={isMobile ? { display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' } : {}}>
+          <DialogTitle sx={{ flexShrink: 0, pb: { xs: 1, sm: 2 } }}>
             {deleteConfirm
               ? 'Delete Transaction'
               : editingTransaction
               ? 'Edit Transaction'
               : 'Create New Transaction'}
           </DialogTitle>
-          <DialogContent>
+          <DialogContent sx={{ flexGrow: 1, overflow: 'auto', pt: { xs: 1, sm: 2 } }}>
             {actionError && (
               <Alert severity="error" sx={{ mb: 2 }}>
                 {actionError}
@@ -553,7 +576,7 @@ function Home() {
                 </Box>
               </Box>
             ) : (
-              <Grid container spacing={2} sx={{ mt: 1 }}>
+              <Grid container spacing={{ xs: 1.5, sm: 2 }} sx={{ mt: { xs: 0.5, sm: 1 } }}>
                 <Grid item xs={12} sm={6}>
                   <FormControl fullWidth error={!!errors.accountId}>
                     <InputLabel>Account *</InputLabel>
@@ -708,33 +731,29 @@ function Home() {
               </Grid>
             )}
           </DialogContent>
-          <DialogActions>
-            <Box
-              sx={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                width: '100%',
-              }}
-            >
+          <DialogActions sx={{ flexShrink: 0, p: { xs: 1.5, sm: 2 }, borderTop: { xs: '1px solid', sm: 'none' }, borderColor: 'divider' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', flexWrap: 'wrap', gap: 1 }}>
               <Box>
                 {editingTransaction && !deleteConfirm && (
                   <Button
                     onClick={handleDeleteClick}
                     color="error"
-                    startIcon={<DeleteIcon />}
-                    sx={{ mr: 1 }}
+                    startIcon={<DeleteIcon sx={{ fontSize: { xs: 18, sm: 20 } }} />}
+                    size={isMobile ? 'small' : 'medium'}
+                    sx={{ textTransform: 'none' }}
                   >
                     Delete
                   </Button>
                 )}
               </Box>
-              <Box>
+              <Box sx={{ display: 'flex', gap: 1 }}>
                 {deleteConfirm ? (
                   <>
                     <Button
                       onClick={() => setDeleteConfirm(false)}
-                      sx={{ mr: 1 }}
                       disabled={isDeleting}
+                      size={isMobile ? 'small' : 'medium'}
+                      sx={{ textTransform: 'none' }}
                     >
                       Cancel
                     </Button>
@@ -743,23 +762,20 @@ function Home() {
                       color="error"
                       variant="contained"
                       disabled={isDeleting}
-                      startIcon={
-                        isDeleting ? (
-                          <CircularProgress size={20} color="inherit" />
-                        ) : (
-                          <DeleteIcon />
-                        )
-                      }
+                      size={isMobile ? 'small' : 'medium'}
+                      startIcon={isDeleting ? <CircularProgress size={16} color="inherit" /> : <DeleteIcon sx={{ fontSize: { xs: 16, sm: 20 } }} />}
+                      sx={{ textTransform: 'none' }}
                     >
-                      {isDeleting ? 'Deleting...' : 'Confirm Delete'}
+                      {isDeleting ? 'Deleting...' : 'Confirm'}
                     </Button>
                   </>
                 ) : (
                   <>
                     <Button
                       onClick={handleCloseDialog}
-                      sx={{ mr: 1 }}
                       disabled={isSubmitting}
+                      size={isMobile ? 'small' : 'medium'}
+                      sx={{ textTransform: 'none' }}
                     >
                       Cancel
                     </Button>
@@ -767,11 +783,9 @@ function Home() {
                       type="submit"
                       variant="contained"
                       disabled={isSubmitting}
-                      startIcon={
-                        isSubmitting ? (
-                          <CircularProgress size={20} color="inherit" />
-                        ) : null
-                      }
+                      size={isMobile ? 'small' : 'medium'}
+                      startIcon={isSubmitting ? <CircularProgress size={16} color="inherit" /> : null}
+                      sx={{ textTransform: 'none' }}
                     >
                       {isSubmitting
                         ? editingTransaction

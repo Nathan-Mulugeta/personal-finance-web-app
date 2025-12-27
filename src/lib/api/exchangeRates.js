@@ -162,6 +162,11 @@ export async function getExchangeRates(filters = {}) {
     query = query.lte('date', filters.endDate)
   }
 
+  // Incremental sync: fetch records created since last sync (exchange rates only have created_at)
+  if (filters.since) {
+    query = query.gte('created_at', filters.since)
+  }
+
   const { data, error } = await query.order('date', { ascending: false })
 
   if (error) throw error

@@ -57,3 +57,34 @@ export function validateCategoryHierarchy(categoryId, parentCategoryId, categori
   return !descendants.some(desc => desc.category_id === parentCategoryId)
 }
 
+/**
+ * Flatten category tree for dropdown display
+ * Returns flat array with hierarchy metadata for styling
+ */
+export function flattenCategoryTree(categories) {
+  const tree = buildCategoryTree(categories)
+  const result = []
+
+  const flatten = (nodes, depth = 0, parentIndex = null) => {
+    nodes.forEach((node, index) => {
+      const hasChildren = node.children && node.children.length > 0
+      const isLastChild = index === nodes.length - 1
+      
+      result.push({
+        ...node,
+        depth,
+        hasChildren,
+        isLastChild,
+        parentIndex,
+      })
+      
+      if (hasChildren) {
+        flatten(node.children, depth + 1, result.length - 1)
+      }
+    })
+  }
+
+  flatten(tree)
+  return result
+}
+

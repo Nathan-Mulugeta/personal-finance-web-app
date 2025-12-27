@@ -13,7 +13,6 @@ import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import CategoryIcon from '@mui/icons-material/Category';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
-import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import PeopleIcon from '@mui/icons-material/People';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import SettingsIcon from '@mui/icons-material/Settings';
@@ -25,7 +24,6 @@ const menuItems = [
   { text: 'Accounts', icon: <AccountBalanceIcon />, path: '/accounts' },
   { text: 'Categories', icon: <CategoryIcon />, path: '/categories' },
   { text: 'Budgets', icon: <AccountBalanceWalletIcon />, path: '/budgets' },
-  { text: 'Transfers', icon: <SwapHorizIcon />, path: '/transfers' },
   {
     text: 'Borrowings/Lendings',
     icon: <PeopleIcon />,

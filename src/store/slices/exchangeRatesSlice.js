@@ -1,12 +1,31 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
 import * as exchangeRatesApi from '../../lib/api/exchangeRates'
+import { mergeIncrementalData, getIdField } from '../../utils/dataMerge'
+import { updateLastSync } from './syncSlice'
 
 // Async thunks
 export const fetchExchangeRates = createAsyncThunk(
   'exchangeRates/fetchExchangeRates',
-  async (filters, { rejectWithValue }) => {
+  async (filters, { rejectWithValue, getState, dispatch }) => {
     try {
-      return await exchangeRatesApi.getExchangeRates(filters)
+      // Get last sync timestamp for incremental fetch
+      const syncState = getState().sync;
+      const lastSync = syncState.lastSyncExchangeRates;
+      const isIncremental = !!lastSync && !filters?.forceFull;
+      
+      // Add since parameter if we have a last sync timestamp
+      const fetchFilters = isIncremental 
+        ? { ...filters, since: lastSync }
+        : filters || {};
+      
+      const data = await exchangeRatesApi.getExchangeRates(fetchFilters);
+      
+      // Update sync timestamp after successful fetch
+      if (data && data.length >= 0) {
+        dispatch(updateLastSync({ entity: 'exchangeRates', timestamp: new Date().toISOString() }));
+      }
+      
+      return { data, isIncremental };
     } catch (error) {
       return rejectWithValue(error.message)
     }
@@ -53,7 +72,20 @@ const exchangeRatesSlice = createSlice({
       .addCase(fetchExchangeRates.fulfilled, (state, action) => {
         state.loading = false
         state.backgroundLoading = false
-        state.exchangeRates = action.payload || []
+        const { data: exchangeRates, isIncremental } = action.payload || { data: [], isIncremental: false };
+        
+        if (isIncremental && state.exchangeRates.length > 0) {
+          // Merge incremental data with existing
+          state.exchangeRates = mergeIncrementalData(
+            state.exchangeRates,
+            exchangeRates,
+            getIdField('exchangeRates')
+          );
+        } else {
+          // Full fetch - replace all data
+          state.exchangeRates = exchangeRates || [];
+        }
+        
         state.isInitialized = true
         state.error = null
       })

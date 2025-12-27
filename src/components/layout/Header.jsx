@@ -10,6 +10,8 @@ import {
   MenuItem,
   Avatar,
   Box,
+  CircularProgress,
+  Fade,
 } from '@mui/material'
 import MenuIcon from '@mui/icons-material/Menu'
 import AccountCircleIcon from '@mui/icons-material/AccountCircle'
@@ -21,6 +23,20 @@ function Header({ onMenuClick }) {
   const navigate = useNavigate()
   const user = useSelector((state) => state.auth.user)
   const [anchorEl, setAnchorEl] = useState(null)
+  
+  // Check if any slice has background loading active
+  const backgroundLoading = useSelector((state) => {
+    return (
+      state.transactions?.backgroundLoading ||
+      state.accounts?.backgroundLoading ||
+      state.categories?.backgroundLoading ||
+      state.budgets?.backgroundLoading ||
+      state.transfers?.backgroundLoading ||
+      state.borrowingsLendings?.backgroundLoading ||
+      state.settings?.backgroundLoading ||
+      state.exchangeRates?.backgroundLoading
+    )
+  })
 
   const handleMenuOpen = (event) => {
     setAnchorEl(event.currentTarget)
@@ -59,6 +75,11 @@ function Header({ onMenuClick }) {
           Personal Finance
         </Typography>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Fade in={backgroundLoading} unmountOnExit>
+            <Box sx={{ display: 'flex', alignItems: 'center', mr: 0.5 }}>
+              <CircularProgress size={20} thickness={4} sx={{ color: 'primary.main' }} />
+            </Box>
+          </Fade>
           <Typography 
             variant="body2" 
             sx={{ 

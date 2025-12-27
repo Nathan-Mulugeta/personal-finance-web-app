@@ -7,7 +7,6 @@ import Transactions from './pages/Transactions';
 import Accounts from './pages/Accounts';
 import Categories from './pages/Categories';
 import Budgets from './pages/Budgets';
-import Transfers from './pages/Transfers';
 import BorrowingsLendings from './pages/BorrowingsLendings';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
@@ -31,7 +30,6 @@ function App() {
         <Route path="accounts" element={<Accounts />} />
         <Route path="categories" element={<Categories />} />
         <Route path="budgets" element={<Budgets />} />
-        <Route path="transfers" element={<Transfers />} />
         <Route path="borrowings-lendings" element={<BorrowingsLendings />} />
         <Route path="reports" element={<Reports />} />
         <Route path="exchange-rates" element={<ExchangeRates />} />

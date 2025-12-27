@@ -1,12 +1,31 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import * as transactionsApi from '../../lib/api/transactions';
+import { mergeIncrementalData, getIdField } from '../../utils/dataMerge';
+import { updateLastSync } from './syncSlice';
 
 // Async thunks
 export const fetchTransactions = createAsyncThunk(
   'transactions/fetchTransactions',
-  async (filters, { rejectWithValue }) => {
+  async (filters, { rejectWithValue, getState, dispatch }) => {
     try {
-      return await transactionsApi.getTransactions(filters);
+      // Get last sync timestamp for incremental fetch
+      const syncState = getState().sync;
+      const lastSync = syncState.lastSyncTransactions;
+      const isIncremental = !!lastSync && !filters.forceFull;
+      
+      // Add since parameter if we have a last sync timestamp
+      const fetchFilters = isIncremental 
+        ? { ...filters, since: lastSync }
+        : filters;
+      
+      const data = await transactionsApi.getTransactions(fetchFilters);
+      
+      // Update sync timestamp after successful fetch
+      if (data && data.length >= 0) {
+        dispatch(updateLastSync({ entity: 'transactions', timestamp: new Date().toISOString() }));
+      }
+      
+      return { data, isIncremental };
     } catch (error) {
       return rejectWithValue(error.message);
     }
@@ -61,8 +80,22 @@ export const deleteTransaction = createAsyncThunk(
   'transactions/deleteTransaction',
   async (transactionId, { rejectWithValue }) => {
     try {
-      await transactionsApi.deleteTransaction(transactionId);
-      return transactionId;
+      const result = await transactionsApi.deleteTransaction(transactionId);
+      // API now returns { transactionId, linkedTransactionId?, deletedTransactionIds }
+      return result;
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+export const bulkDeleteTransactions = createAsyncThunk(
+  'transactions/bulkDeleteTransactions',
+  async (transactionIds, { rejectWithValue }) => {
+    try {
+      const result = await transactionsApi.bulkDeleteTransactions(transactionIds);
+      // API returns { deletedTransactionIds, requestedTransactionIds }
+      return result;
     } catch (error) {
       return rejectWithValue(error.message);
     }
@@ -116,10 +149,27 @@ const transactionsSlice = createSlice({
         (txn) => txn.transaction_id !== transactionId
       );
     },
+    // Bulk delete transactions (for cascading deletes) - reducer action
+    removeDeletedTransactions: (state, action) => {
+      const transactionIds = Array.isArray(action.payload) ? action.payload : [action.payload];
+      state.transactions = state.transactions.filter(
+        (txn) => !transactionIds.includes(txn.transaction_id)
+      );
+      state.allTransactions = state.allTransactions.filter(
+        (txn) => !transactionIds.includes(txn.transaction_id)
+      );
+      // Clear current transaction if it was deleted
+      if (state.currentTransaction && transactionIds.includes(state.currentTransaction.transaction_id)) {
+        state.currentTransaction = null;
+      }
+    },
     // Filter transactions client-side
     filterTransactions: (state, action) => {
       const filters = action.payload || {};
       let filtered = [...state.allTransactions];
+      
+      // Always filter out deleted transactions
+      filtered = filtered.filter(t => !t.deleted_at);
       
       if (filters.accountId) {
         filtered = filtered.filter(t => t.account_id === filters.accountId);
@@ -168,18 +218,41 @@ const transactionsSlice = createSlice({
       .addCase(fetchTransactions.fulfilled, (state, action) => {
         state.loading = false;
         state.backgroundLoading = false;
+        const { data: transactions, isIncremental } = action.payload || { data: [], isIncremental: false };
+        
         // If no filters, store all transactions but don't update filtered list
-        const hasFilters = action.meta.arg && Object.keys(action.meta.arg).length > 0;
+        const hasFilters = action.meta.arg && Object.keys(action.meta.arg).length > 0 && !action.meta.arg.forceFull;
         if (!hasFilters) {
-          state.allTransactions = action.payload;
+          // Merge incremental data or replace all
+          if (isIncremental && state.allTransactions.length > 0) {
+            state.allTransactions = mergeIncrementalData(
+              state.allTransactions,
+              transactions,
+              getIdField('transactions')
+            );
+            // Remove any transactions that have deleted_at set (from incremental sync)
+            state.allTransactions = state.allTransactions.filter(t => !t.deleted_at);
+          } else {
+            state.allTransactions = (transactions || []).filter(t => !t.deleted_at);
+          }
           state.isInitialized = true;
           state.lastFetched = Date.now();
           // Don't update transactions array - let filterTransactions handle it
           // This prevents showing all transactions before filter is applied
         } else {
           // Filtered fetch - update allTransactions and transactions
-          state.allTransactions = action.payload;
-          state.transactions = action.payload;
+          if (isIncremental && state.allTransactions.length > 0) {
+            state.allTransactions = mergeIncrementalData(
+              state.allTransactions,
+              transactions,
+              getIdField('transactions')
+            );
+            // Remove any transactions that have deleted_at set (from incremental sync)
+            state.allTransactions = state.allTransactions.filter(t => !t.deleted_at);
+          } else {
+            state.allTransactions = (transactions || []).filter(t => !t.deleted_at);
+          }
+          state.transactions = (transactions || []).filter(t => !t.deleted_at);
           state.isInitialized = true;
         }
       })
@@ -278,24 +351,72 @@ const transactionsSlice = createSlice({
       })
       .addCase(deleteTransaction.fulfilled, (state, action) => {
         state.loading = false;
-        // Remove from both filtered and all transactions
+        // Handle new return format: { transactionId, linkedTransactionId?, deletedTransactionIds }
+        // Also handle old format for backward compatibility: just transactionId string
+        const payload = action.payload;
+        let deletedIds;
+        let mainTransactionId;
+        
+        if (typeof payload === 'string') {
+          // Old format: just transactionId string
+          deletedIds = [payload];
+          mainTransactionId = payload;
+        } else if (payload && typeof payload === 'object') {
+          // New format: object with deletedTransactionIds or transactionId
+          deletedIds = payload.deletedTransactionIds || (payload.transactionId ? [payload.transactionId] : []);
+          mainTransactionId = payload.transactionId || (deletedIds.length > 0 ? deletedIds[0] : null);
+        } else {
+          // Fallback: treat payload as transactionId
+          deletedIds = [payload];
+          mainTransactionId = payload;
+        }
+        
+        // Remove all deleted transaction IDs from both filtered and all transactions
         state.transactions = state.transactions.filter(
-          (txn) => txn.transaction_id !== action.payload
+          (txn) => !deletedIds.includes(txn.transaction_id)
         );
         state.allTransactions = state.allTransactions.filter(
-          (txn) => txn.transaction_id !== action.payload
+          (txn) => !deletedIds.includes(txn.transaction_id)
         );
-        if (state.currentTransaction?.transaction_id === action.payload) {
+        
+        // Clear current transaction if it was deleted
+        if (mainTransactionId && state.currentTransaction?.transaction_id === mainTransactionId) {
           state.currentTransaction = null;
         }
       })
       .addCase(deleteTransaction.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+      })
+      // Bulk delete transactions
+      .addCase(bulkDeleteTransactions.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(bulkDeleteTransactions.fulfilled, (state, action) => {
+        state.loading = false;
+        const { deletedTransactionIds } = action.payload;
+        
+        // Remove all deleted transaction IDs from both filtered and all transactions
+        state.transactions = state.transactions.filter(
+          (txn) => !deletedTransactionIds.includes(txn.transaction_id)
+        );
+        state.allTransactions = state.allTransactions.filter(
+          (txn) => !deletedTransactionIds.includes(txn.transaction_id)
+        );
+        
+        // Clear current transaction if it was deleted
+        if (state.currentTransaction && deletedTransactionIds.includes(state.currentTransaction.transaction_id)) {
+          state.currentTransaction = null;
+        }
+      })
+      .addCase(bulkDeleteTransactions.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
       });
   },
 });
 
-export const { clearError, clearCurrentTransaction, optimisticUpdateTransaction, optimisticDeleteTransaction, filterTransactions } =
+export const { clearError, clearCurrentTransaction, optimisticUpdateTransaction, optimisticDeleteTransaction, removeDeletedTransactions, filterTransactions } =
   transactionsSlice.actions;
 export default transactionsSlice.reducer;

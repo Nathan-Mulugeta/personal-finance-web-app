@@ -9,12 +9,16 @@ import { fetchBorrowingLendingRecords } from './borrowingsLendingsSlice'
 import { fetchSettings } from './settingsSlice'
 import { setExchangeRates } from './exchangeRatesSlice'
 import * as exchangeRatesApi from '../../lib/api/exchangeRates'
+import { clearPersistedStorage, hasPersistedData } from '../../utils/clearPersistedStorage'
 
 // Initialize app - fetch all data in parallel
 export const initializeApp = createAsyncThunk(
   'appInit/initializeApp',
-  async (_, { dispatch, rejectWithValue }) => {
+  async (_, { dispatch, rejectWithValue, getState }) => {
     try {
+      // Check if we have persisted data before fetching
+      const hasPersisted = await hasPersistedData()
+      
       // Fetch all data in parallel
       const [
         accountsResult,
@@ -36,14 +40,39 @@ export const initializeApp = createAsyncThunk(
         exchangeRatesApi.getExchangeRates({}),
       ])
 
-      // Extract data from fulfilled actions
-      const accounts = accountsResult.payload || []
-      const transactions = transactionsResult.payload || []
-      const categories = categoriesResult.payload || []
-      const budgets = budgetsResult.payload || []
-      const transfers = transfersResult.payload || []
-      const borrowingsLendings = borrowingsLendingsResult.payload || []
-      const settings = settingsResult.payload || []
+      // Extract data from fulfilled actions (new format: { data, isIncremental })
+      const accounts = (accountsResult.payload?.data || accountsResult.payload) || []
+      const transactions = (transactionsResult.payload?.data || transactionsResult.payload) || []
+      const categories = (categoriesResult.payload?.data || categoriesResult.payload) || []
+      const budgets = (budgetsResult.payload?.data || budgetsResult.payload) || []
+      const transfers = (transfersResult.payload?.data || transfersResult.payload) || []
+      const borrowingsLendings = (borrowingsLendingsResult.payload?.data || borrowingsLendingsResult.payload) || []
+      const settings = (settingsResult.payload?.data || settingsResult.payload) || []
+
+      // Detect if backend is empty but we have persisted data
+      // This indicates backend was cleared but local cache still has old data
+      // Only check on first initialization to avoid infinite reload loops
+      const state = getState()
+      const isFirstInit = !state.appInit.isInitialized
+      
+      if (isFirstInit) {
+        const backendIsEmpty = 
+          accounts.length === 0 &&
+          transactions.length === 0 &&
+          categories.length === 0 &&
+          budgets.length === 0 &&
+          transfers.length === 0 &&
+          borrowingsLendings.length === 0
+
+        if (backendIsEmpty && hasPersisted) {
+          // Backend is empty but we have cached data - clear the cache
+          await clearPersistedStorage()
+          
+          // Reload the page to rehydrate with empty state
+          window.location.reload()
+          return rejectWithValue('Backend cleared, reloading...')
+        }
+      }
 
       // Calculate account balances from transactions
       const balances = {}
@@ -126,6 +155,25 @@ const appInitSlice = createSlice({
       })
   },
 })
+
+// Manual refresh is now handled in the component by purging and reloading
+// This action is kept for backwards compatibility but is no longer used
+export const manualRefresh = createAsyncThunk(
+  'appInit/manualRefresh',
+  async (_, { dispatch, rejectWithValue }) => {
+    try {
+      // Reset initialization state
+      dispatch(resetInitialization())
+      
+      // Reinitialize app (will fetch fresh data from backend)
+      await dispatch(initializeApp())
+      
+      return { success: true }
+    } catch (error) {
+      return rejectWithValue(error.message)
+    }
+  }
+)
 
 export const { resetInitialization, clearError } = appInitSlice.actions
 export default appInitSlice.reducer

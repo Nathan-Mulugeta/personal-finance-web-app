@@ -104,6 +104,11 @@ export async function getCategories(filters = {}) {
     }
   }
 
+  // Incremental sync: fetch records updated or created since last sync
+  if (filters.since) {
+    query = query.or(`updated_at.gte.${filters.since},created_at.gte.${filters.since}`)
+  }
+
   const { data, error } = await query.order('name', { ascending: true })
 
   if (error) throw error

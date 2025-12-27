@@ -1,13 +1,32 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
 import * as accountsApi from '../../lib/api/accounts'
 import { calculateAccountBalance, calculateAllAccountBalances } from '../../utils/accountBalance'
+import { mergeIncrementalData, getIdField } from '../../utils/dataMerge'
+import { updateLastSync } from './syncSlice'
 
 // Async thunks
 export const fetchAccounts = createAsyncThunk(
   'accounts/fetchAccounts',
-  async (filters, { rejectWithValue }) => {
+  async (filters, { rejectWithValue, getState, dispatch }) => {
     try {
-      return await accountsApi.getAccounts(filters)
+      // Get last sync timestamp for incremental fetch
+      const syncState = getState().sync;
+      const lastSync = syncState.lastSyncAccounts;
+      const isIncremental = !!lastSync && !filters.forceFull;
+      
+      // Add since parameter if we have a last sync timestamp
+      const fetchFilters = isIncremental 
+        ? { ...filters, since: lastSync }
+        : filters;
+      
+      const data = await accountsApi.getAccounts(fetchFilters);
+      
+      // Update sync timestamp after successful fetch
+      if (data && data.length >= 0) {
+        dispatch(updateLastSync({ entity: 'accounts', timestamp: new Date().toISOString() }));
+      }
+      
+      return { data, isIncremental };
     } catch (error) {
       return rejectWithValue(error.message)
     }
@@ -166,7 +185,20 @@ const accountsSlice = createSlice({
       .addCase(fetchAccounts.fulfilled, (state, action) => {
         state.loading = false
         state.backgroundLoading = false
-        state.accounts = action.payload
+        const { data: accounts, isIncremental } = action.payload || { data: [], isIncremental: false };
+        
+        if (isIncremental && state.accounts.length > 0) {
+          // Merge incremental data with existing
+          state.accounts = mergeIncrementalData(
+            state.accounts,
+            accounts,
+            getIdField('accounts')
+          );
+        } else {
+          // Full fetch - replace all data
+          state.accounts = accounts || [];
+        }
+        
         state.isInitialized = true
       })
       .addCase(fetchAccounts.rejected, (state, action) => {

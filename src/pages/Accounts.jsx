@@ -52,6 +52,8 @@ import { ACCOUNT_TYPES, ACCOUNT_STATUSES } from '../lib/api/accounts';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
 import { formatCurrency } from '../utils/currencyConversion';
+import { usePageRefresh } from '../hooks/usePageRefresh';
+import { refreshAllData } from '../utils/refreshAllData';
 
 function Accounts() {
   const dispatch = useDispatch();
@@ -91,18 +93,13 @@ function Accounts() {
   const watchedType = watch('type');
   const watchedStatus = watch('status');
 
-  const settingsInitialized = useSelector((state) => state.settings.isInitialized);
-
-  useEffect(() => {
-    // Only fetch if app initialization hasn't completed (data will be loaded during app initialization)
-    if (!appInitialized) {
-      dispatch(fetchAccounts({ status: 'Active' }));
-    }
-    // Settings are also loaded during initialization, but fetch if not initialized
-    if (!settingsInitialized) {
-      dispatch(fetchSettings());
-    }
-  }, [dispatch, appInitialized, settingsInitialized]);
+  // Refresh data on navigation
+  usePageRefresh({
+    dataTypes: ['accounts', 'settings', 'exchangeRates'],
+    filters: {
+      accounts: { status: 'Active' },
+    },
+  });
 
   // Calculate summary data from cached data
   const summaryData = useMemo(() => {
@@ -242,6 +239,9 @@ function Accounts() {
         // No need to refetch - it will be included in next initialization
       }
       handleCloseDialog();
+      
+      // Refresh all data to ensure all pages have fresh data
+      await refreshAllData(dispatch);
     } catch (err) {
       // Ignore browser extension errors (harmless)
       if (err?.message?.includes('Extension context invalidated')) {
@@ -265,8 +265,9 @@ function Accounts() {
       await dispatch(deleteAccount(deleteConfirm.account_id)).unwrap();
       setDeleteConfirm(null);
       setDeleteError(null);
-      // Refresh in background
-      dispatch(fetchAccounts({ status: 'Active' }));
+      
+      // Refresh all data to ensure all pages have fresh data
+      await refreshAllData(dispatch);
     } catch (err) {
       console.error('Error deleting account:', err);
       const errorMessage = err?.message || 'Failed to delete account. Please try again.';
@@ -276,16 +277,37 @@ function Accounts() {
     }
   };
 
-  const getStatusColor = (status) => {
+  // Google-style chip styling for status badges
+  const getStatusChipSx = (status) => {
     switch (status) {
       case 'Active':
-        return 'success';
+        return {
+          backgroundColor: '#e6f4ea',
+          color: '#1e8e3e',
+          fontWeight: 500,
+          '& .MuiChip-label': { px: 1 },
+        };
       case 'Closed':
-        return 'default';
+        return {
+          backgroundColor: '#f1f3f4',
+          color: '#5f6368',
+          fontWeight: 500,
+          '& .MuiChip-label': { px: 1 },
+        };
       case 'Suspended':
-        return 'warning';
+        return {
+          backgroundColor: '#fef7e0',
+          color: '#e37400',
+          fontWeight: 500,
+          '& .MuiChip-label': { px: 1 },
+        };
       default:
-        return 'default';
+        return {
+          backgroundColor: '#f1f3f4',
+          color: '#5f6368',
+          fontWeight: 500,
+          '& .MuiChip-label': { px: 1 },
+        };
     }
   };
 
@@ -301,8 +323,8 @@ function Accounts() {
           flexDirection: { xs: 'column', sm: 'row' },
           justifyContent: 'space-between',
           alignItems: { xs: 'flex-start', sm: 'center' },
-          mb: 3,
-          gap: { xs: 2, sm: 0 },
+          mb: { xs: 1.5, sm: 2, md: 3 },
+          gap: { xs: 1, sm: 0 },
         }}
       >
         <Typography
@@ -326,17 +348,17 @@ function Accounts() {
 
       {/* Summary Section */}
       {accounts.length > 0 && (
-        <Box sx={{ mb: 4 }}>
+        <Box sx={{ mb: { xs: 2, sm: 3, md: 4 } }}>
           {/* Header Row with Overall Balances and Total */}
           <Box
             sx={{
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
-              mb: 3,
+              mb: { xs: 1.5, sm: 2, md: 3 },
             }}
           >
-            <Typography variant="h5" fontWeight="bold">
+            <Typography variant="h5" sx={{ fontWeight: 500, color: 'text.primary' }}>
               Overall Balances
             </Typography>
             {summaryData && (
@@ -372,7 +394,7 @@ function Accounts() {
               </Typography>
             </Box>
           ) : (
-            <Grid container spacing={2}>
+            <Grid container spacing={{ xs: 1.5, sm: 2 }}>
               {(() => {
                 // Group accounts by currency and calculate totals
                 const currencyGroups = {};
@@ -427,11 +449,11 @@ function Accounts() {
                 }
 
                 return currencyArray.map((group) => (
-                  <Grid item xs={12} sm={6} md={4} key={group.currency}>
+                  <Grid item xs={6} sm={6} md={4} key={group.currency}>
                     <Paper
                       elevation={0}
                       sx={{
-                        p: 2,
+                        p: { xs: 1.5, sm: 2 },
                         borderRadius: 2,
                         backgroundColor: 'background.paper',
                         border: '1px solid',
@@ -476,8 +498,8 @@ function Accounts() {
 
       {accounts.length === 0 ? (
         <Card>
-          <CardContent>
-            <Box sx={{ textAlign: 'center', py: 4 }}>
+          <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+            <Box sx={{ textAlign: 'center', py: { xs: 3, sm: 4 } }}>
               <AccountBalanceIcon
                 sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }}
               />
@@ -504,14 +526,14 @@ function Accounts() {
             {accounts.map((account) => {
               const balance = accountBalances[account.account_id];
               return (
-                <Card key={account.account_id} sx={{ mb: 2 }}>
-                  <CardContent>
+                <Card key={account.account_id} sx={{ mb: 1.5 }}>
+                  <CardContent sx={{ p: { xs: 1.5, sm: 2 }, '&:last-child': { pb: { xs: 1.5, sm: 2 } } }}>
                     <Box
                       sx={{
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'flex-start',
-                        mb: 1.5,
+                        mb: 1,
                       }}
                     >
                       <Box sx={{ flex: 1 }}>
@@ -525,9 +547,9 @@ function Accounts() {
                         <Box
                           sx={{
                             display: 'flex',
-                            gap: 1,
+                            gap: 0.5,
                             flexWrap: 'wrap',
-                            mb: 1,
+                            mb: 0.5,
                           }}
                         >
                           <Chip
@@ -542,8 +564,8 @@ function Accounts() {
                           />
                           <Chip
                             label={account.status}
-                            color={getStatusColor(account.status)}
                             size="small"
+                            sx={getStatusChipSx(account.status)}
                           />
                         </Box>
                       </Box>
@@ -551,14 +573,20 @@ function Accounts() {
                         <IconButton
                           size="small"
                           onClick={() => handleOpenDialog(account)}
-                          color="primary"
+                          sx={{ 
+                            color: '#5f6368',
+                            '&:hover': { color: '#1a73e8' }
+                          }}
                         >
                           <EditIcon fontSize="small" />
                         </IconButton>
                         <IconButton
                           size="small"
                           onClick={() => setDeleteConfirm(account)}
-                          sx={{ color: 'softRed.main' }}
+                          sx={{ 
+                            color: '#5f6368',
+                            '&:hover': { color: '#d93025' }
+                          }}
                           disabled={account.status === 'Closed'}
                         >
                           <DeleteIcon fontSize="small" />
@@ -699,8 +727,8 @@ function Accounts() {
                       <TableCell>
                         <Chip
                           label={account.status}
-                          color={getStatusColor(account.status)}
                           size="small"
+                          sx={getStatusChipSx(account.status)}
                         />
                       </TableCell>
                       <TableCell align="right">
@@ -708,20 +736,28 @@ function Accounts() {
                           <IconButton
                             size="small"
                             onClick={() => handleOpenDialog(account)}
-                            color="primary"
+                            sx={{ 
+                              color: '#5f6368',
+                              '&:hover': { color: '#1a73e8' }
+                            }}
                           >
                             <EditIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
                         <Tooltip title="Delete">
-                          <IconButton
-                            size="small"
-                            onClick={() => setDeleteConfirm(account)}
-                            color="error"
-                            disabled={account.status === 'Closed'}
-                          >
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
+                          <span>
+                            <IconButton
+                              size="small"
+                              onClick={() => setDeleteConfirm(account)}
+                              sx={{ 
+                                color: '#5f6368',
+                                '&:hover': { color: '#d93025' }
+                              }}
+                              disabled={account.status === 'Closed'}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </span>
                         </Tooltip>
                       </TableCell>
                     </TableRow>
@@ -751,7 +787,7 @@ function Accounts() {
                 {actionError}
               </Alert>
             )}
-            <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid container spacing={{ xs: 1.5, sm: 2 }} sx={{ mt: 1 }}>
               <Grid item xs={12}>
                 <TextField
                   fullWidth

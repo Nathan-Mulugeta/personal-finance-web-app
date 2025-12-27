@@ -1,12 +1,31 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
 import * as budgetsApi from '../../lib/api/budgets'
+import { mergeIncrementalData, getIdField } from '../../utils/dataMerge'
+import { updateLastSync } from './syncSlice'
 
 // Async thunks
 export const fetchBudgets = createAsyncThunk(
   'budgets/fetchBudgets',
-  async (filters, { rejectWithValue }) => {
+  async (filters, { rejectWithValue, getState, dispatch }) => {
     try {
-      return await budgetsApi.getBudgets(filters)
+      // Get last sync timestamp for incremental fetch
+      const syncState = getState().sync;
+      const lastSync = syncState.lastSyncBudgets;
+      const isIncremental = !!lastSync && !filters.forceFull;
+      
+      // Add since parameter if we have a last sync timestamp
+      const fetchFilters = isIncremental 
+        ? { ...filters, since: lastSync }
+        : filters;
+      
+      const data = await budgetsApi.getBudgets(fetchFilters);
+      
+      // Update sync timestamp after successful fetch
+      if (data && data.length >= 0) {
+        dispatch(updateLastSync({ entity: 'budgets', timestamp: new Date().toISOString() }));
+      }
+      
+      return { data, isIncremental };
     } catch (error) {
       return rejectWithValue(error.message)
     }
@@ -104,7 +123,20 @@ const budgetsSlice = createSlice({
       .addCase(fetchBudgets.fulfilled, (state, action) => {
         state.loading = false
         state.backgroundLoading = false
-        state.budgets = action.payload
+        const { data: budgets, isIncremental } = action.payload || { data: [], isIncremental: false };
+        
+        if (isIncremental && state.budgets.length > 0) {
+          // Merge incremental data with existing
+          state.budgets = mergeIncrementalData(
+            state.budgets,
+            budgets,
+            getIdField('budgets')
+          );
+        } else {
+          // Full fetch - replace all data
+          state.budgets = budgets || [];
+        }
+        
         state.isInitialized = true
       })
       .addCase(fetchBudgets.rejected, (state, action) => {

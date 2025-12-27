@@ -1,6 +1,6 @@
 import { configureStore } from '@reduxjs/toolkit'
 import { persistStore, persistReducer } from 'redux-persist'
-import storage from 'redux-persist/lib/storage'
+import localforage from 'localforage'
 import { combineReducers } from '@reduxjs/toolkit'
 import authReducer from './slices/authSlice'
 import accountsReducer from './slices/accountsSlice'
@@ -12,12 +12,34 @@ import borrowingsLendingsReducer from './slices/borrowingsLendingsSlice'
 import settingsReducer from './slices/settingsSlice'
 import exchangeRatesReducer from './slices/exchangeRatesSlice'
 import appInitReducer from './slices/appInitSlice'
+import syncReducer from './slices/syncSlice'
+import '../utils/storageDebug' // Import debug utilities
+
+// Configure localforage to explicitly use IndexedDB
+// Create a dedicated instance for redux-persist
+const persistStorage = localforage.createInstance({
+  name: 'finance-web-app',
+  storeName: 'redux-persist',
+  description: 'Finance app Redux state storage',
+  driver: [
+    localforage.INDEXEDDB, // Prefer IndexedDB
+    localforage.WEBSQL,    // Fallback to WebSQL
+    localforage.LOCALSTORAGE // Final fallback
+  ],
+})
+
+// Verify IndexedDB is available
+if (typeof window !== 'undefined') {
+  persistStorage.ready().catch(() => {
+    // Silently handle initialization errors
+  })
+}
 
 // Persist config - persist all slices except auth
 const persistConfig = {
   key: 'root',
-  storage,
-  whitelist: ['accounts', 'categories', 'transactions', 'budgets', 'transfers', 'borrowingsLendings', 'settings', 'exchangeRates', 'appInit'],
+  storage: persistStorage,
+  whitelist: ['accounts', 'categories', 'transactions', 'budgets', 'transfers', 'borrowingsLendings', 'settings', 'exchangeRates', 'appInit', 'sync'],
   // Don't persist auth to prevent stale sessions
 }
 
@@ -32,6 +54,7 @@ const rootReducer = combineReducers({
   settings: settingsReducer,
   exchangeRates: exchangeRatesReducer,
   appInit: appInitReducer,
+  sync: syncReducer,
 })
 
 const persistedReducer = persistReducer(persistConfig, rootReducer)

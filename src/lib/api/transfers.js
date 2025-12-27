@@ -126,6 +126,7 @@ export async function createTransfer(transferData) {
       toCurrency: toAccount.currency,
       rate: finalToAmount / finalFromAmount,
     } : null,
+    date: transferDate.toISOString().split('T')[0],
   }
 }
 
@@ -154,6 +155,11 @@ export async function getTransfers(filters = {}) {
   }
   if (filters.endDate) {
     query = query.lte('date', filters.endDate)
+  }
+
+  // Incremental sync: fetch records updated or created since last sync
+  if (filters.since) {
+    query = query.or(`updated_at.gte.${filters.since},created_at.gte.${filters.since}`)
   }
 
   const { data: transactions, error } = await query.order('date', { ascending: false })
@@ -187,14 +193,18 @@ export async function getTransfers(filters = {}) {
   const transfers = Array.from(transfersMap.values()).map(transfer => {
     const transferOut = transfer.transactions.find(t => t.type === 'Transfer Out')
     const transferIn = transfer.transactions.find(t => t.type === 'Transfer In')
-    const exchangeRate = exchangeRates?.find(er => er.transfer_id === transfer.transfer_id)
+    const exchangeRate = exchangeRates?.find(er => er.transfer_id === transfer.transferId)
+    
+    // Normalize date to YYYY-MM-DD format (handle dates with time components)
+    const rawDate = transferOut?.date || transferIn?.date
+    const normalizedDate = rawDate ? rawDate.split('T')[0] : null
 
     return {
-      transferId: transfer.transfer_id,
+      transferId: transfer.transferId,
       transferOut,
       transferIn,
       exchangeRate,
-      date: transferOut?.date || transferIn?.date,
+      date: normalizedDate,
     }
   })
 
@@ -239,6 +249,16 @@ export async function deleteTransfer(transactionId) {
 
   const transferId = transaction.transfer_id
 
+  // Get all transaction IDs with this transfer_id before deleting
+  const { data: transactionsToDelete } = await supabase
+    .from('transactions')
+    .select('transaction_id')
+    .eq('transfer_id', transferId)
+    .eq('user_id', user.id)
+    .is('deleted_at', null)
+
+  const transactionIds = transactionsToDelete?.map(t => t.transaction_id) || []
+
   // Soft-delete all transactions with this transfer_id directly
   // This avoids the double-deletion issue since deleteTransaction has its own logic for linked transactions
   const { error: deleteError } = await supabase
@@ -267,6 +287,12 @@ export async function deleteTransfer(transactionId) {
   } catch (error) {
     console.warn('Error deleting exchange rates:', error)
     // Don't throw - exchange rate deletion is not critical
+  }
+
+  // Return transfer ID and all deleted transaction IDs
+  return {
+    transferId,
+    transactionIds
   }
 }
 

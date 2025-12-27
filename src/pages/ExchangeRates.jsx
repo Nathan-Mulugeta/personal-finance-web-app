@@ -2,8 +2,6 @@ import { useEffect, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   Box,
-  Card,
-  CardContent,
   Paper,
   Table,
   TableBody,
@@ -20,20 +18,20 @@ import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
 import { fetchExchangeRates } from '../store/slices/exchangeRatesSlice';
 import { format } from 'date-fns';
+import { usePageRefresh } from '../hooks/usePageRefresh';
 
 function ExchangeRates() {
   const dispatch = useDispatch();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const { exchangeRates, loading, isInitialized, error } = useSelector((state) => state.exchangeRates);
-  const appInitialized = useSelector((state) => state.appInit.isInitialized);
+  const { exchangeRates, loading, isInitialized, error } = useSelector(
+    (state) => state.exchangeRates
+  );
 
-  // Fetch exchange rates on mount to ensure fresh data
-  useEffect(() => {
-    if (appInitialized) {
-      dispatch(fetchExchangeRates({}));
-    }
-  }, [dispatch, appInitialized]);
+  // Refresh data on navigation
+  usePageRefresh({
+    dataTypes: ['exchangeRates'],
+  });
 
   // Sort exchange rates by date descending (most recent first)
   const sortedExchangeRates = useMemo(() => {
@@ -47,16 +45,16 @@ function ExchangeRates() {
     });
   }, [exchangeRates]);
 
-  if (!appInitialized || (loading && !isInitialized)) {
+  if (loading && !isInitialized) {
     return <LoadingSpinner />;
   }
 
   return (
     <Box>
       {/* Page Header */}
-      <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
-        <CurrencyExchangeIcon sx={{ fontSize: 32, color: 'primary.main' }} />
-        <Typography variant="h4" fontWeight="bold">
+      <Box sx={{ mb: { xs: 1.5, sm: 2, md: 3 }, display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 1.5 } }}>
+        <CurrencyExchangeIcon sx={{ fontSize: { xs: 24, sm: 28 }, color: 'primary.main' }} />
+        <Typography variant="h4" sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' }, fontWeight: 500 }}>
           Exchange Rates
         </Typography>
       </Box>
@@ -64,80 +62,166 @@ function ExchangeRates() {
       {error && <ErrorMessage error={error} />}
 
       {sortedExchangeRates.length === 0 ? (
-        <Card>
-          <CardContent>
-            <Box sx={{ textAlign: 'center', py: 4 }}>
-              <CurrencyExchangeIcon
-                sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }}
-              />
-              <Typography variant="h6" color="text.secondary" gutterBottom>
-                No exchange rates yet
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Exchange rates are automatically created when you make multi-currency transfers
-              </Typography>
-            </Box>
-          </CardContent>
-        </Card>
+        <Box
+          sx={{
+            textAlign: 'center',
+            py: { xs: 3, sm: 4 },
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 1,
+            backgroundColor: 'background.paper',
+          }}
+        >
+          <CurrencyExchangeIcon sx={{ fontSize: { xs: 48, sm: 64 }, color: 'text.secondary', mb: { xs: 1.5, sm: 2 } }} />
+          <Typography variant="h6" color="text.secondary" gutterBottom sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}>
+            No exchange rates yet
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}>
+            Exchange rates are automatically created when you make multi-currency transfers
+          </Typography>
+        </Box>
       ) : (
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Date</TableCell>
-                <TableCell>From Currency</TableCell>
-                <TableCell>To Currency</TableCell>
-                <TableCell align="right">Rate</TableCell>
-                <TableCell align="right">From Amount</TableCell>
-                <TableCell align="right">To Amount</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {sortedExchangeRates.map((rate) => (
-                <TableRow key={rate.exchange_rate_id} hover>
-                  <TableCell>
+        <>
+          {/* Mobile Card View */}
+          <Box sx={{ display: { xs: 'block', md: 'none' } }}>
+            {sortedExchangeRates.map((rate) => (
+              <Box
+                key={rate.exchange_rate_id}
+                sx={{
+                  mb: 1.5,
+                  p: 1.5,
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  borderRadius: 1,
+                  backgroundColor: 'background.paper',
+                }}
+              >
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
                     {rate.date ? format(new Date(rate.date), 'MMM dd, yyyy') : 'N/A'}
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body1" fontWeight="medium">
-                      {rate.from_currency}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body1" fontWeight="medium">
-                      {rate.to_currency}
-                    </Typography>
-                  </TableCell>
-                  <TableCell align="right">
-                    <Typography variant="body1" fontWeight="medium">
-                      {rate.rate?.toFixed(6) || 'N/A'}
-                    </Typography>
-                  </TableCell>
-                  <TableCell align="right">
-                    {rate.from_amount !== null && rate.from_amount !== undefined
-                      ? rate.from_amount.toLocaleString('en-US', {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })
+                  </Typography>
+                  <Typography variant="body1" fontWeight={600} sx={{ fontSize: '0.875rem' }}>
+                    {rate.rate?.toFixed(4) || 'N/A'}
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+                  <Typography variant="body1" fontWeight={500} sx={{ fontSize: '0.9375rem' }}>
+                    {rate.from_currency}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>→</Typography>
+                  <Typography variant="body1" fontWeight={500} sx={{ fontSize: '0.9375rem' }}>
+                    {rate.to_currency}
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                    From: {rate.from_amount !== null && rate.from_amount !== undefined
+                      ? rate.from_amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                       : 'N/A'}
-                  </TableCell>
-                  <TableCell align="right">
-                    {rate.to_amount !== null && rate.to_amount !== undefined
-                      ? rate.to_amount.toLocaleString('en-US', {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                    To: {rate.to_amount !== null && rate.to_amount !== undefined
+                      ? rate.to_amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                       : 'N/A'}
-                  </TableCell>
+                  </Typography>
+                </Box>
+              </Box>
+            ))}
+          </Box>
+
+          {/* Desktop Table View */}
+          <TableContainer
+            component={Paper}
+            elevation={0}
+            sx={{
+              display: { xs: 'none', md: 'block' },
+              border: '1px solid',
+              borderColor: 'divider',
+              borderRadius: 1,
+            }}
+          >
+            <Table size="small">
+              <TableHead>
+                <TableRow
+                  sx={{
+                    backgroundColor: 'background.default',
+                    '& th': {
+                      borderBottom: '1px solid',
+                      borderColor: 'divider',
+                      py: 1,
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      color: 'text.secondary',
+                      textTransform: 'uppercase',
+                      letterSpacing: 0.5,
+                    },
+                  }}
+                >
+                  <TableCell>Date</TableCell>
+                  <TableCell>From Currency</TableCell>
+                  <TableCell>To Currency</TableCell>
+                  <TableCell align="right">Rate</TableCell>
+                  <TableCell align="right">From Amount</TableCell>
+                  <TableCell align="right">To Amount</TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+              </TableHead>
+              <TableBody>
+                {sortedExchangeRates.map((rate) => (
+                  <TableRow
+                    key={rate.exchange_rate_id}
+                    hover
+                    sx={{
+                      '& td': {
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
+                        py: 1,
+                        fontSize: '0.875rem',
+                      },
+                    }}
+                  >
+                    <TableCell>
+                      {rate.date ? format(new Date(rate.date), 'MMM dd, yyyy') : 'N/A'}
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" fontWeight={500} sx={{ fontSize: '0.875rem' }}>
+                        {rate.from_currency}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" fontWeight={500} sx={{ fontSize: '0.875rem' }}>
+                        {rate.to_currency}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Typography variant="body2" fontWeight={500} sx={{ fontSize: '0.875rem' }}>
+                        {rate.rate?.toFixed(6) || 'N/A'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="right">
+                      {rate.from_amount !== null && rate.from_amount !== undefined
+                        ? rate.from_amount.toLocaleString('en-US', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })
+                        : 'N/A'}
+                    </TableCell>
+                    <TableCell align="right">
+                      {rate.to_amount !== null && rate.to_amount !== undefined
+                        ? rate.to_amount.toLocaleString('en-US', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })
+                        : 'N/A'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </>
       )}
     </Box>
   );
 }
 
 export default ExchangeRates;
-

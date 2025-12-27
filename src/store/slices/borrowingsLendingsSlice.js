@@ -1,12 +1,31 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
 import * as borrowingsLendingsApi from '../../lib/api/borrowingsLendings'
+import { mergeIncrementalData, getIdField } from '../../utils/dataMerge'
+import { updateLastSync } from './syncSlice'
 
 // Async thunks
 export const fetchBorrowingLendingRecords = createAsyncThunk(
   'borrowingsLendings/fetchBorrowingLendingRecords',
-  async (filters, { rejectWithValue }) => {
+  async (filters, { rejectWithValue, getState, dispatch }) => {
     try {
-      return await borrowingsLendingsApi.getBorrowingLendingRecords(filters)
+      // Get last sync timestamp for incremental fetch
+      const syncState = getState().sync;
+      const lastSync = syncState.lastSyncBorrowingsLendings;
+      const isIncremental = !!lastSync && !filters.forceFull;
+      
+      // Add since parameter if we have a last sync timestamp
+      const fetchFilters = isIncremental 
+        ? { ...filters, since: lastSync }
+        : filters;
+      
+      const data = await borrowingsLendingsApi.getBorrowingLendingRecords(fetchFilters);
+      
+      // Update sync timestamp after successful fetch
+      if (data && data.length >= 0) {
+        dispatch(updateLastSync({ entity: 'borrowingsLendings', timestamp: new Date().toISOString() }));
+      }
+      
+      return { data, isIncremental };
     } catch (error) {
       return rejectWithValue(error.message)
     }
@@ -126,7 +145,20 @@ const borrowingsLendingsSlice = createSlice({
       .addCase(fetchBorrowingLendingRecords.fulfilled, (state, action) => {
         state.loading = false
         state.backgroundLoading = false
-        state.records = action.payload
+        const { data: records, isIncremental } = action.payload || { data: [], isIncremental: false };
+        
+        if (isIncremental && state.records.length > 0) {
+          // Merge incremental data with existing
+          state.records = mergeIncrementalData(
+            state.records,
+            records,
+            getIdField('borrowingsLendings')
+          );
+        } else {
+          // Full fetch - replace all data
+          state.records = records || [];
+        }
+        
         state.isInitialized = true
       })
       .addCase(fetchBorrowingLendingRecords.rejected, (state, action) => {

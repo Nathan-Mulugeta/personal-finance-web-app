@@ -1,12 +1,31 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
 import * as settingsApi from '../../lib/api/settings'
+import { mergeIncrementalData, getIdField } from '../../utils/dataMerge'
+import { updateLastSync } from './syncSlice'
 
 // Async thunks
 export const fetchSettings = createAsyncThunk(
   'settings/fetchSettings',
-  async (_, { rejectWithValue }) => {
+  async (filters, { rejectWithValue, getState, dispatch }) => {
     try {
-      return await settingsApi.getSettings()
+      // Get last sync timestamp for incremental fetch
+      const syncState = getState().sync;
+      const lastSync = syncState.lastSyncSettings;
+      const isIncremental = !!lastSync && !filters?.forceFull;
+      
+      // Add since parameter if we have a last sync timestamp
+      const fetchFilters = isIncremental 
+        ? { since: lastSync }
+        : {};
+      
+      const data = await settingsApi.getSettings(fetchFilters);
+      
+      // Update sync timestamp after successful fetch
+      if (data && data.length >= 0) {
+        dispatch(updateLastSync({ entity: 'settings', timestamp: new Date().toISOString() }));
+      }
+      
+      return { data, isIncremental };
     } catch (error) {
       return rejectWithValue(error.message)
     }
@@ -65,7 +84,20 @@ const settingsSlice = createSlice({
       .addCase(fetchSettings.fulfilled, (state, action) => {
         state.loading = false
         state.backgroundLoading = false
-        state.settings = action.payload
+        const { data: settings, isIncremental } = action.payload || { data: [], isIncremental: false };
+        
+        if (isIncremental && state.settings.length > 0) {
+          // Merge incremental data with existing
+          state.settings = mergeIncrementalData(
+            state.settings,
+            settings,
+            getIdField('settings')
+          );
+        } else {
+          // Full fetch - replace all data
+          state.settings = settings || [];
+        }
+        
         state.isInitialized = true
       })
       .addCase(fetchSettings.rejected, (state, action) => {

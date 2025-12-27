@@ -7,6 +7,7 @@ import { fetchBudgets } from '../store/slices/budgetsSlice'
 import { fetchTransfers } from '../store/slices/transfersSlice'
 import { fetchBorrowingLendingRecords } from '../store/slices/borrowingsLendingsSlice'
 import { fetchSettings } from '../store/slices/settingsSlice'
+import { fetchExchangeRates } from '../store/slices/exchangeRatesSlice'
 import { recalculateAllBalances } from '../store/slices/accountsSlice'
 
 /**
@@ -24,7 +25,8 @@ export function useDataRefresh() {
     if (!appInitialized) return
 
     const handleFocus = () => {
-      // Silent background refresh - don't show loading states
+      // Silent background refresh using incremental sync
+      // These will automatically use incremental sync if lastSync timestamps exist
       dispatch(fetchAccounts({ status: 'Active' }))
       dispatch(fetchTransactions({}))
       dispatch(fetchCategories({}))
@@ -32,6 +34,7 @@ export function useDataRefresh() {
       dispatch(fetchTransfers({}))
       dispatch(fetchBorrowingLendingRecords({}))
       dispatch(fetchSettings())
+      dispatch(fetchExchangeRates({}))
       
       // Recalculate balances after a short delay to ensure transactions are loaded
       setTimeout(() => {
@@ -48,7 +51,8 @@ export function useDataRefresh() {
     if (!appInitialized) return
 
     const refreshInterval = setInterval(() => {
-      // Background refresh - use backgroundLoading flags
+      // Background refresh using incremental sync
+      // These will automatically use incremental sync if lastSync timestamps exist
       dispatch(fetchAccounts({ status: 'Active' }))
       dispatch(fetchTransactions({}))
       dispatch(fetchCategories({}))
@@ -56,6 +60,7 @@ export function useDataRefresh() {
       dispatch(fetchTransfers({}))
       dispatch(fetchBorrowingLendingRecords({}))
       dispatch(fetchSettings())
+      dispatch(fetchExchangeRates({}))
       
       // Recalculate balances after a short delay
       setTimeout(() => {
