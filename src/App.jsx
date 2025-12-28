@@ -19,31 +19,31 @@ function App() {
   return (
     <>
       <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/signup" element={<Signup />} />
-      <Route path="/auth/callback" element={<AuthCallback />} />
-      <Route
-        path="/"
-        element={
-          <ProtectedRoute>
-            <AppLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<Navigate to="/home" replace />} />
-        <Route path="home" element={<Home />} />
-        <Route path="transactions" element={<Transactions />} />
-        <Route path="accounts" element={<Accounts />} />
-        <Route path="categories" element={<Categories />} />
-        <Route path="budgets" element={<Budgets />} />
-        <Route path="borrowings-lendings" element={<BorrowingsLendings />} />
-        <Route path="reports" element={<Reports />} />
-        <Route path="exchange-rates" element={<ExchangeRates />} />
-        <Route path="settings" element={<Settings />} />
-        <Route path="*" element={<Navigate to="/home" replace />} />
-      </Route>
-    </Routes>
-    <InstallPrompt />
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
+        <Route path="/auth/callback" element={<AuthCallback />} />
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <AppLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<Navigate to="/home" replace />} />
+          <Route path="home" element={<Home />} />
+          <Route path="transactions" element={<Transactions />} />
+          <Route path="accounts" element={<Accounts />} />
+          <Route path="categories" element={<Categories />} />
+          <Route path="budgets" element={<Budgets />} />
+          <Route path="borrowings-lendings" element={<BorrowingsLendings />} />
+          <Route path="reports" element={<Reports />} />
+          <Route path="exchange-rates" element={<ExchangeRates />} />
+          <Route path="settings" element={<Settings />} />
+          <Route path="*" element={<Navigate to="/home" replace />} />
+        </Route>
+      </Routes>
+      <InstallPrompt />
     </>
   );
 }

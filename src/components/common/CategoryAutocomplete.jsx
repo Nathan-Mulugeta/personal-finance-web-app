@@ -1,3 +1,4 @@
+import { useRef, useEffect } from 'react';
 import { Autocomplete, TextField, Box, Typography } from '@mui/material';
 
 /**
@@ -14,8 +15,22 @@ function CategoryAutocomplete({
   disabled,
   filterByType,        // Optional: 'Income' or 'Expense'
   required = false,
+  autoFocus = false,   // Auto-focus the input on mount
   ...props
 }) {
+  const inputRef = useRef(null);
+
+  // Auto-focus the input when autoFocus prop is true
+  useEffect(() => {
+    if (autoFocus && inputRef.current && !disabled) {
+      // Small delay to ensure the dialog is fully mounted
+      const timer = setTimeout(() => {
+        inputRef.current?.focus();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [autoFocus, disabled]);
+
   // Filter categories by type if specified
   const filteredCategories = filterByType
     ? categories.filter(cat => cat.type === filterByType && cat.status === 'Active')
@@ -35,6 +50,7 @@ function CategoryAutocomplete({
       renderInput={(params) => (
         <TextField
           {...params}
+          inputRef={inputRef}
           label={label}
           error={error}
           helperText={helperText}

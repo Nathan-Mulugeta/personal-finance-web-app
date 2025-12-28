@@ -34,6 +34,8 @@ import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 import DeleteIcon from '@mui/icons-material/Delete';
+import AddIcon from '@mui/icons-material/Add';
+import AddTransactionDialog from '../components/common/AddTransactionDialog';
 import {
   updateTransaction,
   deleteTransaction,
@@ -66,6 +68,7 @@ function Home() {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
+  const [addTransactionOpen, setAddTransactionOpen] = useState(false);
   const searchInputRef = useRef(null);
 
   // Get data from Redux - only what we need for transactions
@@ -322,18 +325,56 @@ function Home() {
 
   return (
     <Box>
-      <Typography
-        variant="h4"
+      <Box
         sx={{
-          fontSize: { xs: '1.25rem', sm: '1.5rem' },
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
           mb: { xs: 1.5, sm: 2, md: 3 },
-          fontWeight: 500,
         }}
       >
-        Home
-      </Typography>
+        <Typography
+          variant="h4"
+          sx={{
+            fontSize: { xs: '1.25rem', sm: '1.5rem' },
+            fontWeight: 500,
+          }}
+        >
+          Home
+        </Typography>
+        <IconButton
+          onClick={() => setAddTransactionOpen(true)}
+          sx={{
+            backgroundColor: 'primary.main',
+            color: 'white',
+            width: 36,
+            height: 36,
+            '&:hover': {
+              backgroundColor: 'primary.main',
+              cursor: 'pointer',
+              '& .add-icon': {
+                transform: 'rotate(90deg)',
+              },
+            },
+          }}
+        >
+          <AddIcon
+            className="add-icon"
+            sx={{
+              fontSize: 20,
+              transition: 'transform 0.2s ease-in-out',
+            }}
+          />
+        </IconButton>
+      </Box>
 
       {error && <ErrorMessage error={error} />}
+
+      {/* Add Transaction Dialog */}
+      <AddTransactionDialog
+        open={addTransactionOpen}
+        onClose={() => setAddTransactionOpen(false)}
+      />
 
       {/* Search Bar */}
       <Box

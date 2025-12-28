@@ -30,6 +30,7 @@ import {
   clearError,
 } from '../store/slices/settingsSlice';
 import { fetchCategories } from '../store/slices/categoriesSlice';
+import { fetchAccounts } from '../store/slices/accountsSlice';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
 import CategoryAutocomplete from '../components/common/CategoryAutocomplete';
@@ -45,6 +46,7 @@ function Settings() {
   const { settings, loading, backgroundLoading, isInitialized, error } =
     useSelector((state) => state.settings);
   const { categories } = useSelector((state) => state.categories);
+  const { accounts } = useSelector((state) => state.accounts);
   const categoriesInitialized = useSelector(
     (state) => state.categories.isInitialized
   );
@@ -64,6 +66,7 @@ function Settings() {
   } = useForm({
     defaultValues: {
       baseCurrency: '',
+      defaultAccountId: '',
       borrowingCategoryId: '',
       lendingCategoryId: '',
       borrowingPaymentCategoryId: '',
@@ -71,6 +74,7 @@ function Settings() {
     },
   });
 
+  const watchedDefaultAccountId = watch('defaultAccountId');
   const watchedBorrowingCategoryId = watch('borrowingCategoryId');
   const watchedLendingCategoryId = watch('lendingCategoryId');
   const watchedBorrowingPaymentCategoryId = watch('borrowingPaymentCategoryId');
@@ -78,9 +82,10 @@ function Settings() {
 
   // Refresh data on navigation
   usePageRefresh({
-    dataTypes: ['settings', 'categories'],
+    dataTypes: ['settings', 'categories', 'accounts'],
     filters: {
       categories: { status: 'Active' },
+      accounts: { status: 'Active' },
     },
   });
 
@@ -90,6 +95,9 @@ function Settings() {
       const baseCurrency =
         settings.find((s) => s.setting_key === 'BaseCurrency')?.setting_value ||
         '';
+      const defaultAccountId =
+        settings.find((s) => s.setting_key === 'DefaultAccountID')
+          ?.setting_value || '';
       const borrowingCategoryId =
         settings.find((s) => s.setting_key === 'BorrowingCategoryID')
           ?.setting_value || '';
@@ -105,6 +113,7 @@ function Settings() {
 
       reset({
         baseCurrency,
+        defaultAccountId,
         borrowingCategoryId,
         lendingCategoryId,
         borrowingPaymentCategoryId,
@@ -119,6 +128,9 @@ function Settings() {
       baseCurrency:
         settings.find((s) => s.setting_key === 'BaseCurrency')?.setting_value ||
         '',
+      defaultAccountId:
+        settings.find((s) => s.setting_key === 'DefaultAccountID')
+          ?.setting_value || '',
       borrowingCategoryId:
         settings.find((s) => s.setting_key === 'BorrowingCategoryID')
           ?.setting_value || '',
@@ -152,6 +164,11 @@ function Settings() {
       const updates = {};
       if (data.baseCurrency) {
         updates.BaseCurrency = data.baseCurrency.toUpperCase();
+      }
+      if (data.defaultAccountId) {
+        updates.DefaultAccountID = data.defaultAccountId;
+      } else {
+        updates.DefaultAccountID = '';
       }
       if (data.borrowingCategoryId) {
         updates.BorrowingCategoryID = data.borrowingCategoryId;
@@ -200,6 +217,13 @@ function Settings() {
     if (!categoryId) return 'Not set';
     const category = categories.find((cat) => cat.category_id === categoryId);
     return category?.name || 'Unknown';
+  };
+
+  // Get account name helper
+  const getAccountName = (accountId) => {
+    if (!accountId) return 'Not set';
+    const account = accounts.find((acc) => acc.account_id === accountId);
+    return account ? `${account.name} (${account.currency})` : 'Unknown';
   };
 
   // Get income categories for borrowing (money coming in)
@@ -310,6 +334,19 @@ function Settings() {
               </Typography>
               <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.6875rem', sm: '0.75rem' } }}>
                 Default currency for displaying totals and conversions
+              </Typography>
+            </Box>
+
+            {/* Default Account */}
+            <Box sx={{ p: { xs: 1.5, sm: 2 }, borderBottom: '1px solid', borderColor: 'divider' }}>
+              <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.8125rem' }, mb: 0.5 }}>
+                Default Account
+              </Typography>
+              <Typography variant="body1" fontWeight={500} sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}>
+                {getAccountName(getSettingValue('DefaultAccountID'))}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.6875rem', sm: '0.75rem' } }}>
+                Account auto-selected when creating new transactions
               </Typography>
             </Box>
 
@@ -449,6 +486,30 @@ function Settings() {
                     setValue('baseCurrency', e.target.value.toUpperCase());
                   }}
                 />
+              </Grid>
+              <Grid item xs={12}>
+                <FormControl fullWidth>
+                  <InputLabel>Default Account (Optional)</InputLabel>
+                  <Select
+                    value={watchedDefaultAccountId || ''}
+                    label="Default Account (Optional)"
+                    onChange={(e) => setValue('defaultAccountId', e.target.value)}
+                  >
+                    <MenuItem value="">
+                      <em>None</em>
+                    </MenuItem>
+                    {accounts
+                      .filter((acc) => acc.status === 'Active')
+                      .map((account) => (
+                        <MenuItem key={account.account_id} value={account.account_id}>
+                          {account.name} ({account.currency})
+                        </MenuItem>
+                      ))}
+                  </Select>
+                  <FormHelperText>
+                    Account auto-selected when creating new transactions
+                  </FormHelperText>
+                </FormControl>
               </Grid>
               <Grid item xs={12}>
                 <CategoryAutocomplete

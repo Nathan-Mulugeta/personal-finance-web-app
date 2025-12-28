@@ -335,11 +335,21 @@ export async function getTransactions(filters = {}) {
   const user = await getCurrentUser();
   if (!user) throw new Error('User not authenticated');
 
-  let query = supabase
-    .from('transactions')
-    .select('*')
-    .eq('user_id', user.id)
-    .is('deleted_at', null); // Soft delete filter
+  let query = supabase.from('transactions').select('*').eq('user_id', user.id);
+
+  // For incremental sync, include deleted transactions that were updated since last sync
+  // For full sync, only include active transactions
+  if (filters.since) {
+    // Incremental sync: include both active and recently deleted transactions
+    // Active transactions: deleted_at IS NULL AND (updated_at >= since OR created_at >= since)
+    // Deleted transactions: deleted_at IS NOT NULL AND updated_at >= since
+    query = query.or(
+      `and(deleted_at.is.null,or(updated_at.gte.${filters.since},created_at.gte.${filters.since})),and(deleted_at.not.is.null,updated_at.gte.${filters.since})`
+    );
+  } else {
+    // Full sync: only include active transactions
+    query = query.is('deleted_at', null);
+  }
 
   if (filters.accountId) {
     query = query.eq('account_id', filters.accountId);
@@ -368,13 +378,6 @@ export async function getTransactions(filters = {}) {
       .toISOString()
       .split('T')[0];
     query = query.gte('date', startDate).lt('date', endDate);
-  }
-
-  // Incremental sync: fetch records updated or created since last sync
-  if (filters.since) {
-    query = query.or(
-      `updated_at.gte.${filters.since},created_at.gte.${filters.since}`
-    );
   }
 
   // If explicit pagination is requested, use single query with limit/offset

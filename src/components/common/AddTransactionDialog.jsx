@@ -1,0 +1,362 @@
+import { useEffect, useState } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import {
+  Alert,
+  Box,
+  Button,
+  CircularProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  FormControl,
+  FormHelperText,
+  Grid,
+  InputLabel,
+  MenuItem,
+  Select,
+  TextField,
+  useMediaQuery,
+  useTheme,
+} from '@mui/material';
+import { format } from 'date-fns';
+import { createTransaction } from '../../store/slices/transactionsSlice';
+import { transactionSchema } from '../../schemas/transactionSchema';
+import {
+  TRANSACTION_TYPES,
+  TRANSACTION_STATUSES,
+} from '../../lib/api/transactions';
+import CategoryAutocomplete from './CategoryAutocomplete';
+import { refreshAllData } from '../../utils/refreshAllData';
+import { flattenCategoryTree } from '../../utils/categoryHierarchy';
+
+/**
+ * Global Add Transaction Dialog component.
+ * Used for quickly adding transactions from anywhere in the app.
+ */
+function AddTransactionDialog({ open, onClose }) {
+  const dispatch = useDispatch();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  
+  const { accounts } = useSelector((state) => state.accounts);
+  const { categories } = useSelector((state) => state.categories);
+  const { settings } = useSelector((state) => state.settings);
+  
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [actionError, setActionError] = useState(null);
+
+  // Get default account from settings
+  const getDefaultAccountId = () => {
+    const defaultAccountSetting = settings.find(
+      (s) => s.setting_key === 'DefaultAccountID'
+    );
+    const defaultAccountId = defaultAccountSetting?.setting_value || '';
+    // Verify the account exists and is active
+    const accountExists = accounts.find(
+      (acc) => acc.account_id === defaultAccountId && acc.status === 'Active'
+    );
+    return accountExists ? defaultAccountId : '';
+  };
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    reset,
+    setValue,
+    watch,
+  } = useForm({
+    resolver: zodResolver(transactionSchema),
+    defaultValues: {
+      accountId: '',
+      categoryId: '',
+      amount: '',
+      currency: '',
+      description: '',
+      type: 'Expense',
+      status: 'Cleared',
+      date: format(new Date(), 'yyyy-MM-dd'),
+    },
+  });
+
+  const watchedAccountId = watch('accountId');
+  const watchedCategoryId = watch('categoryId');
+  const watchedType = watch('type');
+  const watchedStatus = watch('status');
+
+  // Reset form when dialog opens
+  useEffect(() => {
+    if (open) {
+      const defaultAccountId = getDefaultAccountId();
+      reset({
+        accountId: defaultAccountId,
+        categoryId: '',
+        amount: '',
+        currency: '',
+        description: '',
+        type: 'Expense',
+        status: 'Cleared',
+        date: format(new Date(), 'yyyy-MM-dd'),
+      });
+      
+      // Set currency if default account is available
+      if (defaultAccountId) {
+        const account = accounts.find((acc) => acc.account_id === defaultAccountId);
+        if (account) {
+          setValue('currency', account.currency);
+        }
+      }
+      
+      setActionError(null);
+      setIsSubmitting(false);
+    }
+  }, [open, accounts, settings, reset, setValue]);
+
+  // Auto-set currency when account is selected
+  useEffect(() => {
+    if (watchedAccountId) {
+      const account = accounts.find((acc) => acc.account_id === watchedAccountId);
+      if (account) {
+        setValue('currency', account.currency);
+      }
+    }
+  }, [watchedAccountId, accounts, setValue]);
+
+  // Filter categories by type and flatten with hierarchy
+  const getFilteredCategories = () => {
+    if (!watchedType) return flattenCategoryTree(categories);
+    let filtered;
+    if (watchedType === 'Income') {
+      filtered = categories.filter((cat) => cat.type === 'Income');
+    } else if (watchedType === 'Expense') {
+      filtered = categories.filter((cat) => cat.type === 'Expense');
+    } else {
+      filtered = categories;
+    }
+    return flattenCategoryTree(filtered);
+  };
+
+  const handleClose = () => {
+    setActionError(null);
+    setIsSubmitting(false);
+    reset();
+    onClose();
+  };
+
+  const onSubmit = async (data) => {
+    setIsSubmitting(true);
+    setActionError(null);
+    try {
+      await dispatch(createTransaction(data)).unwrap();
+      handleClose();
+      
+      // Refresh all data to ensure all pages have fresh data
+      await refreshAllData(dispatch);
+    } catch (err) {
+      console.error('Error saving transaction:', err);
+      const errorMessage = err?.message || 'Failed to save transaction. Please try again.';
+      setActionError(errorMessage);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onClose={handleClose}
+      maxWidth="sm"
+      fullWidth
+      fullScreen={isMobile}
+      PaperProps={{
+        sx: isMobile ? {
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100%',
+          maxHeight: '100%',
+        } : {},
+      }}
+    >
+      <form onSubmit={handleSubmit(onSubmit)} style={isMobile ? { display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' } : {}}>
+        <DialogTitle sx={{ flexShrink: 0, pb: { xs: 1, sm: 2 } }}>
+          Add Transaction
+        </DialogTitle>
+        <DialogContent sx={{ flexGrow: 1, overflow: 'auto', pt: { xs: 1, sm: 2 } }}>
+          {actionError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {actionError}
+            </Alert>
+          )}
+          <Grid container spacing={{ xs: 1.5, sm: 2 }} sx={{ mt: { xs: 0.5, sm: 1 } }}>
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth error={!!errors.accountId}>
+                <InputLabel>Account *</InputLabel>
+                <Select
+                  {...register('accountId')}
+                  label="Account *"
+                  value={watchedAccountId || ''}
+                  onChange={(e) => setValue('accountId', e.target.value)}
+                >
+                  {accounts
+                    .filter((acc) => acc.status === 'Active')
+                    .map((account) => (
+                      <MenuItem key={account.account_id} value={account.account_id}>
+                        {account.name} ({account.currency})
+                      </MenuItem>
+                    ))}
+                </Select>
+                {errors.accountId && (
+                  <FormHelperText>{errors.accountId.message}</FormHelperText>
+                )}
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth error={!!errors.type}>
+                <InputLabel>Type *</InputLabel>
+                <Select
+                  {...register('type')}
+                  label="Type *"
+                  value={watchedType || ''}
+                  onChange={(e) => setValue('type', e.target.value)}
+                >
+                  {TRANSACTION_TYPES.filter(
+                    (t) => !t.includes('Transfer')
+                  ).map((type) => (
+                    <MenuItem key={type} value={type}>
+                      {type}
+                    </MenuItem>
+                  ))}
+                </Select>
+                {errors.type && (
+                  <FormHelperText>{errors.type.message}</FormHelperText>
+                )}
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <CategoryAutocomplete
+                categories={getFilteredCategories()}
+                value={watchedCategoryId || ''}
+                onChange={(id) => setValue('categoryId', id)}
+                label="Category *"
+                error={!!errors.categoryId}
+                helperText={
+                  errors.categoryId?.message ||
+                  (!watchedType ? 'Please select a transaction type first' : undefined)
+                }
+                disabled={!watchedType}
+                autoFocus={open && !!watchedType}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                type="date"
+                label="Date *"
+                {...register('date')}
+                error={!!errors.date}
+                helperText={errors.date?.message}
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                type="number"
+                label="Amount *"
+                {...register('amount', { valueAsNumber: true })}
+                error={!!errors.amount}
+                helperText={errors.amount?.message}
+                inputProps={{ step: '0.01', min: '0.01' }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Currency"
+                {...register('currency')}
+                error={!!errors.currency}
+                helperText={
+                  errors.currency?.message ||
+                  'Auto-filled from account selection'
+                }
+                disabled
+                InputLabelProps={{
+                  shrink: !!watch('currency'),
+                }}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Description"
+                {...register('description')}
+                error={!!errors.description}
+                helperText={errors.description?.message}
+                multiline
+                rows={2}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth error={!!errors.status}>
+                <InputLabel>Status</InputLabel>
+                <Select
+                  {...register('status')}
+                  label="Status"
+                  value={watchedStatus || ''}
+                  onChange={(e) => setValue('status', e.target.value)}
+                >
+                  {TRANSACTION_STATUSES.map((status) => (
+                    <MenuItem key={status} value={status}>
+                      {status}
+                    </MenuItem>
+                  ))}
+                </Select>
+                {errors.status && (
+                  <FormHelperText>{errors.status.message}</FormHelperText>
+                )}
+              </FormControl>
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions sx={{ 
+          flexShrink: 0, 
+          p: { xs: 1.5, sm: 2 },
+          gap: 1,
+        }}>
+          <Button
+            onClick={handleClose}
+            disabled={isSubmitting}
+            size={isMobile ? 'medium' : 'medium'}
+            sx={{ 
+              textTransform: 'none',
+              minWidth: { xs: '45%', sm: 100 },
+              flex: { xs: 1, sm: 'none' },
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            variant="contained"
+            disabled={isSubmitting}
+            size={isMobile ? 'medium' : 'medium'}
+            startIcon={isSubmitting ? <CircularProgress size={16} color="inherit" /> : null}
+            sx={{ 
+              textTransform: 'none',
+              minWidth: { xs: '45%', sm: 100 },
+              flex: { xs: 1, sm: 'none' },
+            }}
+          >
+            {isSubmitting ? 'Creating...' : 'Create'}
+          </Button>
+        </DialogActions>
+      </form>
+    </Dialog>
+  );
+}
+
+export default AddTransactionDialog;
+

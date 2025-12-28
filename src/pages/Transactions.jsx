@@ -102,6 +102,8 @@ function Transactions() {
     endDate: format(new Date(), 'yyyy-MM-dd'),
   });
   const [selectedItems, setSelectedItems] = useState(new Set());
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [longPressTimer, setLongPressTimer] = useState(null);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [bulkDeleteError, setBulkDeleteError] = useState(null);
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
@@ -557,8 +559,9 @@ function Transactions() {
         }, 100);
       });
 
-      // Clear selection
+      // Clear selection and exit selection mode
       setSelectedItems(new Set());
+      setSelectionMode(false);
       setBulkDeleteConfirm(false);
 
       // Re-apply current filters to update the view
@@ -844,6 +847,27 @@ function Transactions() {
     });
   };
 
+  // Long-press handlers for selection mode
+  const handleLongPressStart = (itemId) => {
+    const timer = setTimeout(() => {
+      setSelectionMode(true);
+      setSelectedItems(new Set([itemId]));
+    }, 500); // 500ms long press
+    setLongPressTimer(timer);
+  };
+
+  const handleLongPressEnd = () => {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      setLongPressTimer(null);
+    }
+  };
+
+  const exitSelectionMode = () => {
+    setSelectionMode(false);
+    setSelectedItems(new Set());
+  };
+
   const handleSelectAll = (checked) => {
     if (checked) {
       const allIds = combinedItems.map((item) => getItemId(item));
@@ -925,67 +949,6 @@ function Transactions() {
         </Box>
       </Box>
 
-      {/* Expense Aggregation */}
-      {isInitialized && (
-        <Box sx={{ mb: 2, display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
-          {Object.entries(calculateExpensesByCurrency()).map(([currency, total]) => (
-            <Box
-              key={currency}
-              sx={{
-                flex: { xs: '1 1 100%', sm: '1 1 auto' },
-                minWidth: { xs: '100%', sm: 180 },
-                p: 1.5,
-                borderBottom: '2px solid',
-                borderColor: 'divider',
-                backgroundColor: 'transparent',
-              }}
-            >
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{ mb: 0.5, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 500 }}
-              >
-                Expenses ({currency})
-              </Typography>
-              <Typography
-                variant="h6"
-                fontWeight={600}
-                sx={{ color: '#d93025', fontSize: { xs: '1.25rem', sm: '1.5rem' } }}
-              >
-                {formatCurrency(total, currency)}
-              </Typography>
-            </Box>
-          ))}
-          {Object.keys(calculateExpensesByCurrency()).length === 0 && (
-            <Box
-              sx={{
-                flex: { xs: '1 1 100%', sm: '1 1 auto' },
-                minWidth: { xs: '100%', sm: 180 },
-                p: 1.5,
-                borderBottom: '2px solid',
-                borderColor: 'divider',
-                backgroundColor: 'transparent',
-              }}
-            >
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{ mb: 0.5, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 500 }}
-              >
-                Expenses
-              </Typography>
-              <Typography
-                variant="h6"
-                fontWeight={600}
-                sx={{ color: '#d93025', fontSize: { xs: '1.25rem', sm: '1.5rem' } }}
-              >
-                {formatCurrency(0, 'USD')}
-              </Typography>
-            </Box>
-          )}
-        </Box>
-      )}
-
       {/* Date Navigation */}
       <Box 
         sx={{ 
@@ -1051,6 +1014,15 @@ function Transactions() {
           }}
         >
           {(() => {
+            // Calculate total expenses
+            const expensesByCurrency = calculateExpensesByCurrency();
+            const totalParts = Object.entries(expensesByCurrency).map(([currency, total]) => 
+              formatCurrency(total, currency)
+            );
+            const totalStr = totalParts.length > 0 
+              ? `Total: ${totalParts.join(', ')}` 
+              : 'Total: 0';
+            
             // Count filtered transfers (same logic as combinedItems)
             let transferCount = 0;
             if (showTransfers && transfers && Array.isArray(transfers)) {
@@ -1082,35 +1054,31 @@ function Transactions() {
               });
             }
             
-            const totalCount = transactions.length + transferCount;
-            if (totalCount === 0) return 'No items';
-            const items = [];
-            if (transactions.length > 0) {
-              items.push(`${transactions.length} transaction${transactions.length !== 1 ? 's' : ''}`);
-            }
-            if (transferCount > 0) {
-              items.push(`${transferCount} transfer${transferCount !== 1 ? 's' : ''}`);
-            }
-            return items.join(', ');
+            const totalItemCount = transactions.length + transferCount;
+            const countStr = totalItemCount === 0 
+              ? 'No items' 
+              : `${totalItemCount} item${totalItemCount !== 1 ? 's' : ''}`;
+            
+            return `${totalStr} • ${countStr}`;
           })()}
         </Typography>
       </Box>
 
       {error && <ErrorMessage error={error} />}
 
-      {/* Selection Header */}
-      {combinedItems.length > 0 && (
+      {/* Selection Header - only visible in selection mode */}
+      {selectionMode && combinedItems.length > 0 && (
         <Box
           sx={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            mb: 1.5,
+            mb: 1,
             p: 1,
-            height: 48,
+            height: 44,
             borderBottom: '1px solid',
             borderColor: 'divider',
-            backgroundColor: selectedItems.size > 0 ? 'action.selected' : 'transparent',
+            backgroundColor: 'action.selected',
           }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -1126,27 +1094,41 @@ function Transactions() {
               sx={{ fontSize: '0.875rem' }}
             >
               {selectedItems.size > 0
-                ? `${selectedItems.size} item${selectedItems.size !== 1 ? 's' : ''} selected`
-                : 'Select items to delete'}
+                ? `${selectedItems.size} selected`
+                : 'Select items'}
             </Typography>
           </Box>
-          {selectedItems.size > 0 && (
+          <Box sx={{ display: 'flex', gap: 1 }}>
             <Button
-              variant="outlined"
-              color="error"
+              variant="text"
               size="small"
-              startIcon={<DeleteIcon sx={{ fontSize: 18 }} />}
-              onClick={() => setBulkDeleteConfirm(true)}
-              disabled={isBulkDeleting}
+              onClick={exitSelectionMode}
               sx={{
                 textTransform: 'none',
                 fontSize: '0.875rem',
-                minHeight: 36,
+                minHeight: 32,
               }}
             >
-              Delete Selected
+              Cancel
             </Button>
-          )}
+            {selectedItems.size > 0 && (
+              <Button
+                variant="outlined"
+                color="error"
+                size="small"
+                startIcon={<DeleteIcon sx={{ fontSize: 16 }} />}
+                onClick={() => setBulkDeleteConfirm(true)}
+                disabled={isBulkDeleting}
+                sx={{
+                  textTransform: 'none',
+                  fontSize: '0.875rem',
+                  minHeight: 32,
+                }}
+              >
+                Delete
+              </Button>
+            )}
+          </Box>
         </Box>
       )}
 
@@ -1352,38 +1334,56 @@ function Transactions() {
                 return (
                   <Box
                     key={transferId}
+                    onTouchStart={() => handleLongPressStart(transferId)}
+                    onTouchEnd={handleLongPressEnd}
+                    onTouchCancel={handleLongPressEnd}
+                    onMouseDown={() => handleLongPressStart(transferId)}
+                    onMouseUp={handleLongPressEnd}
+                    onMouseLeave={handleLongPressEnd}
+                    onClick={() => {
+                      if (selectionMode) {
+                        handleItemSelect(transferId, !isSelected);
+                      }
+                    }}
                     sx={{
-                      mb: 1,
-                      p: 1.5,
-                      border: '1px solid',
-                      borderColor: isSelected ? 'primary.main' : 'divider',
-                      borderRadius: 1,
-                      backgroundColor: isSelected ? 'action.selected' : 'background.paper',
+                      py: 1,
+                      px: 0.5,
+                      borderBottom: '1px solid',
+                      borderColor: 'divider',
+                      backgroundColor: isSelected ? 'action.selected' : 'transparent',
                       display: 'flex',
-                      gap: 1,
+                      gap: 0.75,
                       alignItems: 'flex-start',
                       overflow: 'hidden',
                       width: '100%',
                       boxSizing: 'border-box',
+                      cursor: selectionMode ? 'pointer' : 'default',
+                      userSelect: 'none',
                     }}
                   >
-                    <Checkbox
-                      checked={isSelected}
-                      onChange={(e) => handleItemSelect(transferId, e.target.checked)}
-                      size="small"
-                      sx={{ p: 0, mt: 0.25, flexShrink: 0 }}
-                    />
+                    {selectionMode && (
+                      <Checkbox
+                        checked={isSelected}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          handleItemSelect(transferId, e.target.checked);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        size="small"
+                        sx={{ p: 0, mt: 0.25, flexShrink: 0 }}
+                      />
+                    )}
                     <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden', width: 0 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1, mb: 0.5, width: '100%' }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1, width: '100%' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0, overflow: 'hidden' }}>
-                          <SwapHorizIcon sx={{ fontSize: 16, color: 'primary.main', flexShrink: 0 }} />
+                          <SwapHorizIcon sx={{ fontSize: 14, color: 'primary.main', flexShrink: 0 }} />
                           <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.8125rem', flexShrink: 0 }}>
                             Transfer
                           </Typography>
                           <Chip 
                             label={transfer.exchangeRate ? 'Multi' : 'Same'} 
                             size="small" 
-                            sx={{ height: 18, fontSize: '0.625rem', '& .MuiChip-label': { px: 0.5 }, flexShrink: 0 }} 
+                            sx={{ height: 16, fontSize: '0.5625rem', '& .MuiChip-label': { px: 0.5 }, flexShrink: 0 }} 
                           />
                         </Box>
                         <Typography 
@@ -1394,52 +1394,26 @@ function Transactions() {
                           {getAccountCurrency(transferOut?.account_id)} {new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(transferOut?.amount || 0))}
                         </Typography>
                       </Box>
-                      <Typography 
-                        variant="body2" 
-                        component="div"
-                        sx={{ 
-                          fontSize: '0.75rem', 
-                          color: 'text.secondary', 
-                          mb: 0.25,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                          width: '100%',
-                          maxWidth: '100%',
-                          display: 'block',
-                        }}
-                      >
-                        {getAccountName(transferOut?.account_id)} → {getAccountName(transferIn?.account_id)}
-                      </Typography>
-                      {transfer.exchangeRate && (
-                        <Typography variant="body2" sx={{ fontSize: '0.75rem', color: '#1e8e3e', mb: 0.25, whiteSpace: 'nowrap' }}>
-                          → {getAccountCurrency(transferIn?.account_id)} {new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(transferIn?.amount || 0))}
-                        </Typography>
-                      )}
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1, width: '100%' }}>
-                        <Typography variant="body2" sx={{ fontSize: '0.6875rem', color: 'text.secondary', flexShrink: 0 }}>
-                          {transferDate ? format(parseISO(transferDate), 'MMM dd, yyyy') : '-'}
+                        <Typography 
+                          variant="body2" 
+                          component="div"
+                          sx={{ 
+                            fontSize: '0.6875rem', 
+                            color: 'text.secondary', 
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            minWidth: 0,
+                            flex: 1,
+                          }}
+                        >
+                          {getAccountName(transferOut?.account_id)} → {getAccountName(transferIn?.account_id)}
+                          {transfer.exchangeRate && ` • ${getAccountCurrency(transferIn?.account_id)} ${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(transferIn?.amount || 0))}`}
                         </Typography>
-                        {transferOut?.description && (
-                          <Typography 
-                            variant="body2" 
-                            component="div"
-                            sx={{ 
-                              fontSize: '0.6875rem', 
-                              color: 'text.secondary',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                              minWidth: 0,
-                              flex: 1,
-                              textAlign: 'right',
-                              maxWidth: '100%',
-                              display: 'block',
-                            }}
-                          >
-                            {transferOut.description}
-                          </Typography>
-                        )}
+                        <Typography variant="body2" sx={{ fontSize: '0.6875rem', color: 'text.secondary', flexShrink: 0 }}>
+                          {transferDate ? format(parseISO(transferDate), 'MMM dd') : '-'}
+                        </Typography>
                       </Box>
                     </Box>
                   </Box>
@@ -1469,40 +1443,50 @@ function Transactions() {
                 return (
                   <Box
                     key={transaction.transaction_id}
+                    onTouchStart={() => handleLongPressStart(transaction.transaction_id)}
+                    onTouchEnd={handleLongPressEnd}
+                    onTouchCancel={handleLongPressEnd}
+                    onMouseDown={() => handleLongPressStart(transaction.transaction_id)}
+                    onMouseUp={handleLongPressEnd}
+                    onMouseLeave={handleLongPressEnd}
                     onClick={() => {
-                      if (!isBulkDeleting) {
+                      if (selectionMode) {
+                        handleItemSelect(transaction.transaction_id, !isSelected);
+                      } else if (!isBulkDeleting) {
                         handleOpenDialog(transaction);
                       }
                     }}
                     sx={{
-                      mb: 1,
-                      p: 1.5,
-                      border: '1px solid',
-                      borderColor: isSelected ? 'primary.main' : 'divider',
-                      borderRadius: 1,
-                      backgroundColor: isSelected ? 'action.selected' : 'background.paper',
+                      py: 1,
+                      px: 0.5,
+                      borderBottom: '1px solid',
+                      borderColor: 'divider',
+                      backgroundColor: isSelected ? 'action.selected' : 'transparent',
                       cursor: isBulkDeleting ? 'default' : 'pointer',
                       display: 'flex',
-                      gap: 1,
+                      gap: 0.75,
                       alignItems: 'flex-start',
-                      '&:active': { backgroundColor: 'action.hover' },
+                      '&:active': !selectionMode ? { backgroundColor: 'action.hover' } : {},
                       overflow: 'hidden',
                       width: '100%',
                       boxSizing: 'border-box',
+                      userSelect: 'none',
                     }}
                   >
-                    <Checkbox
-                      checked={isSelected}
-                      onChange={(e) => {
-                        e.stopPropagation();
-                        handleItemSelect(transaction.transaction_id, e.target.checked);
-                      }}
-                      onClick={(e) => e.stopPropagation()}
-                      size="small"
-                      sx={{ p: 0, mt: 0.25, flexShrink: 0 }}
-                    />
+                    {selectionMode && (
+                      <Checkbox
+                        checked={isSelected}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          handleItemSelect(transaction.transaction_id, e.target.checked);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        size="small"
+                        sx={{ p: 0, mt: 0.25, flexShrink: 0 }}
+                      />
+                    )}
                     <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden', width: 0 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1, mb: 0.25, width: '100%' }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1, width: '100%' }}>
                         <Typography 
                           variant="body2" 
                           fontWeight={600} 
@@ -1542,42 +1526,21 @@ function Transactions() {
                           variant="body2" 
                           component="div"
                           sx={{ 
-                            fontSize: '0.75rem', 
+                            fontSize: '0.6875rem', 
                             color: 'text.secondary',
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
                             whiteSpace: 'nowrap',
                             minWidth: 0,
                             flex: 1,
-                            maxWidth: '100%',
-                            display: 'block',
                           }}
                         >
-                          {getAccountName(transaction.account_id)}
+                          {getAccountName(transaction.account_id)}{description && ` • ${description}`}
                         </Typography>
                         <Typography variant="body2" sx={{ fontSize: '0.6875rem', color: 'text.secondary', flexShrink: 0 }}>
                           {dateDisplay}
                         </Typography>
                       </Box>
-                      {description && (
-                        <Typography 
-                          variant="body2" 
-                          component="div"
-                          sx={{ 
-                            fontSize: '0.6875rem', 
-                            color: 'text.secondary',
-                            mt: 0.25,
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            width: '100%',
-                            maxWidth: '100%',
-                            display: 'block',
-                          }}
-                        >
-                          {description}
-                        </Typography>
-                      )}
                     </Box>
                   </Box>
                 );
@@ -1605,8 +1568,8 @@ function Transactions() {
                     '& th': {
                       borderBottom: '1px solid',
                       borderColor: 'divider',
-                      py: 1,
-                      fontSize: '0.75rem',
+                      py: 0.75,
+                      fontSize: '0.6875rem',
                       fontWeight: 600,
                       color: 'text.secondary',
                       textTransform: 'uppercase',
@@ -1614,14 +1577,16 @@ function Transactions() {
                     },
                   }}
                 >
-                  <TableCell padding="checkbox" sx={{ width: 40 }}>
-                    <Checkbox
-                      checked={isAllSelected}
-                      indeterminate={isIndeterminate}
-                      onChange={(e) => handleSelectAll(e.target.checked)}
-                      size="small"
-                    />
-                  </TableCell>
+                  {selectionMode && (
+                    <TableCell padding="checkbox" sx={{ width: 40 }}>
+                      <Checkbox
+                        checked={isAllSelected}
+                        indeterminate={isIndeterminate}
+                        onChange={(e) => handleSelectAll(e.target.checked)}
+                        size="small"
+                      />
+                    </TableCell>
+                  )}
                   <TableCell>Category/Type</TableCell>
                   <TableCell>Account</TableCell>
                   <TableCell>Description</TableCell>
@@ -1644,30 +1609,42 @@ function Transactions() {
                         key={transferId}
                         hover
                         selected={isSelected}
+                        onMouseDown={() => handleLongPressStart(transferId)}
+                        onMouseUp={handleLongPressEnd}
+                        onMouseLeave={handleLongPressEnd}
+                        onClick={() => {
+                          if (selectionMode) {
+                            handleItemSelect(transferId, !isSelected);
+                          }
+                        }}
                         sx={{
                           backgroundColor: isSelected ? 'action.selected' : 'transparent',
+                          cursor: selectionMode ? 'pointer' : 'default',
+                          userSelect: 'none',
                           '&:hover': {
                             backgroundColor: isSelected ? 'action.selected' : 'action.hover',
                           },
                           '& td': {
                             borderBottom: '1px solid',
                             borderColor: 'divider',
-                            py: 1,
-                            fontSize: '0.875rem',
+                            py: 0.5,
+                            fontSize: '0.8125rem',
                           },
                         }}
                       >
-                        <TableCell padding="checkbox">
-                          <Checkbox
-                            checked={isSelected}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              handleItemSelect(transferId, e.target.checked);
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                            size="small"
-                          />
-                        </TableCell>
+                        {selectionMode && (
+                          <TableCell padding="checkbox">
+                            <Checkbox
+                              checked={isSelected}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                handleItemSelect(transferId, e.target.checked);
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                              size="small"
+                            />
+                          </TableCell>
+                        )}
                         <TableCell>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
                             <SwapHorizIcon sx={{ fontSize: 18, color: 'primary.main' }} />
@@ -1757,43 +1734,51 @@ function Transactions() {
                         key={transaction.transaction_id}
                         hover
                         selected={isSelected}
+                        onMouseDown={() => handleLongPressStart(transaction.transaction_id)}
+                        onMouseUp={handleLongPressEnd}
+                        onMouseLeave={handleLongPressEnd}
                         onClick={() => {
-                          if (!isBulkDeleting) {
+                          if (selectionMode) {
+                            handleItemSelect(transaction.transaction_id, !isSelected);
+                          } else if (!isBulkDeleting) {
                             handleOpenDialog(transaction);
                           }
                         }}
                         sx={{
                           cursor: isBulkDeleting ? 'default' : 'pointer',
                           backgroundColor: isSelected ? 'action.selected' : 'transparent',
+                          userSelect: 'none',
                           '&:hover': {
                             backgroundColor: isSelected ? 'action.selected' : 'action.hover',
                           },
                           '& td': {
                             borderBottom: '1px solid',
                             borderColor: 'divider',
-                            py: 1,
-                            fontSize: '0.875rem',
+                            py: 0.5,
+                            fontSize: '0.8125rem',
                           },
                         }}
                       >
-                        <TableCell padding="checkbox">
-                          <Checkbox
-                            checked={isSelected}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              handleItemSelect(transaction.transaction_id, e.target.checked);
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                            size="small"
-                          />
-                        </TableCell>
+                        {selectionMode && (
+                          <TableCell padding="checkbox">
+                            <Checkbox
+                              checked={isSelected}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                handleItemSelect(transaction.transaction_id, e.target.checked);
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                              size="small"
+                            />
+                          </TableCell>
+                        )}
                         <TableCell>
-                          <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>
+                          <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.8125rem' }}>
                             {getCategoryName(transaction.category_id)}
                           </Typography>
                         </TableCell>
                         <TableCell>
-                          <Typography variant="body2" sx={{ fontSize: '0.875rem', color: 'text.secondary' }}>
+                          <Typography variant="body2" sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>
                             {getAccountName(transaction.account_id)}
                           </Typography>
                         </TableCell>
@@ -1801,7 +1786,7 @@ function Transactions() {
                           <Typography 
                             variant="body2" 
                             sx={{ 
-                              fontSize: '0.875rem',
+                              fontSize: '0.8125rem',
                               color: 'text.secondary',
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
@@ -2044,29 +2029,38 @@ function Transactions() {
             </Grid>
             )}
           </DialogContent>
-          <DialogActions sx={{ flexShrink: 0, p: { xs: 1.5, sm: 2 }, borderTop: { xs: '1px solid', sm: 'none' }, borderColor: 'divider' }}>
+          <DialogActions sx={{ flexShrink: 0, p: { xs: 1.5, sm: 2 } }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', flexWrap: 'wrap', gap: 1 }}>
-              <Box>
+              <Box sx={{ flex: { xs: editingTransaction && !deleteConfirm ? '0 0 100%' : 'none', sm: 'none' }, mb: { xs: editingTransaction && !deleteConfirm ? 1 : 0, sm: 0 } }}>
                 {editingTransaction && !deleteConfirm && (
                   <Button
                     onClick={handleDeleteClick}
                     color="error"
                     startIcon={<DeleteIcon sx={{ fontSize: { xs: 18, sm: 20 } }} />}
-                    size={isMobile ? 'small' : 'medium'}
-                    sx={{ textTransform: 'none' }}
+                    size="medium"
+                    sx={{ 
+                      textTransform: 'none',
+                      minWidth: { xs: '100%', sm: 100 },
+                      minHeight: 42,
+                    }}
                   >
                     Delete
                   </Button>
                 )}
               </Box>
-              <Box sx={{ display: 'flex', gap: 1 }}>
+              <Box sx={{ display: 'flex', gap: 1, flex: { xs: '1 1 100%', sm: 'none' } }}>
                 {deleteConfirm ? (
                   <>
                     <Button
                       onClick={() => setDeleteConfirm(false)}
                       disabled={isDeleting}
-                      size={isMobile ? 'small' : 'medium'}
-                      sx={{ textTransform: 'none' }}
+                      size="medium"
+                      sx={{ 
+                        textTransform: 'none',
+                        flex: { xs: 1, sm: 'none' },
+                        minWidth: { xs: 'auto', sm: 100 },
+                        minHeight: 42,
+                      }}
                     >
                       Cancel
                     </Button>
@@ -2075,9 +2069,14 @@ function Transactions() {
                       color="error"
                       variant="contained"
                       disabled={isDeleting}
-                      size={isMobile ? 'small' : 'medium'}
-                      startIcon={isDeleting ? <CircularProgress size={16} color="inherit" /> : <DeleteIcon sx={{ fontSize: { xs: 16, sm: 20 } }} />}
-                      sx={{ textTransform: 'none' }}
+                      size="medium"
+                      startIcon={isDeleting ? <CircularProgress size={16} color="inherit" /> : <DeleteIcon sx={{ fontSize: 20 }} />}
+                      sx={{ 
+                        textTransform: 'none',
+                        flex: { xs: 1, sm: 'none' },
+                        minWidth: { xs: 'auto', sm: 100 },
+                        minHeight: 42,
+                      }}
                     >
                       {isDeleting ? 'Deleting...' : 'Confirm'}
                     </Button>
@@ -2087,8 +2086,13 @@ function Transactions() {
                     <Button
                       onClick={handleCloseDialog}
                       disabled={isSubmitting}
-                      size={isMobile ? 'small' : 'medium'}
-                      sx={{ textTransform: 'none' }}
+                      size="medium"
+                      sx={{ 
+                        textTransform: 'none',
+                        flex: { xs: 1, sm: 'none' },
+                        minWidth: { xs: 'auto', sm: 100 },
+                        minHeight: 42,
+                      }}
                     >
                       Cancel
                     </Button>
@@ -2096,9 +2100,14 @@ function Transactions() {
                       type="submit"
                       variant="contained"
                       disabled={isSubmitting}
-                      size={isMobile ? 'small' : 'medium'}
+                      size="medium"
                       startIcon={isSubmitting ? <CircularProgress size={16} color="inherit" /> : null}
-                      sx={{ textTransform: 'none' }}
+                      sx={{ 
+                        textTransform: 'none',
+                        flex: { xs: 1, sm: 'none' },
+                        minWidth: { xs: 'auto', sm: 100 },
+                        minHeight: 42,
+                      }}
                     >
                       {isSubmitting
                         ? editingTransaction
@@ -2312,12 +2321,17 @@ function Transactions() {
               </Grid>
             </Grid>
           </DialogContent>
-          <DialogActions sx={{ flexShrink: 0, p: { xs: 1.5, sm: 2 }, borderTop: { xs: '1px solid', sm: 'none' }, borderColor: 'divider' }}>
+          <DialogActions sx={{ flexShrink: 0, p: { xs: 1.5, sm: 2 }, gap: 1 }}>
             <Button
               onClick={handleCloseTransferDialog}
               disabled={isSubmittingTransfer}
-              size={isMobile ? 'small' : 'medium'}
-              sx={{ textTransform: 'none' }}
+              size="medium"
+              sx={{ 
+                textTransform: 'none',
+                flex: { xs: 1, sm: 'none' },
+                minWidth: { xs: 'auto', sm: 100 },
+                minHeight: 42,
+              }}
             >
               Cancel
             </Button>
@@ -2325,9 +2339,14 @@ function Transactions() {
               type="submit"
               variant="contained"
               disabled={isSubmittingTransfer}
-              size={isMobile ? 'small' : 'medium'}
+              size="medium"
               startIcon={isSubmittingTransfer ? <CircularProgress size={16} color="inherit" /> : null}
-              sx={{ textTransform: 'none' }}
+              sx={{ 
+                textTransform: 'none',
+                flex: { xs: 1, sm: 'none' },
+                minWidth: { xs: 'auto', sm: 100 },
+                minHeight: 42,
+              }}
             >
               {isSubmittingTransfer ? 'Creating...' : 'Create Transfer'}
             </Button>
