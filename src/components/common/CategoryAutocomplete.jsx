@@ -9,6 +9,7 @@ function CategoryAutocomplete({
   categories,          // Flattened category list with depth info
   value,               // Selected category_id
   onChange,            // (category_id) => void
+  onSelect,            // Optional callback after a category is selected (for focus chaining)
   label = "Category *",
   error,
   helperText,
@@ -42,7 +43,15 @@ function CategoryAutocomplete({
     <Autocomplete
       options={filteredCategories}
       value={selectedCategory}
-      onChange={(_, newValue) => onChange(newValue?.category_id || '')}
+      onChange={(_, newValue) => {
+        const categoryId = newValue?.category_id || '';
+        onChange(categoryId);
+        // Call onSelect callback if a category was selected (for focus chaining)
+        if (categoryId && onSelect) {
+          // Small delay to allow form state to update
+          setTimeout(() => onSelect(categoryId), 50);
+        }
+      }}
       getOptionLabel={(option) => option.name || ''}
       isOptionEqualToValue={(option, value) => option?.category_id === value?.category_id}
       disabled={disabled}

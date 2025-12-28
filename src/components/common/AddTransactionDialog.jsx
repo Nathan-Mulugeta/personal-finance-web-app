@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -48,6 +48,7 @@ function AddTransactionDialog({ open, onClose }) {
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionError, setActionError] = useState(null);
+  const amountInputRef = useRef(null); // Ref for Amount field focus chaining
 
   // Get default account from settings
   const getDefaultAccountId = () => {
@@ -246,6 +247,10 @@ function AddTransactionDialog({ open, onClose }) {
                 categories={getFilteredCategories()}
                 value={watchedCategoryId || ''}
                 onChange={(id) => setValue('categoryId', id)}
+                onSelect={() => {
+                  // Focus Amount field after category selection
+                  amountInputRef.current?.focus();
+                }}
                 label="Category *"
                 error={!!errors.categoryId}
                 helperText={
@@ -273,6 +278,7 @@ function AddTransactionDialog({ open, onClose }) {
                 type="number"
                 label="Amount *"
                 {...register('amount', { valueAsNumber: true })}
+                inputRef={amountInputRef}
                 error={!!errors.amount}
                 helperText={errors.amount?.message}
                 inputProps={{ step: '0.01', min: '0.01' }}

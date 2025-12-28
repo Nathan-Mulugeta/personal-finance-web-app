@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useSelector } from 'react-redux';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -53,6 +53,8 @@ function BatchTransactionForm({
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [actionError, setActionError] = useState(null);
+  const [formKey, setFormKey] = useState(0); // Increments to force re-mount for auto-focus
+  const amountInputRef = useRef(null); // Ref for Amount field focus chaining
 
   // Get default account from settings
   const getDefaultAccountId = () => {
@@ -180,6 +182,8 @@ function BatchTransactionForm({
           setValue('currency', account.currency);
         }
       }
+      // Increment formKey to force CategoryAutocomplete re-mount and auto-focus
+      setFormKey((prev) => prev + 1);
     } catch (err) {
       setActionError(err?.message || 'Failed to add transaction');
     } finally {
@@ -285,9 +289,14 @@ function BatchTransactionForm({
           </Grid>
           <Grid item xs={12} sm={6}>
             <CategoryAutocomplete
+              key={formKey}
               categories={getFilteredCategories()}
               value={watchedCategoryId || ''}
               onChange={(id) => setValue('categoryId', id)}
+              onSelect={() => {
+                // Focus Amount field after category selection
+                amountInputRef.current?.focus();
+              }}
               label="Category *"
               error={!!errors.categoryId}
               helperText={
@@ -295,6 +304,7 @@ function BatchTransactionForm({
                 (!watchedType ? 'Please select a transaction type first' : undefined)
               }
               disabled={!watchedType}
+              autoFocus={!!watchedType}
             />
           </Grid>
           <Grid item xs={12} sm={6}>
@@ -314,6 +324,7 @@ function BatchTransactionForm({
               type="number"
               label="Amount *"
               {...register('amount', { valueAsNumber: true })}
+              inputRef={amountInputRef}
               error={!!errors.amount}
               helperText={errors.amount?.message}
               inputProps={{ step: '0.01', min: '0.01' }}
