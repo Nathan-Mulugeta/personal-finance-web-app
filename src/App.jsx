@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import AppLayout from './components/layout/AppLayout';
 import ProtectedRoute from './components/auth/ProtectedRoute';
+import InstallPrompt from './components/common/InstallPrompt';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import AuthCallback from './pages/AuthCallback';
@@ -16,7 +17,8 @@ import ExchangeRates from './pages/ExchangeRates';
 
 function App() {
   return (
-    <Routes>
+    <>
+      <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
       <Route path="/auth/callback" element={<AuthCallback />} />
@@ -41,6 +43,8 @@ function App() {
         <Route path="*" element={<Navigate to="/home" replace />} />
       </Route>
     </Routes>
+    <InstallPrompt />
+    </>
   );
 }
 
