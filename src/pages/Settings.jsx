@@ -67,6 +67,7 @@ function Settings() {
     defaultValues: {
       baseCurrency: '',
       defaultAccountId: '',
+      geminiApiKey: '',
       borrowingCategoryId: '',
       lendingCategoryId: '',
       borrowingPaymentCategoryId: '',
@@ -75,6 +76,7 @@ function Settings() {
   });
 
   const watchedDefaultAccountId = watch('defaultAccountId');
+  const watchedGeminiApiKey = watch('geminiApiKey');
   const watchedBorrowingCategoryId = watch('borrowingCategoryId');
   const watchedLendingCategoryId = watch('lendingCategoryId');
   const watchedBorrowingPaymentCategoryId = watch('borrowingPaymentCategoryId');
@@ -98,6 +100,9 @@ function Settings() {
       const defaultAccountId =
         settings.find((s) => s.setting_key === 'DefaultAccountID')
           ?.setting_value || '';
+      const geminiApiKey =
+        settings.find((s) => s.setting_key === 'GeminiAPIKey')?.setting_value ||
+        '';
       const borrowingCategoryId =
         settings.find((s) => s.setting_key === 'BorrowingCategoryID')
           ?.setting_value || '';
@@ -114,6 +119,7 @@ function Settings() {
       reset({
         baseCurrency,
         defaultAccountId,
+        geminiApiKey,
         borrowingCategoryId,
         lendingCategoryId,
         borrowingPaymentCategoryId,
@@ -131,6 +137,9 @@ function Settings() {
       defaultAccountId:
         settings.find((s) => s.setting_key === 'DefaultAccountID')
           ?.setting_value || '',
+      geminiApiKey:
+        settings.find((s) => s.setting_key === 'GeminiAPIKey')?.setting_value ||
+        '',
       borrowingCategoryId:
         settings.find((s) => s.setting_key === 'BorrowingCategoryID')
           ?.setting_value || '',
@@ -170,6 +179,8 @@ function Settings() {
       } else {
         updates.DefaultAccountID = '';
       }
+      // Always save geminiApiKey (even if empty to clear it)
+      updates.GeminiAPIKey = data.geminiApiKey || '';
       if (data.borrowingCategoryId) {
         updates.BorrowingCategoryID = data.borrowingCategoryId;
       } else {
@@ -246,7 +257,7 @@ function Settings() {
     try {
       // Purge persisted storage using redux-persist
       await persistor.purge();
-      
+
       // Reload the page to rehydrate with empty state and fetch fresh data
       // This ensures all Redux state is reset properly
       window.location.reload();
@@ -281,14 +292,20 @@ function Settings() {
         >
           Settings
         </Typography>
-        <Box sx={{ display: 'flex', gap: 1, width: { xs: '100%', sm: 'auto' } }}>
+        <Box
+          sx={{ display: 'flex', gap: 1, width: { xs: '100%', sm: 'auto' } }}
+        >
           <Button
             variant="outlined"
             startIcon={<RefreshIcon sx={{ fontSize: 18 }} />}
             onClick={handleManualRefresh}
             size="small"
             disabled={isRefreshing}
-            sx={{ flex: { xs: '1 1 auto', sm: 'none' }, textTransform: 'none', minHeight: 36 }}
+            sx={{
+              flex: { xs: '1 1 auto', sm: 'none' },
+              textTransform: 'none',
+              minHeight: 36,
+            }}
           >
             {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
           </Button>
@@ -297,7 +314,11 @@ function Settings() {
             startIcon={<EditIcon sx={{ fontSize: 18 }} />}
             onClick={handleOpenDialog}
             size="small"
-            sx={{ flex: { xs: '1 1 auto', sm: 'none' }, textTransform: 'none', minHeight: 36 }}
+            sx={{
+              flex: { xs: '1 1 auto', sm: 'none' },
+              textTransform: 'none',
+              minHeight: 36,
+            }}
           >
             Edit Settings
           </Button>
@@ -317,87 +338,240 @@ function Settings() {
               overflow: 'hidden',
             }}
           >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, p: { xs: 1.5, sm: 2 }, borderBottom: '1px solid', borderColor: 'divider', backgroundColor: 'action.hover' }}>
-              <SettingsIcon sx={{ fontSize: { xs: 20, sm: 24 }, color: 'primary.main' }} />
-              <Typography variant="h6" sx={{ fontSize: { xs: '0.9375rem', sm: '1.125rem' }, fontWeight: 600 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+                p: { xs: 1.5, sm: 2 },
+                borderBottom: '1px solid',
+                borderColor: 'divider',
+                backgroundColor: 'action.hover',
+              }}
+            >
+              <SettingsIcon
+                sx={{ fontSize: { xs: 20, sm: 24 }, color: 'primary.main' }}
+              />
+              <Typography
+                variant="h6"
+                sx={{
+                  fontSize: { xs: '0.9375rem', sm: '1.125rem' },
+                  fontWeight: 600,
+                }}
+              >
                 Application Settings
               </Typography>
             </Box>
-            
+
             {/* Base Currency */}
-            <Box sx={{ p: { xs: 1.5, sm: 2 }, borderBottom: '1px solid', borderColor: 'divider' }}>
-              <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.8125rem' }, mb: 0.5 }}>
+            <Box
+              sx={{
+                p: { xs: 1.5, sm: 2 },
+                borderBottom: '1px solid',
+                borderColor: 'divider',
+              }}
+            >
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ fontSize: { xs: '0.75rem', sm: '0.8125rem' }, mb: 0.5 }}
+              >
                 Base Currency
               </Typography>
-              <Typography variant="body1" fontWeight={500} sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}>
+              <Typography
+                variant="body1"
+                fontWeight={500}
+                sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}
+              >
                 {getSettingValue('BaseCurrency') || 'Not set'}
               </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.6875rem', sm: '0.75rem' } }}>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ fontSize: { xs: '0.6875rem', sm: '0.75rem' } }}
+              >
                 Default currency for displaying totals and conversions
               </Typography>
             </Box>
 
             {/* Default Account */}
-            <Box sx={{ p: { xs: 1.5, sm: 2 }, borderBottom: '1px solid', borderColor: 'divider' }}>
-              <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.8125rem' }, mb: 0.5 }}>
+            <Box
+              sx={{
+                p: { xs: 1.5, sm: 2 },
+                borderBottom: '1px solid',
+                borderColor: 'divider',
+              }}
+            >
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ fontSize: { xs: '0.75rem', sm: '0.8125rem' }, mb: 0.5 }}
+              >
                 Default Account
               </Typography>
-              <Typography variant="body1" fontWeight={500} sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}>
+              <Typography
+                variant="body1"
+                fontWeight={500}
+                sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}
+              >
                 {getAccountName(getSettingValue('DefaultAccountID'))}
               </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.6875rem', sm: '0.75rem' } }}>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ fontSize: { xs: '0.6875rem', sm: '0.75rem' } }}
+              >
                 Account auto-selected when creating new transactions
               </Typography>
             </Box>
 
+            {/* Gemini API Key */}
+            <Box
+              sx={{
+                p: { xs: 1.5, sm: 2 },
+                borderBottom: '1px solid',
+                borderColor: 'divider',
+              }}
+            >
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ fontSize: { xs: '0.75rem', sm: '0.8125rem' }, mb: 0.5 }}
+              >
+                Gemini API Key
+              </Typography>
+              <Typography
+                variant="body1"
+                fontWeight={500}
+                sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}
+              >
+                {getSettingValue('GeminiAPIKey')
+                  ? '••••••••' + getSettingValue('GeminiAPIKey').slice(-4)
+                  : 'Not set'}
+              </Typography>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ fontSize: { xs: '0.6875rem', sm: '0.75rem' } }}
+              >
+                Required for AI receipt scanning and natural language parsing
+              </Typography>
+            </Box>
+
             {/* Borrowing Category */}
-            <Box sx={{ p: { xs: 1.5, sm: 2 }, borderBottom: '1px solid', borderColor: 'divider' }}>
-              <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.8125rem' }, mb: 0.5 }}>
+            <Box
+              sx={{
+                p: { xs: 1.5, sm: 2 },
+                borderBottom: '1px solid',
+                borderColor: 'divider',
+              }}
+            >
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ fontSize: { xs: '0.75rem', sm: '0.8125rem' }, mb: 0.5 }}
+              >
                 Borrowing Category
               </Typography>
-              <Typography variant="body1" fontWeight={500} sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}>
+              <Typography
+                variant="body1"
+                fontWeight={500}
+                sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}
+              >
                 {getCategoryName(getSettingValue('BorrowingCategoryID'))}
               </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.6875rem', sm: '0.75rem' } }}>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ fontSize: { xs: '0.6875rem', sm: '0.75rem' } }}
+              >
                 Default category for borrowing transactions
               </Typography>
             </Box>
 
             {/* Lending Category */}
-            <Box sx={{ p: { xs: 1.5, sm: 2 }, borderBottom: '1px solid', borderColor: 'divider' }}>
-              <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.8125rem' }, mb: 0.5 }}>
+            <Box
+              sx={{
+                p: { xs: 1.5, sm: 2 },
+                borderBottom: '1px solid',
+                borderColor: 'divider',
+              }}
+            >
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ fontSize: { xs: '0.75rem', sm: '0.8125rem' }, mb: 0.5 }}
+              >
                 Lending Category
               </Typography>
-              <Typography variant="body1" fontWeight={500} sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}>
+              <Typography
+                variant="body1"
+                fontWeight={500}
+                sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}
+              >
                 {getCategoryName(getSettingValue('LendingCategoryID'))}
               </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.6875rem', sm: '0.75rem' } }}>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ fontSize: { xs: '0.6875rem', sm: '0.75rem' } }}
+              >
                 Default category for lending transactions
               </Typography>
             </Box>
 
             {/* Borrowing Payment Category */}
-            <Box sx={{ p: { xs: 1.5, sm: 2 }, borderBottom: '1px solid', borderColor: 'divider' }}>
-              <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.8125rem' }, mb: 0.5 }}>
+            <Box
+              sx={{
+                p: { xs: 1.5, sm: 2 },
+                borderBottom: '1px solid',
+                borderColor: 'divider',
+              }}
+            >
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ fontSize: { xs: '0.75rem', sm: '0.8125rem' }, mb: 0.5 }}
+              >
                 Borrowing Payment Category
               </Typography>
-              <Typography variant="body1" fontWeight={500} sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}>
+              <Typography
+                variant="body1"
+                fontWeight={500}
+                sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}
+              >
                 {getCategoryName(getSettingValue('BorrowingPaymentCategoryID'))}
               </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.6875rem', sm: '0.75rem' } }}>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ fontSize: { xs: '0.6875rem', sm: '0.75rem' } }}
+              >
                 Category used when recording payments for borrowing
               </Typography>
             </Box>
 
             {/* Lending Payment Category */}
             <Box sx={{ p: { xs: 1.5, sm: 2 } }}>
-              <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.8125rem' }, mb: 0.5 }}>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ fontSize: { xs: '0.75rem', sm: '0.8125rem' }, mb: 0.5 }}
+              >
                 Lending Payment Category
               </Typography>
-              <Typography variant="body1" fontWeight={500} sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}>
+              <Typography
+                variant="body1"
+                fontWeight={500}
+                sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}
+              >
                 {getCategoryName(getSettingValue('LendingPaymentCategoryID'))}
               </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.6875rem', sm: '0.75rem' } }}>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ fontSize: { xs: '0.6875rem', sm: '0.75rem' } }}
+              >
                 Category used when recording payments for lending
               </Typography>
             </Box>
@@ -414,23 +588,41 @@ function Settings() {
               backgroundColor: 'background.paper',
             }}
           >
-            <Typography variant="h6" sx={{ fontSize: { xs: '0.9375rem', sm: '1.125rem' }, fontWeight: 600, mb: 1 }}>
+            <Typography
+              variant="h6"
+              sx={{
+                fontSize: { xs: '0.9375rem', sm: '1.125rem' },
+                fontWeight: 600,
+                mb: 1,
+              }}
+            >
               About Settings
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.8125rem', sm: '0.875rem' }, mb: 2 }}>
-              Configure your application preferences here. These settings
-              affect how your financial data is displayed and categorized.
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ fontSize: { xs: '0.8125rem', sm: '0.875rem' }, mb: 2 }}
+            >
+              Configure your application preferences here. These settings affect
+              how your financial data is displayed and categorized.
             </Typography>
-            <Alert severity="info" sx={{ '& .MuiAlert-message': { fontSize: { xs: '0.8125rem', sm: '0.875rem' } } }}>
+            <Alert
+              severity="info"
+              sx={{
+                '& .MuiAlert-message': {
+                  fontSize: { xs: '0.8125rem', sm: '0.875rem' },
+                },
+              }}
+            >
               <Typography variant="body2" sx={{ fontSize: 'inherit' }}>
                 <strong>Base Currency:</strong> This is the primary currency
                 used for displaying totals and performing currency conversions
                 across all accounts.
               </Typography>
               <Typography variant="body2" sx={{ mt: 1, fontSize: 'inherit' }}>
-                <strong>Borrowing/Lending Categories:</strong> These
-                categories are used as defaults when creating borrowing or
-                lending records from transactions.
+                <strong>Borrowing/Lending Categories:</strong> These categories
+                are used as defaults when creating borrowing or lending records
+                from transactions.
               </Typography>
               <Typography variant="body2" sx={{ mt: 1, fontSize: 'inherit' }}>
                 <strong>Payment Categories:</strong> These categories are used
@@ -493,7 +685,9 @@ function Settings() {
                   <Select
                     value={watchedDefaultAccountId || ''}
                     label="Default Account (Optional)"
-                    onChange={(e) => setValue('defaultAccountId', e.target.value)}
+                    onChange={(e) =>
+                      setValue('defaultAccountId', e.target.value)
+                    }
                   >
                     <MenuItem value="">
                       <em>None</em>
@@ -501,7 +695,10 @@ function Settings() {
                     {accounts
                       .filter((acc) => acc.status === 'Active')
                       .map((account) => (
-                        <MenuItem key={account.account_id} value={account.account_id}>
+                        <MenuItem
+                          key={account.account_id}
+                          value={account.account_id}
+                        >
                           {account.name} ({account.currency})
                         </MenuItem>
                       ))}
@@ -510,6 +707,28 @@ function Settings() {
                     Account auto-selected when creating new transactions
                   </FormHelperText>
                 </FormControl>
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Gemini API Key (Optional)"
+                  type="password"
+                  {...register('geminiApiKey')}
+                  helperText={
+                    <span>
+                      Get a free API key from{' '}
+                      <a
+                        href="https://aistudio.google.com/apikey"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: 'inherit' }}
+                      >
+                        Google AI Studio
+                      </a>
+                      . Required for AI features.
+                    </span>
+                  }
+                />
               </Grid>
               <Grid item xs={12}>
                 <CategoryAutocomplete
@@ -533,7 +752,9 @@ function Settings() {
                 <CategoryAutocomplete
                   categories={getExpenseCategories()}
                   value={watchedBorrowingPaymentCategoryId || ''}
-                  onChange={(id) => setValue('borrowingPaymentCategoryId', id || '')}
+                  onChange={(id) =>
+                    setValue('borrowingPaymentCategoryId', id || '')
+                  }
                   label="Borrowing Payment Category (Optional)"
                   helperText="Category used when recording payments for borrowing (Expense categories only)"
                 />
@@ -542,7 +763,9 @@ function Settings() {
                 <CategoryAutocomplete
                   categories={getIncomeCategories()}
                   value={watchedLendingPaymentCategoryId || ''}
-                  onChange={(id) => setValue('lendingPaymentCategoryId', id || '')}
+                  onChange={(id) =>
+                    setValue('lendingPaymentCategoryId', id || '')
+                  }
                   label="Lending Payment Category (Optional)"
                   helperText="Category used when recording payments for lending (Income categories only)"
                 />

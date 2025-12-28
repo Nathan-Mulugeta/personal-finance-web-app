@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { useSelector } from 'react-redux';
 import {
   Box,
@@ -15,7 +15,7 @@ import {
 } from '@mui/material';
 import CameraAltIcon from '@mui/icons-material/CameraAlt';
 import PhotoLibraryIcon from '@mui/icons-material/PhotoLibrary';
-import { parseReceipt } from '../../lib/api/aiParsing';
+import { parseReceipt, isAIConfigured } from '../../lib/api/aiParsing';
 
 /**
  * Receipt Capture Dialog
@@ -26,8 +26,15 @@ function ReceiptCaptureDialog({ open, onClose, onParsed }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
-  // Get categories from Redux for AI matching
+  // Get categories and settings from Redux
   const { categories } = useSelector((state) => state.categories);
+  const { settings } = useSelector((state) => state.settings);
+
+  // Get Gemini API key from settings
+  const geminiApiKey = useMemo(() => {
+    const setting = settings.find((s) => s.setting_key === 'GeminiAPIKey');
+    return setting?.setting_value || '';
+  }, [settings]);
 
   // State
   const [isProcessing, setIsProcessing] = useState(false);
@@ -83,8 +90,15 @@ function ReceiptCaptureDialog({ open, onClose, onParsed }) {
           parent_category_id: cat.parent_category_id,
         }));
 
+      // Check if AI is configured
+      if (!isAIConfigured(geminiApiKey)) {
+        setError('Gemini API key not configured. Please add your API key in Settings.');
+        setIsProcessing(false);
+        return;
+      }
+
       // Call AI parsing API
-      const result = await parseReceipt(base64, activeCategories);
+      const result = await parseReceipt(base64, activeCategories, geminiApiKey);
 
       if (result.success) {
         // Pass parsed data to parent

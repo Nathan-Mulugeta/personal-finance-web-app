@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useSelector } from 'react-redux';
 import {
   Box,
@@ -15,7 +15,7 @@ import {
   useTheme,
 } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
-import { parseNaturalLanguage } from '../../lib/api/aiParsing';
+import { parseNaturalLanguage, isAIConfigured } from '../../lib/api/aiParsing';
 
 /**
  * Natural Language Transaction Dialog
@@ -27,8 +27,15 @@ function NaturalLanguageDialog({ open, onClose, onParsed }) {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const inputRef = useRef(null);
 
-  // Get categories from Redux for AI matching
+  // Get categories and settings from Redux
   const { categories } = useSelector((state) => state.categories);
+  const { settings } = useSelector((state) => state.settings);
+
+  // Get Gemini API key from settings
+  const geminiApiKey = useMemo(() => {
+    const setting = settings.find((s) => s.setting_key === 'GeminiAPIKey');
+    return setting?.setting_value || '';
+  }, [settings]);
 
   // State
   const [text, setText] = useState('');
@@ -60,6 +67,12 @@ function NaturalLanguageDialog({ open, onClose, onParsed }) {
       return;
     }
 
+    // Check if AI is configured
+    if (!isAIConfigured(geminiApiKey)) {
+      setError('Gemini API key not configured. Please add your API key in Settings.');
+      return;
+    }
+
     try {
       setError(null);
       setIsProcessing(true);
@@ -75,7 +88,7 @@ function NaturalLanguageDialog({ open, onClose, onParsed }) {
         }));
 
       // Call AI parsing API
-      const result = await parseNaturalLanguage(text.trim(), activeCategories);
+      const result = await parseNaturalLanguage(text.trim(), activeCategories, geminiApiKey);
 
       if (result.success) {
         // Pass parsed data to parent

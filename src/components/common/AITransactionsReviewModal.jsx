@@ -65,7 +65,9 @@ function AITransactionsReviewModal({
   // State
   const [transactions, setTransactions] = useState([]);
   const [selectedAccountId, setSelectedAccountId] = useState('');
-  const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [selectedDate, setSelectedDate] = useState(
+    format(new Date(), 'yyyy-MM-dd')
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
@@ -76,7 +78,9 @@ function AITransactionsReviewModal({
 
   // Get selected account currency
   const selectedCurrency = useMemo(() => {
-    const account = accounts.find((acc) => acc.account_id === selectedAccountId);
+    const account = accounts.find(
+      (acc) => acc.account_id === selectedAccountId
+    );
     return account?.currency || 'USD';
   }, [accounts, selectedAccountId]);
 
@@ -84,15 +88,17 @@ function AITransactionsReviewModal({
   useEffect(() => {
     if (open && parsedData) {
       // Initialize transactions with tax toggle (default ON for receipts)
-      const initialTransactions = (parsedData.transactions || []).map((txn, index) => ({
-        id: `ai_${Date.now()}_${index}`,
-        description: txn.description || '',
-        amount: txn.amount || 0,
-        categoryId: txn.suggestedCategoryId || '',
-        categoryName: txn.suggestedCategoryName || '',
-        type: txn.type || 'Expense',
-        applyTax: isReceipt, // Default to true for receipts
-      }));
+      const initialTransactions = (parsedData.transactions || []).map(
+        (txn, index) => ({
+          id: `ai_${Date.now()}_${index}`,
+          description: txn.description || '',
+          amount: txn.amount || 0,
+          categoryId: txn.suggestedCategoryId || '',
+          categoryName: txn.suggestedCategoryName || '',
+          type: txn.type || 'Expense',
+          applyTax: isReceipt, // Default to true for receipts
+        })
+      );
 
       setTransactions(initialTransactions);
 
@@ -175,7 +181,9 @@ function AITransactionsReviewModal({
     );
 
     if (validTransactions.length === 0) {
-      setError('No valid transactions to save. Each transaction needs an amount and category.');
+      setError(
+        'No valid transactions to save. Each transaction needs an amount and category.'
+      );
       return;
     }
 
@@ -205,7 +213,9 @@ function AITransactionsReviewModal({
       onClose();
     } catch (err) {
       console.error('Error saving transactions:', err);
-      setError(err?.message || 'Failed to save transactions. Please try again.');
+      setError(
+        err?.message || 'Failed to save transactions. Please try again.'
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -258,7 +268,7 @@ function AITransactionsReviewModal({
         )}
       </DialogTitle>
 
-      <DialogContent sx={{ pt: 1, overflow: 'auto' }}>
+      <DialogContent sx={{ pt: 2, overflow: 'auto' }}>
         {error && (
           <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
             {error}
@@ -271,15 +281,17 @@ function AITransactionsReviewModal({
             display: 'flex',
             gap: 2,
             mb: 2,
+            mt: 1,
             flexDirection: { xs: 'column', sm: 'row' },
           }}
         >
           <FormControl fullWidth size="small">
-            <InputLabel>Account *</InputLabel>
+            <InputLabel shrink={!!selectedAccountId}>Account *</InputLabel>
             <Select
               value={selectedAccountId}
               label="Account *"
               onChange={(e) => setSelectedAccountId(e.target.value)}
+              notched={!!selectedAccountId}
             >
               {activeAccounts.map((account) => (
                 <MenuItem key={account.account_id} value={account.account_id}>
@@ -291,7 +303,7 @@ function AITransactionsReviewModal({
 
           <TextField
             type="date"
-            label="Date"
+            label="Date *"
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
             size="small"
@@ -363,7 +375,11 @@ function AITransactionsReviewModal({
                     label="Description"
                     value={txn.description}
                     onChange={(e) =>
-                      handleTransactionChange(txn.id, 'description', e.target.value)
+                      handleTransactionChange(
+                        txn.id,
+                        'description',
+                        e.target.value
+                      )
                     }
                     size="small"
                     fullWidth
@@ -417,22 +433,31 @@ function AITransactionsReviewModal({
                         <Checkbox
                           checked={txn.applyTax}
                           onChange={(e) =>
-                            handleTransactionChange(txn.id, 'applyTax', e.target.checked)
+                            handleTransactionChange(
+                              txn.id,
+                              'applyTax',
+                              e.target.checked
+                            )
                           }
                           size="small"
                         />
                       }
                       label={
-                        <Typography variant="body2">
-                          Add 15% tax
-                        </Typography>
+                        <Typography variant="body2">Add 15% tax</Typography>
                       }
                     />
                     <Typography variant="body2" fontWeight={500}>
                       {txn.applyTax ? (
                         <>
-                          {formatCurrency(txn.amount, selectedCurrency)} + {formatCurrency(txn.amount * 0.15, selectedCurrency)} ={' '}
-                          <strong>{formatCurrency(getFinalAmount(txn), selectedCurrency)}</strong>
+                          {formatCurrency(txn.amount, selectedCurrency)} +{' '}
+                          {formatCurrency(txn.amount * 0.15, selectedCurrency)}{' '}
+                          ={' '}
+                          <strong>
+                            {formatCurrency(
+                              getFinalAmount(txn),
+                              selectedCurrency
+                            )}
+                          </strong>
                         </>
                       ) : (
                         formatCurrency(txn.amount, selectedCurrency)
@@ -480,7 +505,9 @@ function AITransactionsReviewModal({
                   </Typography>
                 </Box>
                 {isReceipt && totals.taxTotal > 0 && (
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Box
+                    sx={{ display: 'flex', justifyContent: 'space-between' }}
+                  >
                     <Typography variant="body2" color="text.secondary">
                       Tax (15%)
                     </Typography>
@@ -502,7 +529,9 @@ function AITransactionsReviewModal({
         )}
       </DialogContent>
 
-      <DialogActions sx={{ p: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+      <DialogActions
+        sx={{ p: 2, borderTop: '1px solid', borderColor: 'divider' }}
+      >
         <Button onClick={handleClose} disabled={isSubmitting}>
           Cancel
         </Button>
@@ -510,9 +539,15 @@ function AITransactionsReviewModal({
           variant="contained"
           onClick={handleSave}
           disabled={isSubmitting || transactions.length === 0}
-          startIcon={isSubmitting ? <CircularProgress size={16} color="inherit" /> : null}
+          startIcon={
+            isSubmitting ? <CircularProgress size={16} color="inherit" /> : null
+          }
         >
-          {isSubmitting ? 'Saving...' : `Save ${transactions.length} Transaction${transactions.length !== 1 ? 's' : ''}`}
+          {isSubmitting
+            ? 'Saving...'
+            : `Save ${transactions.length} Transaction${
+                transactions.length !== 1 ? 's' : ''
+              }`}
         </Button>
       </DialogActions>
     </Dialog>
@@ -520,4 +555,3 @@ function AITransactionsReviewModal({
 }
 
 export default AITransactionsReviewModal;
-
