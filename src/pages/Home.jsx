@@ -275,6 +275,8 @@ function Home() {
   };
 
   const handleDeleteClick = () => {
+    // Close the edit dialog and open the delete confirmation dialog
+    setOpenDialog(false);
     setDeleteConfirm(true);
   };
 
@@ -284,7 +286,7 @@ function Home() {
     setIsDeleting(true);
     setDeleteError(null);
     try {
-      const deletedTransactionId = await dispatch(
+      await dispatch(
         deleteTransaction(editingTransaction.transaction_id)
       ).unwrap();
 
@@ -300,8 +302,10 @@ function Home() {
         }
       }, 100);
 
+      // Close delete confirmation and clean up
       setDeleteConfirm(false);
-      handleCloseDialog();
+      setEditingTransaction(null);
+      setDeleteError(null);
 
       // Refresh all data to ensure all pages have fresh data
       await refreshAllData(dispatch);
@@ -313,6 +317,13 @@ function Home() {
     } finally {
       setIsDeleting(false);
     }
+  };
+
+  const handleCancelDelete = () => {
+    setDeleteConfirm(false);
+    setDeleteError(null);
+    // Re-open the edit dialog
+    setOpenDialog(true);
   };
 
   const handleClearSearch = () => {
@@ -669,11 +680,7 @@ function Home() {
           }
         >
           <DialogTitle sx={{ flexShrink: 0, pb: { xs: 1, sm: 2 } }}>
-            {deleteConfirm
-              ? 'Delete Transaction'
-              : editingTransaction
-              ? 'Edit Transaction'
-              : 'Create New Transaction'}
+            {editingTransaction ? 'Edit Transaction' : 'Create New Transaction'}
           </DialogTitle>
           <DialogContent
             sx={{ flexGrow: 1, overflow: 'auto', pt: { xs: 1, sm: 2 } }}
@@ -683,62 +690,7 @@ function Home() {
                 {actionError}
               </Alert>
             )}
-            {deleteError && (
-              <Alert severity="error" sx={{ mb: 2 }}>
-                {deleteError}
-              </Alert>
-            )}
-            {deleteConfirm && editingTransaction ? (
-              <Box>
-                <Alert severity="warning" sx={{ mb: 2 }}>
-                  Are you sure you want to delete this transaction? This action
-                  cannot be undone. If this is part of a transfer, both
-                  transactions will be deleted.
-                </Alert>
-                <Box sx={{ mt: 2 }}>
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    gutterBottom
-                  >
-                    <strong>Date:</strong>{' '}
-                    {format(new Date(editingTransaction.date), 'MMM dd, yyyy')}
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    gutterBottom
-                  >
-                    <strong>Account:</strong>{' '}
-                    {getAccountName(editingTransaction.account_id)}
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    gutterBottom
-                  >
-                    <strong>Category:</strong>{' '}
-                    {getCategoryName(editingTransaction.category_id)}
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    gutterBottom
-                  >
-                    <strong>Amount:</strong>{' '}
-                    {formatCurrency(
-                      editingTransaction.amount,
-                      editingTransaction.currency
-                    )}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    <strong>Description:</strong>{' '}
-                    {editingTransaction.description || '-'}
-                  </Typography>
-                </Box>
-              </Box>
-            ) : (
-              <Grid
+            <Grid
                 container
                 spacing={{ xs: 1.5, sm: 2 }}
                 sx={{ mt: { xs: 0.5, sm: 1 } }}
@@ -878,7 +830,6 @@ function Home() {
                   </FormControl>
                 </Grid>
               </Grid>
-            )}
           </DialogContent>
           <DialogActions
             sx={{
@@ -898,7 +849,7 @@ function Home() {
               }}
             >
               <Box>
-                {editingTransaction && !deleteConfirm && (
+                {editingTransaction && (
                   <Button
                     onClick={handleDeleteClick}
                     color="error"
@@ -913,70 +864,101 @@ function Home() {
                 )}
               </Box>
               <Box sx={{ display: 'flex', gap: 1 }}>
-                {deleteConfirm ? (
-                  <>
-                    <Button
-                      onClick={() => setDeleteConfirm(false)}
-                      disabled={isDeleting}
-                      size={isMobile ? 'small' : 'medium'}
-                      sx={{ textTransform: 'none' }}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      onClick={handleDeleteConfirm}
-                      color="error"
-                      variant="contained"
-                      disabled={isDeleting}
-                      size={isMobile ? 'small' : 'medium'}
-                      startIcon={
-                        isDeleting ? (
-                          <CircularProgress size={16} color="inherit" />
-                        ) : (
-                          <DeleteIcon sx={{ fontSize: { xs: 16, sm: 20 } }} />
-                        )
-                      }
-                      sx={{ textTransform: 'none' }}
-                    >
-                      {isDeleting ? 'Deleting...' : 'Confirm'}
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button
-                      onClick={handleCloseDialog}
-                      disabled={isSubmitting}
-                      size={isMobile ? 'small' : 'medium'}
-                      sx={{ textTransform: 'none' }}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="submit"
-                      variant="contained"
-                      disabled={isSubmitting}
-                      size={isMobile ? 'small' : 'medium'}
-                      startIcon={
-                        isSubmitting ? (
-                          <CircularProgress size={16} color="inherit" />
-                        ) : null
-                      }
-                      sx={{ textTransform: 'none' }}
-                    >
-                      {isSubmitting
-                        ? editingTransaction
-                          ? 'Updating...'
-                          : 'Creating...'
-                        : editingTransaction
-                        ? 'Update'
-                        : 'Create'}
-                    </Button>
-                  </>
-                )}
+                <Button
+                  onClick={handleCloseDialog}
+                  disabled={isSubmitting}
+                  size={isMobile ? 'small' : 'medium'}
+                  sx={{ textTransform: 'none' }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  variant="contained"
+                  disabled={isSubmitting}
+                  size={isMobile ? 'small' : 'medium'}
+                  startIcon={
+                    isSubmitting ? (
+                      <CircularProgress size={16} color="inherit" />
+                    ) : null
+                  }
+                  sx={{ textTransform: 'none' }}
+                >
+                  {isSubmitting
+                    ? editingTransaction
+                      ? 'Updating...'
+                      : 'Creating...'
+                    : editingTransaction
+                    ? 'Update'
+                    : 'Create'}
+                </Button>
               </Box>
             </Box>
           </DialogActions>
         </form>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog - Popup Modal */}
+      <Dialog
+        open={deleteConfirm}
+        onClose={handleCancelDelete}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            p: 1,
+          },
+        }}
+      >
+        <DialogTitle sx={{ textAlign: 'center', pb: 1 }}>
+          Delete Transaction?
+        </DialogTitle>
+        <DialogContent sx={{ textAlign: 'center', pb: 2 }}>
+          {deleteError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {deleteError}
+            </Alert>
+          )}
+          <Typography variant="body2" color="text.secondary">
+            This action cannot be undone.
+            {editingTransaction?.type?.includes('Transfer') && (
+              <> Both transfer transactions will be deleted.</>
+            )}
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: 'center', gap: 2, px: 3, pb: 3 }}>
+          <Button
+            onClick={handleCancelDelete}
+            disabled={isDeleting}
+            variant="outlined"
+            size="large"
+            sx={{
+              textTransform: 'none',
+              minWidth: 120,
+              py: 1.5,
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleDeleteConfirm}
+            color="error"
+            variant="contained"
+            disabled={isDeleting}
+            size="large"
+            startIcon={
+              isDeleting ? <CircularProgress size={20} color="inherit" /> : null
+            }
+            sx={{
+              textTransform: 'none',
+              minWidth: 120,
+              py: 1.5,
+            }}
+          >
+            {isDeleting ? 'Deleting...' : 'Delete'}
+          </Button>
+        </DialogActions>
       </Dialog>
     </Box>
   );
