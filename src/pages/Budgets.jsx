@@ -58,6 +58,7 @@ import { budgetSchema } from '../schemas/budgetSchema';
 import { BUDGET_STATUSES } from '../lib/api/budgets';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
+import CategoryAutocomplete from '../components/common/CategoryAutocomplete';
 import { usePageRefresh } from '../hooks/usePageRefresh';
 import { refreshAllData } from '../utils/refreshAllData';
 import {
@@ -1530,29 +1531,14 @@ function Budgets() {
             )}
             <Grid container spacing={2} sx={{ mt: 1 }}>
               <Grid item xs={12}>
-                <FormControl fullWidth error={!!errors.categoryId}>
-                  <InputLabel>Category *</InputLabel>
-                  <Select
-                    {...register('categoryId')}
-                    label="Category *"
-                    value={watchedCategoryId || ''}
-                    onChange={(e) => setValue('categoryId', e.target.value)}
-                  >
-                    {categories
-                      .filter((cat) => cat.status === 'Active')
-                      .map((category) => (
-                        <MenuItem
-                          key={category.category_id}
-                          value={category.category_id}
-                        >
-                          {category.name}
-                        </MenuItem>
-                      ))}
-                  </Select>
-                  {errors.categoryId && (
-                    <FormHelperText>{errors.categoryId.message}</FormHelperText>
-                  )}
-                </FormControl>
+                <CategoryAutocomplete
+                  categories={categories}
+                  value={watchedCategoryId || ''}
+                  onChange={(id) => setValue('categoryId', id)}
+                  label="Category *"
+                  error={!!errors.categoryId}
+                  helperText={errors.categoryId?.message}
+                />
               </Grid>
               <Grid item xs={12} sm={6}>
                 <TextField

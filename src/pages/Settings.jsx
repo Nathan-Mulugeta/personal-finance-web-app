@@ -32,6 +32,7 @@ import {
 import { fetchCategories } from '../store/slices/categoriesSlice';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
+import CategoryAutocomplete from '../components/common/CategoryAutocomplete';
 import { usePageRefresh } from '../hooks/usePageRefresh';
 import { refreshAllData } from '../utils/refreshAllData';
 import { persistor } from '../store';
@@ -450,115 +451,40 @@ function Settings() {
                 />
               </Grid>
               <Grid item xs={12}>
-                <FormControl fullWidth>
-                  <InputLabel>Borrowing Category (Optional)</InputLabel>
-                  <Select
-                    {...register('borrowingCategoryId')}
-                    label="Borrowing Category (Optional)"
-                    value={watchedBorrowingCategoryId || ''}
-                    onChange={(e) =>
-                      setValue('borrowingCategoryId', e.target.value || '')
-                    }
-                  >
-                    <MenuItem value="">None</MenuItem>
-                    {getIncomeCategories().map((category) => (
-                      <MenuItem
-                        key={category.category_id}
-                        value={category.category_id}
-                      >
-                        {category.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                  <FormHelperText>
-                    Default category for borrowing transactions (Income
-                    categories only)
-                  </FormHelperText>
-                </FormControl>
+                <CategoryAutocomplete
+                  categories={getIncomeCategories()}
+                  value={watchedBorrowingCategoryId || ''}
+                  onChange={(id) => setValue('borrowingCategoryId', id || '')}
+                  label="Borrowing Category (Optional)"
+                  helperText="Default category for borrowing transactions (Income categories only)"
+                />
               </Grid>
               <Grid item xs={12}>
-                <FormControl fullWidth>
-                  <InputLabel>Lending Category (Optional)</InputLabel>
-                  <Select
-                    {...register('lendingCategoryId')}
-                    label="Lending Category (Optional)"
-                    value={watchedLendingCategoryId || ''}
-                    onChange={(e) =>
-                      setValue('lendingCategoryId', e.target.value || '')
-                    }
-                  >
-                    <MenuItem value="">None</MenuItem>
-                    {getExpenseCategories().map((category) => (
-                      <MenuItem
-                        key={category.category_id}
-                        value={category.category_id}
-                      >
-                        {category.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                  <FormHelperText>
-                    Default category for lending transactions (Expense
-                    categories only)
-                  </FormHelperText>
-                </FormControl>
+                <CategoryAutocomplete
+                  categories={getExpenseCategories()}
+                  value={watchedLendingCategoryId || ''}
+                  onChange={(id) => setValue('lendingCategoryId', id || '')}
+                  label="Lending Category (Optional)"
+                  helperText="Default category for lending transactions (Expense categories only)"
+                />
               </Grid>
               <Grid item xs={12}>
-                <FormControl fullWidth>
-                  <InputLabel>Borrowing Payment Category (Optional)</InputLabel>
-                  <Select
-                    {...register('borrowingPaymentCategoryId')}
-                    label="Borrowing Payment Category (Optional)"
-                    value={watchedBorrowingPaymentCategoryId || ''}
-                    onChange={(e) =>
-                      setValue(
-                        'borrowingPaymentCategoryId',
-                        e.target.value || ''
-                      )
-                    }
-                  >
-                    <MenuItem value="">None</MenuItem>
-                    {getExpenseCategories().map((category) => (
-                      <MenuItem
-                        key={category.category_id}
-                        value={category.category_id}
-                      >
-                        {category.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                  <FormHelperText>
-                    Category used when recording payments for borrowing (Expense
-                    categories only)
-                  </FormHelperText>
-                </FormControl>
+                <CategoryAutocomplete
+                  categories={getExpenseCategories()}
+                  value={watchedBorrowingPaymentCategoryId || ''}
+                  onChange={(id) => setValue('borrowingPaymentCategoryId', id || '')}
+                  label="Borrowing Payment Category (Optional)"
+                  helperText="Category used when recording payments for borrowing (Expense categories only)"
+                />
               </Grid>
               <Grid item xs={12}>
-                <FormControl fullWidth>
-                  <InputLabel>Lending Payment Category (Optional)</InputLabel>
-                  <Select
-                    {...register('lendingPaymentCategoryId')}
-                    label="Lending Payment Category (Optional)"
-                    value={watchedLendingPaymentCategoryId || ''}
-                    onChange={(e) =>
-                      setValue('lendingPaymentCategoryId', e.target.value || '')
-                    }
-                  >
-                    <MenuItem value="">None</MenuItem>
-                    {getIncomeCategories().map((category) => (
-                      <MenuItem
-                        key={category.category_id}
-                        value={category.category_id}
-                      >
-                        {category.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                  <FormHelperText>
-                    Category used when recording payments for lending (Income
-                    categories only)
-                  </FormHelperText>
-                </FormControl>
+                <CategoryAutocomplete
+                  categories={getIncomeCategories()}
+                  value={watchedLendingPaymentCategoryId || ''}
+                  onChange={(id) => setValue('lendingPaymentCategoryId', id || '')}
+                  label="Lending Payment Category (Optional)"
+                  helperText="Category used when recording payments for lending (Income categories only)"
+                />
               </Grid>
             </Grid>
           </DialogContent>

@@ -377,24 +377,51 @@ export async function getTransactions(filters = {}) {
     );
   }
 
-  // Pagination
-  if (filters.limit) {
-    query = query.limit(filters.limit);
-  }
-  if (filters.offset) {
-    query = query.range(
-      filters.offset,
-      filters.offset + (filters.limit || 100) - 1
-    );
+  // If explicit pagination is requested, use single query with limit/offset
+  if (filters.limit || filters.offset) {
+    if (filters.limit) {
+      query = query.limit(filters.limit);
+    }
+    if (filters.offset) {
+      query = query.range(
+        filters.offset,
+        filters.offset + (filters.limit || 100) - 1
+      );
+    }
+
+    // Order by date descending, then by created_at descending (newest first)
+    const { data, error } = await query
+      .order('date', { ascending: false })
+      .order('created_at', { ascending: false, nullsFirst: false });
+
+    if (error) throw error;
+    return data || [];
   }
 
-  // Order by date descending, then by created_at descending (newest first)
-  const { data, error } = await query
-    .order('date', { ascending: false })
-    .order('created_at', { ascending: false, nullsFirst: false });
+  // No explicit pagination: fetch ALL records by paginating in batches of 1000
+  // This overcomes Supabase's default 1000 row limit
+  const BATCH_SIZE = 1000;
+  let allData = [];
+  let offset = 0;
+  let hasMore = true;
 
-  if (error) throw error;
-  return data || [];
+  while (hasMore) {
+    const { data, error } = await query
+      .order('date', { ascending: false })
+      .order('created_at', { ascending: false, nullsFirst: false })
+      .range(offset, offset + BATCH_SIZE - 1);
+
+    if (error) throw error;
+
+    if (data && data.length > 0) {
+      allData = [...allData, ...data];
+    }
+
+    hasMore = data && data.length === BATCH_SIZE;
+    offset += BATCH_SIZE;
+  }
+
+  return allData;
 }
 
 // Get transaction by ID
@@ -610,7 +637,7 @@ export async function deleteTransaction(transactionId) {
   return {
     transactionId,
     linkedTransactionId,
-    deletedTransactionIds
+    deletedTransactionIds,
   };
 }
 

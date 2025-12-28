@@ -47,6 +47,7 @@ import {
   TRANSACTION_STATUSES,
 } from '../lib/api/transactions';
 import ErrorMessage from '../components/common/ErrorMessage';
+import CategoryAutocomplete from '../components/common/CategoryAutocomplete';
 import { formatCurrency } from '../utils/currencyConversion';
 import { format, parseISO } from 'date-fns';
 import { usePageRefresh } from '../hooks/usePageRefresh';
@@ -140,33 +141,31 @@ function Home() {
 
     const query = debouncedSearchQuery;
 
-    return allTransactions
-      .filter((txn) => {
-        // Skip deleted or cancelled transactions
-        if (txn.deleted_at || txn.status === 'Cancelled') {
-          return false;
-        }
+    return allTransactions.filter((txn) => {
+      // Skip deleted or cancelled transactions
+      if (txn.deleted_at || txn.status === 'Cancelled') {
+        return false;
+      }
 
-        // Search by description
-        const description = (txn.description || '').toLowerCase();
-        if (description.includes(query)) {
+      // Search by description
+      const description = (txn.description || '').toLowerCase();
+      if (description.includes(query)) {
+        return true;
+      }
+
+      // Search by category name
+      const category = categories.find(
+        (cat) => cat.category_id === txn.category_id
+      );
+      if (category) {
+        const categoryName = (category.name || '').toLowerCase();
+        if (categoryName.includes(query)) {
           return true;
         }
+      }
 
-        // Search by category name
-        const category = categories.find(
-          (cat) => cat.category_id === txn.category_id
-        );
-        if (category) {
-          const categoryName = (category.name || '').toLowerCase();
-          if (categoryName.includes(query)) {
-            return true;
-          }
-        }
-
-        return false;
-      })
-      .slice(0, 20); // Limit to 20 results
+      return false;
+    });
   }, [debouncedSearchQuery, allTransactions, categories]);
 
   // Get category name helper
@@ -325,7 +324,11 @@ function Home() {
     <Box>
       <Typography
         variant="h4"
-        sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' }, mb: { xs: 1.5, sm: 2, md: 3 }, fontWeight: 500 }}
+        sx={{
+          fontSize: { xs: '1.25rem', sm: '1.5rem' },
+          mb: { xs: 1.5, sm: 2, md: 3 },
+          fontWeight: 500,
+        }}
       >
         Home
       </Typography>
@@ -377,7 +380,11 @@ function Home() {
           autoFocus
         />
         {debouncedSearchQuery && (
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1, fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}>
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ mt: 1, fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}
+          >
             {searchResults.length} transaction
             {searchResults.length !== 1 ? 's' : ''} found
           </Typography>
@@ -405,7 +412,10 @@ function Home() {
                       sx={{ py: { xs: 1, sm: 1.5 }, px: { xs: 1.5, sm: 2 } }}
                     >
                       <ListItemIcon sx={{ minWidth: { xs: 36, sm: 48 } }}>
-                        <ReceiptIcon color="primary" sx={{ fontSize: { xs: 20, sm: 24 } }} />
+                        <ReceiptIcon
+                          color="primary"
+                          sx={{ fontSize: { xs: 20, sm: 24 } }}
+                        />
                       </ListItemIcon>
                       <ListItemText
                         primary={
@@ -418,24 +428,56 @@ function Home() {
                               flexWrap: 'wrap',
                             }}
                           >
-                            <Typography component="span" variant="body1" fontWeight="medium" sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}>
+                            <Typography
+                              component="span"
+                              variant="body1"
+                              fontWeight="medium"
+                              sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}
+                            >
                               {txn.description || 'No description'}
                             </Typography>
                             <Chip
                               label={txn.type}
                               size="small"
-                              color={txn.type === 'Income' ? 'success' : 'error'}
+                              color={
+                                txn.type === 'Income' ? 'success' : 'error'
+                              }
                               sx={{ height: 20, fontSize: '0.6875rem' }}
                             />
                           </Box>
                         }
                         secondary={
                           <Box component="span">
-                            <Typography component="span" variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.8125rem' }, display: 'block' }}>
-                              {getCategoryName(txn.category_id)} • {getAccountName(txn.account_id)}
+                            <Typography
+                              component="span"
+                              variant="body2"
+                              color="text.secondary"
+                              sx={{
+                                fontSize: { xs: '0.75rem', sm: '0.8125rem' },
+                                display: 'block',
+                              }}
+                            >
+                              {getCategoryName(txn.category_id)} •{' '}
+                              {getAccountName(txn.account_id)}
                             </Typography>
-                            <Typography component="span" variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.8125rem' }, display: 'block' }}>
-                              {format(parseISO(txn.date), 'MMM dd, yyyy')} • {formatCurrency(Math.abs(txn.amount), txn.currency)}
+                            <Typography
+                              component="span"
+                              variant="body2"
+                              color="text.secondary"
+                              sx={{
+                                fontSize: { xs: '0.75rem', sm: '0.8125rem' },
+                                display: 'block',
+                              }}
+                            >
+                              {format(
+                                parseISO(txn.created_at || txn.date),
+                                'MMM dd, yyyy h:mm a'
+                              )}{' '}
+                              •{' '}
+                              {formatCurrency(
+                                Math.abs(txn.amount),
+                                txn.currency
+                              )}
                             </Typography>
                           </Box>
                         }
@@ -457,11 +499,26 @@ function Home() {
                 backgroundColor: 'background.paper',
               }}
             >
-              <SearchIcon sx={{ fontSize: { xs: 48, sm: 64 }, color: 'text.secondary', mb: { xs: 1.5, sm: 2 } }} />
-              <Typography variant="h6" color="text.secondary" gutterBottom sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}>
+              <SearchIcon
+                sx={{
+                  fontSize: { xs: 48, sm: 64 },
+                  color: 'text.secondary',
+                  mb: { xs: 1.5, sm: 2 },
+                }}
+              />
+              <Typography
+                variant="h6"
+                color="text.secondary"
+                gutterBottom
+                sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}
+              >
                 No transactions found
               </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}
+              >
                 Try searching by category name or transaction description
               </Typography>
             </Box>
@@ -481,11 +538,29 @@ function Home() {
             backgroundColor: 'background.paper',
           }}
         >
-          <SearchIcon sx={{ fontSize: { xs: 48, sm: 64 }, color: 'text.secondary', mb: { xs: 1.5, sm: 2 } }} />
-          <Typography variant="h6" color="text.secondary" gutterBottom sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}>
+          <SearchIcon
+            sx={{
+              fontSize: { xs: 48, sm: 64 },
+              color: 'text.secondary',
+              mb: { xs: 1.5, sm: 2 },
+            }}
+          />
+          <Typography
+            variant="h6"
+            color="text.secondary"
+            gutterBottom
+            sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}
+          >
             Search transactions
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: { xs: 2, sm: 3 }, fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}>
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{
+              mb: { xs: 2, sm: 3 },
+              fontSize: { xs: '0.8125rem', sm: '0.875rem' },
+            }}
+          >
             Search by category name or transaction description
           </Typography>
         </Box>
@@ -499,15 +574,29 @@ function Home() {
         fullWidth
         fullScreen={isMobile}
         PaperProps={{
-          sx: isMobile ? {
-            display: 'flex',
-            flexDirection: 'column',
-            height: '100%',
-            maxHeight: '100%',
-          } : {},
+          sx: isMobile
+            ? {
+                display: 'flex',
+                flexDirection: 'column',
+                height: '100%',
+                maxHeight: '100%',
+              }
+            : {},
         }}
       >
-        <form onSubmit={handleSubmit(onSubmit)} style={isMobile ? { display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' } : {}}>
+        <form
+          onSubmit={handleSubmit(onSubmit)}
+          style={
+            isMobile
+              ? {
+                  display: 'flex',
+                  flexDirection: 'column',
+                  height: '100%',
+                  overflow: 'hidden',
+                }
+              : {}
+          }
+        >
           <DialogTitle sx={{ flexShrink: 0, pb: { xs: 1, sm: 2 } }}>
             {deleteConfirm
               ? 'Delete Transaction'
@@ -515,7 +604,9 @@ function Home() {
               ? 'Edit Transaction'
               : 'Create New Transaction'}
           </DialogTitle>
-          <DialogContent sx={{ flexGrow: 1, overflow: 'auto', pt: { xs: 1, sm: 2 } }}>
+          <DialogContent
+            sx={{ flexGrow: 1, overflow: 'auto', pt: { xs: 1, sm: 2 } }}
+          >
             {actionError && (
               <Alert severity="error" sx={{ mb: 2 }}>
                 {actionError}
@@ -576,7 +667,11 @@ function Home() {
                 </Box>
               </Box>
             ) : (
-              <Grid container spacing={{ xs: 1.5, sm: 2 }} sx={{ mt: { xs: 0.5, sm: 1 } }}>
+              <Grid
+                container
+                spacing={{ xs: 1.5, sm: 2 }}
+                sx={{ mt: { xs: 0.5, sm: 1 } }}
+              >
                 <Grid item xs={12} sm={6}>
                   <FormControl fullWidth error={!!errors.accountId}>
                     <InputLabel>Account *</InputLabel>
@@ -627,37 +722,20 @@ function Home() {
                   </FormControl>
                 </Grid>
                 <Grid item xs={12} sm={6}>
-                  <FormControl fullWidth error={!!errors.categoryId}>
-                    <InputLabel>Category *</InputLabel>
-                    <Select
-                      {...register('categoryId')}
-                      label="Category *"
-                      value={watchedCategoryId || ''}
-                      onChange={(e) => setValue('categoryId', e.target.value)}
-                      disabled={!watchedType}
-                    >
-                      {getFilteredCategories()
-                        .filter((cat) => cat.status === 'Active')
-                        .map((category) => (
-                          <MenuItem
-                            key={category.category_id}
-                            value={category.category_id}
-                          >
-                            {category.name}
-                          </MenuItem>
-                        ))}
-                    </Select>
-                    {errors.categoryId && (
-                      <FormHelperText>
-                        {errors.categoryId.message}
-                      </FormHelperText>
-                    )}
-                    {!watchedType && (
-                      <FormHelperText>
-                        Please select a transaction type first
-                      </FormHelperText>
-                    )}
-                  </FormControl>
+                  <CategoryAutocomplete
+                    categories={getFilteredCategories()}
+                    value={watchedCategoryId || ''}
+                    onChange={(id) => setValue('categoryId', id)}
+                    label="Category *"
+                    error={!!errors.categoryId}
+                    helperText={
+                      errors.categoryId?.message ||
+                      (!watchedType
+                        ? 'Please select a transaction type first'
+                        : undefined)
+                    }
+                    disabled={!watchedType}
+                  />
                 </Grid>
                 <Grid item xs={12} sm={6}>
                   <TextField
@@ -731,14 +809,31 @@ function Home() {
               </Grid>
             )}
           </DialogContent>
-          <DialogActions sx={{ flexShrink: 0, p: { xs: 1.5, sm: 2 }, borderTop: { xs: '1px solid', sm: 'none' }, borderColor: 'divider' }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', flexWrap: 'wrap', gap: 1 }}>
+          <DialogActions
+            sx={{
+              flexShrink: 0,
+              p: { xs: 1.5, sm: 2 },
+              borderTop: { xs: '1px solid', sm: 'none' },
+              borderColor: 'divider',
+            }}
+          >
+            <Box
+              sx={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                width: '100%',
+                flexWrap: 'wrap',
+                gap: 1,
+              }}
+            >
               <Box>
                 {editingTransaction && !deleteConfirm && (
                   <Button
                     onClick={handleDeleteClick}
                     color="error"
-                    startIcon={<DeleteIcon sx={{ fontSize: { xs: 18, sm: 20 } }} />}
+                    startIcon={
+                      <DeleteIcon sx={{ fontSize: { xs: 18, sm: 20 } }} />
+                    }
                     size={isMobile ? 'small' : 'medium'}
                     sx={{ textTransform: 'none' }}
                   >
@@ -763,7 +858,13 @@ function Home() {
                       variant="contained"
                       disabled={isDeleting}
                       size={isMobile ? 'small' : 'medium'}
-                      startIcon={isDeleting ? <CircularProgress size={16} color="inherit" /> : <DeleteIcon sx={{ fontSize: { xs: 16, sm: 20 } }} />}
+                      startIcon={
+                        isDeleting ? (
+                          <CircularProgress size={16} color="inherit" />
+                        ) : (
+                          <DeleteIcon sx={{ fontSize: { xs: 16, sm: 20 } }} />
+                        )
+                      }
                       sx={{ textTransform: 'none' }}
                     >
                       {isDeleting ? 'Deleting...' : 'Confirm'}
@@ -784,7 +885,11 @@ function Home() {
                       variant="contained"
                       disabled={isSubmitting}
                       size={isMobile ? 'small' : 'medium'}
-                      startIcon={isSubmitting ? <CircularProgress size={16} color="inherit" /> : null}
+                      startIcon={
+                        isSubmitting ? (
+                          <CircularProgress size={16} color="inherit" />
+                        ) : null
+                      }
                       sx={{ textTransform: 'none' }}
                     >
                       {isSubmitting

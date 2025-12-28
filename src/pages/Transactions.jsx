@@ -65,6 +65,7 @@ import {
 } from '../lib/api/transactions';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
+import CategoryAutocomplete from '../components/common/CategoryAutocomplete';
 import { formatCurrency } from '../utils/currencyConversion';
 import { format, addDays, subDays, isToday, isSameDay, parseISO } from 'date-fns';
 import { usePageRefresh } from '../hooks/usePageRefresh';
@@ -1958,39 +1959,18 @@ function Transactions() {
                 </FormControl>
               </Grid>
               <Grid item xs={12} sm={6}>
-                <FormControl fullWidth error={!!errors.categoryId}>
-                  <InputLabel>Category *</InputLabel>
-                  <Select
-                    {...register('categoryId')}
-                    label="Category *"
-                    value={watchedCategoryId || ''}
-                    onChange={(e) => setValue('categoryId', e.target.value)}
-                    disabled={!watchedType}
-                  >
-                    {getFilteredCategories()
-                      .filter((cat) => cat.status === 'Active')
-                      .map((category) => (
-                        <MenuItem
-                          key={category.category_id}
-                          value={category.category_id}
-                          sx={{
-                            pl: 2 + (category.depth || 0) * 2,
-                            fontWeight: category.hasChildren ? 600 : 400,
-                          }}
-                        >
-                          {category.name}
-                        </MenuItem>
-                      ))}
-                  </Select>
-                  {errors.categoryId && (
-                    <FormHelperText>{errors.categoryId.message}</FormHelperText>
-                  )}
-                  {!watchedType && (
-                    <FormHelperText>
-                      Please select a transaction type first
-                    </FormHelperText>
-                  )}
-                </FormControl>
+                <CategoryAutocomplete
+                  categories={getFilteredCategories()}
+                  value={watchedCategoryId || ''}
+                  onChange={(id) => setValue('categoryId', id)}
+                  label="Category *"
+                  error={!!errors.categoryId}
+                  helperText={
+                    errors.categoryId?.message ||
+                    (!watchedType ? 'Please select a transaction type first' : undefined)
+                  }
+                  disabled={!watchedType}
+                />
               </Grid>
               <Grid item xs={12} sm={6}>
                 <TextField
@@ -2312,34 +2292,12 @@ function Transactions() {
                 </FormControl>
               </Grid>
               <Grid item xs={12}>
-                <FormControl fullWidth>
-                  <InputLabel>Category (Optional)</InputLabel>
-                  <Select
-                    {...registerTransfer('categoryId', {
-                      setValueAs: (v) => (v === '' ? null : v),
-                    })}
-                    label="Category (Optional)"
-                    value={watchTransfer('categoryId') || ''}
-                    onChange={(e) =>
-                      setValueTransfer('categoryId', e.target.value || null)
-                    }
-                  >
-                    <MenuItem value="">None</MenuItem>
-                    {flattenCategoryTree(categories.filter((cat) => cat.status === 'Active'))
-                      .map((category) => (
-                        <MenuItem
-                          key={category.category_id}
-                          value={category.category_id}
-                          sx={{
-                            pl: 2 + (category.depth || 0) * 2,
-                            fontWeight: category.hasChildren ? 600 : 400,
-                          }}
-                        >
-                          {category.name}
-                        </MenuItem>
-                      ))}
-                  </Select>
-                </FormControl>
+                <CategoryAutocomplete
+                  categories={flattenCategoryTree(categories)}
+                  value={watchTransfer('categoryId') || ''}
+                  onChange={(id) => setValueTransfer('categoryId', id || null)}
+                  label="Category (Optional)"
+                />
               </Grid>
               <Grid item xs={12}>
                 <TextField
