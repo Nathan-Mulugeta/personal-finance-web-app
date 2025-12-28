@@ -11,6 +11,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Fab,
   FormControl,
   FormHelperText,
   Grid,
@@ -36,8 +37,13 @@ import ReceiptIcon from '@mui/icons-material/Receipt';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd';
+import CameraAltIcon from '@mui/icons-material/CameraAlt';
+import ChatIcon from '@mui/icons-material/Chat';
 import AddTransactionDialog from '../components/common/AddTransactionDialog';
 import BatchTransactionDialog from '../components/common/BatchTransactionDialog';
+import ReceiptCaptureDialog from '../components/common/ReceiptCaptureDialog';
+import NaturalLanguageDialog from '../components/common/NaturalLanguageDialog';
+import AITransactionsReviewModal from '../components/common/AITransactionsReviewModal';
 import {
   updateTransaction,
   deleteTransaction,
@@ -72,6 +78,11 @@ function Home() {
   const [deleteError, setDeleteError] = useState(null);
   const [addTransactionOpen, setAddTransactionOpen] = useState(false);
   const [batchTransactionOpen, setBatchTransactionOpen] = useState(false);
+  const [receiptCaptureOpen, setReceiptCaptureOpen] = useState(false);
+  const [naturalLanguageOpen, setNaturalLanguageOpen] = useState(false);
+  const [aiReviewOpen, setAiReviewOpen] = useState(false);
+  const [aiParsedData, setAiParsedData] = useState(null);
+  const [isReceiptParsing, setIsReceiptParsing] = useState(false);
   const searchInputRef = useRef(null);
 
   // Get data from Redux - only what we need for transactions
@@ -81,7 +92,7 @@ function Home() {
 
   // Refresh data on navigation
   usePageRefresh({
-    dataTypes: ['transactions', 'accounts', 'categories'],
+    dataTypes: ['transactions', 'accounts', 'categories', 'settings'],
     filters: {
       accounts: { status: 'Active' },
       categories: { status: 'Active' },
@@ -337,6 +348,20 @@ function Home() {
     }, 0);
   };
 
+  // Handle AI parsed data from receipt or natural language
+  const handleAiParsed = (data) => {
+    setAiParsedData(data);
+    setIsReceiptParsing(data.type === 'receipt');
+    setAiReviewOpen(true);
+  };
+
+  // Close AI review modal
+  const handleAiReviewClose = () => {
+    setAiReviewOpen(false);
+    setAiParsedData(null);
+    setIsReceiptParsing(false);
+  };
+
   return (
     <Box>
       <Box
@@ -415,6 +440,28 @@ function Home() {
       <BatchTransactionDialog
         open={batchTransactionOpen}
         onClose={() => setBatchTransactionOpen(false)}
+      />
+
+      {/* Receipt Capture Dialog */}
+      <ReceiptCaptureDialog
+        open={receiptCaptureOpen}
+        onClose={() => setReceiptCaptureOpen(false)}
+        onParsed={handleAiParsed}
+      />
+
+      {/* Natural Language Dialog */}
+      <NaturalLanguageDialog
+        open={naturalLanguageOpen}
+        onClose={() => setNaturalLanguageOpen(false)}
+        onParsed={handleAiParsed}
+      />
+
+      {/* AI Transactions Review Modal */}
+      <AITransactionsReviewModal
+        open={aiReviewOpen}
+        onClose={handleAiReviewClose}
+        parsedData={aiParsedData}
+        isReceipt={isReceiptParsing}
       />
 
       {/* Search Bar */}
@@ -960,6 +1007,51 @@ function Home() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Floating Action Buttons for AI Features */}
+      <Box
+        sx={{
+          position: 'fixed',
+          bottom: { xs: 16, sm: 24 },
+          right: { xs: 16, sm: 24 },
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 1.5,
+          zIndex: 1000,
+        }}
+      >
+        {/* Natural Language Input FAB */}
+        <Fab
+          color="secondary"
+          size="medium"
+          onClick={() => setNaturalLanguageOpen(true)}
+          sx={{
+            boxShadow: 3,
+            '&:hover': {
+              boxShadow: 6,
+            },
+          }}
+          aria-label="Add transactions with text"
+        >
+          <ChatIcon />
+        </Fab>
+
+        {/* Receipt Scan FAB */}
+        <Fab
+          color="primary"
+          size="large"
+          onClick={() => setReceiptCaptureOpen(true)}
+          sx={{
+            boxShadow: 4,
+            '&:hover': {
+              boxShadow: 8,
+            },
+          }}
+          aria-label="Scan receipt"
+        >
+          <CameraAltIcon />
+        </Fab>
+      </Box>
     </Box>
   );
 }
