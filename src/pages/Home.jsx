@@ -35,7 +35,9 @@ import ClearIcon from '@mui/icons-material/Clear';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
+import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd';
 import AddTransactionDialog from '../components/common/AddTransactionDialog';
+import BatchTransactionDialog from '../components/common/BatchTransactionDialog';
 import {
   updateTransaction,
   deleteTransaction,
@@ -69,6 +71,7 @@ function Home() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
   const [addTransactionOpen, setAddTransactionOpen] = useState(false);
+  const [batchTransactionOpen, setBatchTransactionOpen] = useState(false);
   const searchInputRef = useRef(null);
 
   // Get data from Redux - only what we need for transactions
@@ -342,30 +345,51 @@ function Home() {
         >
           Home
         </Typography>
-        <IconButton
-          onClick={() => setAddTransactionOpen(true)}
-          sx={{
-            backgroundColor: 'primary.main',
-            color: 'white',
-            width: 36,
-            height: 36,
-            '&:hover': {
-              backgroundColor: 'primary.main',
-              cursor: 'pointer',
-              '& .add-icon': {
-                transform: 'rotate(90deg)',
-              },
-            },
-          }}
-        >
-          <AddIcon
-            className="add-icon"
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <IconButton
+            onClick={() => setBatchTransactionOpen(true)}
             sx={{
-              fontSize: 20,
-              transition: 'transform 0.2s ease-in-out',
+              backgroundColor: 'info.main',
+              color: 'white',
+              width: 36,
+              height: 36,
+              '&:hover': {
+                backgroundColor: 'info.dark',
+                cursor: 'pointer',
+              },
             }}
-          />
-        </IconButton>
+          >
+            <PlaylistAddIcon
+              sx={{
+                fontSize: 20,
+              }}
+            />
+          </IconButton>
+          <IconButton
+            onClick={() => setAddTransactionOpen(true)}
+            sx={{
+              backgroundColor: 'primary.main',
+              color: 'white',
+              width: 36,
+              height: 36,
+              '&:hover': {
+                backgroundColor: 'primary.main',
+                cursor: 'pointer',
+                '& .add-icon': {
+                  transform: 'rotate(90deg)',
+                },
+              },
+            }}
+          >
+            <AddIcon
+              className="add-icon"
+              sx={{
+                fontSize: 20,
+                transition: 'transform 0.2s ease-in-out',
+              }}
+            />
+          </IconButton>
+        </Box>
       </Box>
 
       {error && <ErrorMessage error={error} />}
@@ -374,6 +398,12 @@ function Home() {
       <AddTransactionDialog
         open={addTransactionOpen}
         onClose={() => setAddTransactionOpen(false)}
+      />
+
+      {/* Batch Transaction Dialog */}
+      <BatchTransactionDialog
+        open={batchTransactionOpen}
+        onClose={() => setBatchTransactionOpen(false)}
       />
 
       {/* Search Bar */}

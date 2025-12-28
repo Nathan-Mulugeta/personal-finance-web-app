@@ -10,7 +10,6 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions,
   FormControl,
   FormHelperText,
   Grid,
@@ -31,6 +30,7 @@ import {
 import CategoryAutocomplete from './CategoryAutocomplete';
 import { refreshAllData } from '../../utils/refreshAllData';
 import { flattenCategoryTree } from '../../utils/categoryHierarchy';
+import { useKeyboardAwareHeight } from '../../hooks/useKeyboardAwareHeight';
 
 /**
  * Global Add Transaction Dialog component.
@@ -40,6 +40,7 @@ function AddTransactionDialog({ open, onClose }) {
   const dispatch = useDispatch();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const { keyboardVisible, keyboardHeight } = useKeyboardAwareHeight();
   
   const { accounts } = useSelector((state) => state.accounts);
   const { categories } = useSelector((state) => state.categories);
@@ -184,7 +185,12 @@ function AddTransactionDialog({ open, onClose }) {
         <DialogTitle sx={{ flexShrink: 0, pb: { xs: 1, sm: 2 } }}>
           Add Transaction
         </DialogTitle>
-        <DialogContent sx={{ flexGrow: 1, overflow: 'auto', pt: { xs: 1, sm: 2 } }}>
+        <DialogContent sx={{ 
+          flexGrow: 1, 
+          overflow: 'auto', 
+          pt: { xs: 1, sm: 2 },
+          pb: isMobile && keyboardVisible ? '88px' : 2,
+        }}>
           {actionError && (
             <Alert severity="error" sx={{ mb: 2 }}>
               {actionError}
@@ -321,11 +327,27 @@ function AddTransactionDialog({ open, onClose }) {
             </Grid>
           </Grid>
         </DialogContent>
-        <DialogActions sx={{ 
-          flexShrink: 0, 
-          p: { xs: 1.5, sm: 2 },
-          gap: 1,
-        }}>
+        <Box
+          sx={{ 
+            flexShrink: 0, 
+            p: { xs: 1.5, sm: 2 },
+            gap: 1,
+            display: 'flex',
+            justifyContent: 'flex-end',
+            borderTop: '1px solid',
+            borderColor: 'divider',
+            backgroundColor: 'background.paper',
+            ...(isMobile && keyboardVisible
+              ? {
+                  position: 'fixed',
+                  bottom: keyboardHeight,
+                  left: 0,
+                  right: 0,
+                  zIndex: 1300,
+                }
+              : {}),
+          }}
+        >
           <Button
             onClick={handleClose}
             disabled={isSubmitting}
@@ -352,7 +374,7 @@ function AddTransactionDialog({ open, onClose }) {
           >
             {isSubmitting ? 'Creating...' : 'Create'}
           </Button>
-        </DialogActions>
+        </Box>
       </form>
     </Dialog>
   );

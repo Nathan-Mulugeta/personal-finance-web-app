@@ -10,7 +10,6 @@ import {
   MenuItem,
   Avatar,
   Box,
-  CircularProgress,
   Fade,
 } from '@mui/material'
 import MenuIcon from '@mui/icons-material/Menu'
@@ -76,9 +75,15 @@ function Header({ onMenuClick }) {
         </Typography>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Fade in={backgroundLoading} unmountOnExit>
-            <Box sx={{ display: 'flex', alignItems: 'center', mr: 0.5 }}>
-              <CircularProgress size={20} thickness={4} sx={{ color: 'primary.main' }} />
-            </Box>
+            <Box
+              sx={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                backgroundColor: 'primary.main',
+                mr: 1,
+              }}
+            />
           </Fade>
           <Typography 
             variant="body2" 
