@@ -27,11 +27,13 @@ import ClearIcon from '@mui/icons-material/Clear';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 import AddIcon from '@mui/icons-material/Add';
 import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import CameraAltIcon from '@mui/icons-material/CameraAlt';
 import ChatIcon from '@mui/icons-material/Chat';
 import AddTransactionDialog from '../components/common/AddTransactionDialog';
 import EditTransactionDialog from '../components/common/EditTransactionDialog';
 import BatchTransactionDialog from '../components/common/BatchTransactionDialog';
+import AddTransferDialog from '../components/common/AddTransferDialog';
 import ReceiptCaptureDialog from '../components/common/ReceiptCaptureDialog';
 import NaturalLanguageDialog from '../components/common/NaturalLanguageDialog';
 import AITransactionsReviewModal from '../components/common/AITransactionsReviewModal';
@@ -49,6 +51,7 @@ function Home() {
   const [editingTransaction, setEditingTransaction] = useState(null);
   const [addTransactionOpen, setAddTransactionOpen] = useState(false);
   const [batchTransactionOpen, setBatchTransactionOpen] = useState(false);
+  const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [receiptCaptureOpen, setReceiptCaptureOpen] = useState(false);
   const [naturalLanguageOpen, setNaturalLanguageOpen] = useState(false);
   const [aiReviewOpen, setAiReviewOpen] = useState(false);
@@ -545,6 +548,25 @@ function Home() {
         </Typography>
         <Box sx={{ display: 'flex', gap: 1 }}>
           <IconButton
+            onClick={() => setTransferDialogOpen(true)}
+            sx={{
+              backgroundColor: 'primary.main',
+              color: 'white',
+              width: 36,
+              height: 36,
+              '&:hover': {
+                backgroundColor: 'primary.dark',
+                cursor: 'pointer',
+              },
+            }}
+          >
+            <SwapHorizIcon
+              sx={{
+                fontSize: 20,
+              }}
+            />
+          </IconButton>
+          <IconButton
             onClick={() => setBatchTransactionOpen(true)}
             sx={{
               backgroundColor: 'info.main',
@@ -609,6 +631,12 @@ function Home() {
       <BatchTransactionDialog
         open={batchTransactionOpen}
         onClose={() => setBatchTransactionOpen(false)}
+      />
+
+      {/* Add Transfer Dialog */}
+      <AddTransferDialog
+        open={transferDialogOpen}
+        onClose={() => setTransferDialogOpen(false)}
       />
 
       {/* Receipt Capture Dialog */}

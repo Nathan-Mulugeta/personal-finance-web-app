@@ -15,3 +15,4 @@ ALTER TABLE settings ADD PRIMARY KEY (user_id, setting_key);
 CREATE INDEX IF NOT EXISTS idx_settings_setting_key ON settings(setting_key);
 
 
+

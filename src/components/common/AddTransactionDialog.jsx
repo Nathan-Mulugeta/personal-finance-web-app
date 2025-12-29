@@ -28,6 +28,7 @@ import {
   TRANSACTION_STATUSES,
 } from '../../lib/api/transactions';
 import CategoryAutocomplete from './CategoryAutocomplete';
+import AccountAutocomplete from './AccountAutocomplete';
 import { flattenCategoryTree } from '../../utils/categoryHierarchy';
 import { useKeyboardAwareHeight } from '../../hooks/useKeyboardAwareHeight';
 
@@ -48,6 +49,7 @@ function AddTransactionDialog({ open, onClose }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionError, setActionError] = useState(null);
   const amountInputRef = useRef(null); // Ref for Amount field focus chaining
+  const categoryInputRef = useRef(null); // Ref for Category field focus chaining
   const hasInitializedRef = useRef(false); // Guard to prevent form reset during background refresh
 
   // Get default account from settings
@@ -202,26 +204,22 @@ function AddTransactionDialog({ open, onClose }) {
           )}
           <Grid container spacing={{ xs: 1.5, sm: 2 }} sx={{ mt: { xs: 0.5, sm: 1 } }}>
             <Grid item xs={12} sm={6}>
-              <FormControl fullWidth error={!!errors.accountId}>
-                <InputLabel>Account *</InputLabel>
-                <Select
-                  {...register('accountId')}
-                  label="Account *"
-                  value={watchedAccountId || ''}
-                  onChange={(e) => setValue('accountId', e.target.value)}
-                >
-                  {accounts
-                    .filter((acc) => acc.status === 'Active')
-                    .map((account) => (
-                      <MenuItem key={account.account_id} value={account.account_id}>
-                        {account.name} ({account.currency})
-                      </MenuItem>
-                    ))}
-                </Select>
-                {errors.accountId && (
-                  <FormHelperText>{errors.accountId.message}</FormHelperText>
-                )}
-              </FormControl>
+              <AccountAutocomplete
+                accounts={accounts}
+                value={watchedAccountId || ''}
+                onChange={(id) => setValue('accountId', id)}
+                onSelect={() => {
+                  // Focus Category field after account selection
+                  setTimeout(() => {
+                    categoryInputRef.current?.focus();
+                  }, 100);
+                }}
+                label="Account"
+                error={!!errors.accountId}
+                helperText={errors.accountId?.message}
+                required
+                autoFocus={open && !getDefaultAccountId()}
+              />
             </Grid>
             <Grid item xs={12} sm={6}>
               <FormControl fullWidth error={!!errors.type}>
@@ -252,7 +250,9 @@ function AddTransactionDialog({ open, onClose }) {
                 onChange={(id) => setValue('categoryId', id)}
                 onSelect={() => {
                   // Focus Amount field after category selection
-                  amountInputRef.current?.focus();
+                  setTimeout(() => {
+                    amountInputRef.current?.focus();
+                  }, 50);
                 }}
                 label="Category *"
                 error={!!errors.categoryId}
@@ -261,7 +261,8 @@ function AddTransactionDialog({ open, onClose }) {
                   (!watchedType ? 'Please select a transaction type first' : undefined)
                 }
                 disabled={!watchedType}
-                autoFocus={open && !!watchedType}
+                autoFocus={open && !!watchedType && !!watchedAccountId}
+                inputRef={categoryInputRef}
               />
             </Grid>
             <Grid item xs={12} sm={6}>

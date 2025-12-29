@@ -17,9 +17,11 @@ function AccountAutocomplete({
   required = false,
   autoFocus = false, // Auto-focus the input on mount
   excludeAccountId, // Optional: exclude an account from the list (e.g., when selecting "To Account", exclude "From Account")
+  inputRef: externalInputRef, // Optional external ref for parent components to access input
   ...props
 }) {
-  const inputRef = useRef(null);
+  const internalInputRef = useRef(null);
+  const inputRef = externalInputRef || internalInputRef;
 
   // Auto-focus the input when autoFocus prop is true
   useEffect(() => {

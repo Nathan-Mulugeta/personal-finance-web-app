@@ -17,9 +17,11 @@ function CategoryAutocomplete({
   filterByType,        // Optional: 'Income' or 'Expense'
   required = false,
   autoFocus = false,   // Auto-focus the input on mount
+  inputRef: externalInputRef, // Optional external ref for parent components to access input
   ...props
 }) {
-  const inputRef = useRef(null);
+  const internalInputRef = useRef(null);
+  const inputRef = externalInputRef || internalInputRef;
 
   // Auto-focus the input when autoFocus prop is true
   useEffect(() => {
