@@ -66,6 +66,13 @@ const store = configureStore({
       serializableCheck: {
         ignoredActions: ['persist/PERSIST', 'persist/REHYDRATE'],
       },
+      // Increase threshold for immutable check to avoid warnings with large state
+      // This only affects development mode - production builds don't include these checks
+      immutableCheck: {
+        warnAfter: 128, // Increase from default 32ms to 128ms
+        // Ignore large transaction arrays which can cause slow checks
+        ignoredPaths: ['transactions.allTransactions', 'transactions.transactions'],
+      },
     }),
 })
 

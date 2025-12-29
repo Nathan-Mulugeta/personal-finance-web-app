@@ -43,7 +43,6 @@ import {
   createAccount,
   updateAccount,
   deleteAccount,
-  fetchAccountBalance,
   clearError,
 } from '../store/slices/accountsSlice';
 import { fetchSettings } from '../store/slices/settingsSlice';
@@ -53,19 +52,14 @@ import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
 import { formatCurrency } from '../utils/currencyConversion';
 import { usePageRefresh } from '../hooks/usePageRefresh';
-import { refreshAllData } from '../utils/refreshAllData';
 
 function Accounts() {
   const dispatch = useDispatch();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const {
-    accounts,
-    loading,
-    backgroundLoading,
-    error,
-    balances: accountBalances,
-  } = useSelector((state) => state.accounts);
+  const { accounts, loading, backgroundLoading, error } = useSelector(
+    (state) => state.accounts
+  );
   const { settings } = useSelector((state) => state.settings);
   const { exchangeRates } = useSelector((state) => state.exchangeRates);
   const appInitialized = useSelector((state) => state.appInit.isInitialized);
@@ -107,36 +101,30 @@ function Accounts() {
   });
 
   // Calculate summary data from cached data
+  // Balance is now stored directly in account.current_balance (updated by database triggers)
   const summaryData = useMemo(() => {
     if (accounts.length === 0) {
       return null;
     }
 
-    // Use cached balances from Redux
-    const balances = accountBalances || {};
-
-    // Calculate currency totals
+    // Calculate currency totals directly from accounts
     const currencyTotals = {};
     accounts.forEach((account) => {
-      const balance = balances[account.account_id];
-      if (balance) {
-        const currency = account.currency;
-        if (!currencyTotals[currency]) {
-          currencyTotals[currency] = 0;
-        }
-        currencyTotals[currency] += balance.current_balance || 0;
+      const currency = account.currency;
+      if (!currencyTotals[currency]) {
+        currencyTotals[currency] = 0;
       }
+      currencyTotals[currency] += account.current_balance || 0;
     });
 
     const baseCurrency =
       settings.find((s) => s.setting_key === 'BaseCurrency')?.setting_value ||
       'USD';
 
-    // Create accounts array with balances and conversions
+    // Create accounts array with conversions
     const accountBalancesArray = accounts.map((account) => {
-      const balance = balances[account.account_id];
       const currentBalance =
-        balance?.current_balance || account.opening_balance || 0;
+        account.current_balance ?? account.opening_balance ?? 0;
 
       let convertedBalance = null;
       let exchangeRate = null;
@@ -197,7 +185,7 @@ function Accounts() {
       baseCurrency,
       accounts: accountBalancesArray,
     };
-  }, [accounts, accountBalances, settings, exchangeRates]);
+  }, [accounts, settings, exchangeRates]);
 
   const handleOpenDialog = (account = null) => {
     if (account) {
@@ -251,9 +239,6 @@ function Accounts() {
         // No need to refetch - it will be included in next initialization
       }
       handleCloseDialog();
-
-      // Refresh all data to ensure all pages have fresh data
-      await refreshAllData(dispatch);
     } catch (err) {
       // Ignore browser extension errors (harmless)
       if (err?.message?.includes('Extension context invalidated')) {
@@ -278,9 +263,6 @@ function Accounts() {
       await dispatch(deleteAccount(deleteConfirm.account_id)).unwrap();
       setDeleteConfirm(null);
       setDeleteError(null);
-
-      // Refresh all data to ensure all pages have fresh data
-      await refreshAllData(dispatch);
     } catch (err) {
       console.error('Error deleting account:', err);
       const errorMessage =
@@ -291,36 +273,37 @@ function Accounts() {
     }
   };
 
-  // Google-style chip styling for status badges
+  // Status chip styling - muted colors matching other chips
   const getStatusChipSx = (status) => {
     switch (status) {
       case 'Active':
         return {
-          backgroundColor: '#e6f4ea',
-          color: '#1e8e3e',
+          // Muted green text only, outlined style to match other chips
+          color: '#2e7d32', // MUI success.dark - muted green
+          borderColor: '#2e7d32',
           fontWeight: 500,
-          '& .MuiChip-label': { px: 1 },
+          '& .MuiChip-label': { px: 0.75 },
         };
       case 'Closed':
         return {
-          backgroundColor: '#f1f3f4',
           color: '#5f6368',
+          borderColor: '#5f6368',
           fontWeight: 500,
-          '& .MuiChip-label': { px: 1 },
+          '& .MuiChip-label': { px: 0.75 },
         };
       case 'Suspended':
         return {
-          backgroundColor: '#fef7e0',
           color: '#e37400',
+          borderColor: '#e37400',
           fontWeight: 500,
-          '& .MuiChip-label': { px: 1 },
+          '& .MuiChip-label': { px: 0.75 },
         };
       default:
         return {
-          backgroundColor: '#f1f3f4',
           color: '#5f6368',
+          borderColor: '#5f6368',
           fontWeight: 500,
-          '& .MuiChip-label': { px: 1 },
+          '& .MuiChip-label': { px: 0.75 },
         };
     }
   };
@@ -363,36 +346,46 @@ function Accounts() {
       {/* Summary Section */}
       {accounts.length > 0 && (
         <Box sx={{ mb: { xs: 2, sm: 3, md: 4 } }}>
-          {/* Header Row with Overall Balances and Total */}
+          {/* Header Row with Overall Balances and Total - Compact layout */}
           <Box
             sx={{
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
-              mb: { xs: 1.5, sm: 2, md: 3 },
+              mb: { xs: 1, sm: 1.5, md: 2 },
             }}
           >
             <Typography
-              variant="h5"
-              sx={{ fontWeight: 500, color: 'text.primary' }}
+              variant="body1"
+              sx={{
+                fontWeight: 600,
+                color: 'text.secondary',
+                fontSize: { xs: '0.875rem', sm: '1rem' },
+              }}
             >
               Overall Balances
             </Typography>
             {summaryData && (
-              <Typography
-                variant="h5"
-                fontWeight="bold"
-                color={
-                  (summaryData.totalBalance || 0) >= 0
-                    ? 'success.main'
-                    : 'error.main'
-                }
-              >
-                {formatCurrency(
-                  summaryData.totalBalance || 0,
-                  summaryData.baseCurrency || 'USD'
-                )}
-              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5 }}>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: { xs: 'none', sm: 'inline' } }}
+                >
+                  Total:
+                </Typography>
+                <Typography
+                  variant="body1"
+                  fontWeight="bold"
+                  color="text.primary"
+                  sx={{ fontSize: { xs: '0.9rem', sm: '1.1rem' } }}
+                >
+                  {formatCurrency(
+                    summaryData.totalBalance || 0,
+                    summaryData.baseCurrency || 'USD'
+                  )}
+                </Typography>
+              </Box>
             )}
           </Box>
 
@@ -436,20 +429,17 @@ function Accounts() {
                   summaryData.accounts.length === 0
                 ) {
                   accounts.forEach((account) => {
-                    const balance = accountBalances[account.account_id];
-                    if (balance) {
-                      const currency = account.currency;
-                      if (!currencyGroups[currency]) {
-                        currencyGroups[currency] = {
-                          currency,
-                          total: 0,
-                          count: 0,
-                        };
-                      }
-                      currencyGroups[currency].total +=
-                        balance.current_balance || 0;
-                      currencyGroups[currency].count += 1;
+                    const currency = account.currency;
+                    if (!currencyGroups[currency]) {
+                      currencyGroups[currency] = {
+                        currency,
+                        total: 0,
+                        count: 0,
+                      };
                     }
+                    currencyGroups[currency].total +=
+                      account.current_balance || 0;
+                    currencyGroups[currency].count += 1;
                   });
                 }
 
@@ -466,41 +456,48 @@ function Accounts() {
                 }
 
                 return currencyArray.map((group) => (
-                  <Grid item xs={6} sm={6} md={4} key={group.currency}>
+                  <Grid item xs={12} sm={4} md={3} key={group.currency}>
                     <Paper
                       elevation={0}
                       sx={{
-                        p: { xs: 1.5, sm: 2 },
-                        borderRadius: 2,
+                        p: { xs: 1, sm: 1.5 },
+                        borderRadius: 1.5,
                         backgroundColor: 'background.paper',
                         border: '1px solid',
                         borderColor: 'divider',
-                        transition: 'all 0.2s',
-                        '&:hover': {
-                          borderColor: 'primary.main',
-                          boxShadow: 2,
-                        },
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
                       }}
                     >
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        display="block"
-                        gutterBottom
-                        fontWeight="medium"
+                      <Box
+                        sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
                       >
-                        {group.currency}
-                      </Typography>
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          fontWeight="medium"
+                          sx={{ fontSize: { xs: '0.8rem', sm: '0.85rem' } }}
+                        >
+                          {group.currency}
+                        </Typography>
+                        <Typography
+                          variant="caption"
+                          color="text.disabled"
+                          sx={{ fontSize: { xs: '0.7rem', sm: '0.75rem' } }}
+                        >
+                          ({group.count})
+                        </Typography>
+                      </Box>
                       <Typography
-                        variant="h6"
+                        variant="body2"
                         fontWeight="bold"
-                        color={group.total >= 0 ? 'success.main' : 'error.main'}
-                        sx={{ mb: 0.5 }}
+                        color="text.primary"
+                        sx={{
+                          fontSize: { xs: '0.9rem', sm: '1rem' },
+                        }}
                       >
                         {formatCurrency(group.total, group.currency)}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {group.count} account{group.count !== 1 ? 's' : ''}
                       </Typography>
                     </Paper>
                   </Grid>
@@ -536,69 +533,53 @@ function Accounts() {
         </Card>
       ) : (
         <>
-          {/* Mobile Card View */}
+          {/* Mobile Card View - Compact layout */}
           <Box sx={{ display: { xs: 'block', md: 'none' } }}>
             {accounts.map((account) => {
-              const balance = accountBalances[account.account_id];
+              const currentBalance =
+                account.current_balance ?? account.opening_balance ?? 0;
               return (
-                <Card key={account.account_id} sx={{ mb: 1.5 }}>
+                <Card key={account.account_id} sx={{ mb: 1 }}>
                   <CardContent
                     sx={{
-                      p: { xs: 1.5, sm: 2 },
-                      '&:last-child': { pb: { xs: 1.5, sm: 2 } },
+                      p: 1.25,
+                      '&:last-child': { pb: 1.25 },
                     }}
                   >
+                    {/* Top row: Name + Actions */}
                     <Box
                       sx={{
                         display: 'flex',
                         justifyContent: 'space-between',
-                        alignItems: 'flex-start',
-                        mb: 1,
+                        alignItems: 'center',
+                        mb: 0.5,
                       }}
                     >
-                      <Box sx={{ flex: 1 }}>
-                        <Typography
-                          variant="h6"
-                          fontWeight="medium"
-                          gutterBottom
-                        >
-                          {account.name}
-                        </Typography>
-                        <Box
-                          sx={{
-                            display: 'flex',
-                            gap: 0.5,
-                            flexWrap: 'wrap',
-                            mb: 0.5,
-                          }}
-                        >
-                          <Chip
-                            label={account.type}
-                            size="small"
-                            variant="outlined"
-                          />
-                          <Chip
-                            label={account.currency}
-                            size="small"
-                            variant="outlined"
-                          />
-                          <Chip
-                            label={account.status}
-                            size="small"
-                            sx={getStatusChipSx(account.status)}
-                          />
-                        </Box>
-                      </Box>
-                      <Box sx={{ display: 'flex', gap: 0.5 }}>
+                      <Typography
+                        variant="body1"
+                        fontWeight="600"
+                        sx={{
+                          fontSize: '0.9rem',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          flex: 1,
+                          mr: 1,
+                        }}
+                      >
+                        {account.name}
+                      </Typography>
+                      <Box sx={{ display: 'flex', gap: 0.25 }}>
                         <IconButton
                           size="small"
                           onClick={() => handleOpenDialog(account)}
                           sx={{
                             color: '#5f6368',
                             '&:hover': { color: '#1a73e8' },
+                            p: 0.5,
                           }}
                         >
-                          <EditIcon fontSize="small" />
+                          <EditIcon sx={{ fontSize: '1rem' }} />
                         </IconButton>
                         <IconButton
                           size="small"
@@ -606,68 +587,112 @@ function Accounts() {
                           sx={{
                             color: '#5f6368',
                             '&:hover': { color: '#d93025' },
+                            p: 0.5,
                           }}
                           disabled={account.status === 'Closed'}
                         >
-                          <DeleteIcon fontSize="small" />
+                          <DeleteIcon sx={{ fontSize: '1rem' }} />
                         </IconButton>
                       </Box>
                     </Box>
+                    {/* Chips row */}
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        gap: 0.5,
+                        flexWrap: 'wrap',
+                        mb: 0.75,
+                      }}
+                    >
+                      <Chip
+                        label={account.type}
+                        size="small"
+                        variant="outlined"
+                        sx={{
+                          height: 20,
+                          fontSize: '0.65rem',
+                          '& .MuiChip-label': { px: 0.75 },
+                        }}
+                      />
+                      <Chip
+                        label={account.currency}
+                        size="small"
+                        variant="outlined"
+                        sx={{
+                          height: 20,
+                          fontSize: '0.65rem',
+                          '& .MuiChip-label': { px: 0.75 },
+                        }}
+                      />
+                      <Chip
+                        label={account.status}
+                        size="small"
+                        variant="outlined"
+                        sx={{
+                          height: 20,
+                          fontSize: '0.65rem',
+                          ...getStatusChipSx(account.status),
+                        }}
+                      />
+                    </Box>
+                    {/* Balances row - inline */}
                     <Box
                       sx={{
                         display: 'flex',
                         justifyContent: 'space-between',
-                        pt: 1,
+                        alignItems: 'center',
+                        pt: 0.5,
                         borderTop: '1px solid',
                         borderColor: 'divider',
                       }}
                     >
-                      <Box>
-                        <Typography variant="caption" color="text.secondary">
-                          Opening Balance
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'baseline',
+                          gap: 0.5,
+                        }}
+                      >
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ fontSize: '0.65rem' }}
+                        >
+                          Opening:
                         </Typography>
-                        <Typography variant="body2" fontWeight="medium">
+                        <Typography
+                          variant="body2"
+                          fontWeight="medium"
+                          sx={{ fontSize: '0.75rem' }}
+                        >
                           {formatCurrency(
                             account.opening_balance,
                             account.currency
                           )}
                         </Typography>
                       </Box>
-                      <Box sx={{ textAlign: 'right' }}>
-                        <Typography variant="caption" color="text.secondary">
-                          Current Balance
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'baseline',
+                          gap: 0.5,
+                        }}
+                      >
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ fontSize: '0.65rem' }}
+                        >
+                          Current:
                         </Typography>
-                        {balance ? (
-                          <Typography
-                            variant="body2"
-                            fontWeight="medium"
-                            color={
-                              balance.current_balance >= 0
-                                ? 'success.main'
-                                : 'error.main'
-                            }
-                          >
-                            {formatCurrency(
-                              balance.current_balance,
-                              account.currency
-                            )}
-                          </Typography>
-                        ) : (
-                          <Typography
-                            variant="body2"
-                            fontWeight="medium"
-                            color={
-                              (account.opening_balance || 0) >= 0
-                                ? 'success.main'
-                                : 'error.main'
-                            }
-                          >
-                            {formatCurrency(
-                              account.opening_balance || 0,
-                              account.currency
-                            )}
-                          </Typography>
-                        )}
+                        <Typography
+                          variant="body2"
+                          fontWeight="bold"
+                          color="text.primary"
+                          sx={{ fontSize: '0.8rem' }}
+                        >
+                          {formatCurrency(currentBalance, account.currency)}
+                        </Typography>
                       </Box>
                     </Box>
                   </CardContent>
@@ -695,7 +720,8 @@ function Accounts() {
               </TableHead>
               <TableBody>
                 {accounts.map((account) => {
-                  const balance = accountBalances[account.account_id];
+                  const currentBalance =
+                    account.current_balance ?? account.opening_balance ?? 0;
                   return (
                     <TableRow key={account.account_id} hover>
                       <TableCell>
@@ -712,42 +738,21 @@ function Accounts() {
                         )}
                       </TableCell>
                       <TableCell align="right">
-                        {balance ? (
-                          <Typography
-                            variant="body1"
-                            fontWeight="medium"
-                            color={
-                              balance.current_balance >= 0
-                                ? 'success.main'
-                                : 'error.main'
-                            }
-                          >
-                            {formatCurrency(
-                              balance.current_balance,
-                              account.currency
-                            )}
-                          </Typography>
-                        ) : (
-                          <Typography
-                            variant="body1"
-                            fontWeight="medium"
-                            color={
-                              (account.opening_balance || 0) >= 0
-                                ? 'success.main'
-                                : 'error.main'
-                            }
-                          >
-                            {formatCurrency(
-                              account.opening_balance || 0,
-                              account.currency
-                            )}
-                          </Typography>
-                        )}
+                        <Typography
+                          variant="body1"
+                          fontWeight="medium"
+                          color={
+                            currentBalance >= 0 ? 'success.main' : 'error.main'
+                          }
+                        >
+                          {formatCurrency(currentBalance, account.currency)}
+                        </Typography>
                       </TableCell>
                       <TableCell>
                         <Chip
                           label={account.status}
                           size="small"
+                          variant="outlined"
                           sx={getStatusChipSx(account.status)}
                         />
                       </TableCell>

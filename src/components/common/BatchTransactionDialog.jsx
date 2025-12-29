@@ -9,7 +9,6 @@ import BatchTransactionForm from './BatchTransactionForm';
 import BatchTransactionSummary from './BatchTransactionSummary';
 import BatchTransactionEdit from './BatchTransactionEdit';
 import { createTransaction } from '../../store/slices/transactionsSlice';
-import { refreshAllData } from '../../utils/refreshAllData';
 import { generateId } from '../../lib/supabase';
 
 /**
@@ -127,9 +126,6 @@ function BatchTransactionDialog({ open, onClose }) {
         const { tempId, ...transactionData } = txn;
         await dispatch(createTransaction(transactionData)).unwrap();
       }
-
-      // Refresh all data
-      await refreshAllData(dispatch);
 
       // Close dialog on success
       handleClose();

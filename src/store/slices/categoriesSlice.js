@@ -2,6 +2,7 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
 import * as categoriesApi from '../../lib/api/categories'
 import { mergeIncrementalData, getIdField } from '../../utils/dataMerge'
 import { updateLastSync } from './syncSlice'
+import { deduplicatedRequest } from '../../lib/api/requestDeduplication'
 
 // Async thunks
 export const fetchCategories = createAsyncThunk(
@@ -18,7 +19,12 @@ export const fetchCategories = createAsyncThunk(
         ? { ...filters, since: lastSync }
         : filters;
       
-      const data = await categoriesApi.getCategories(fetchFilters);
+      // Use deduplication to prevent duplicate concurrent requests
+      const data = await deduplicatedRequest(
+        'categories/getCategories',
+        fetchFilters,
+        () => categoriesApi.getCategories(fetchFilters)
+      );
       
       // Update sync timestamp after successful fetch
       if (data && data.length >= 0) {

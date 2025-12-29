@@ -3,7 +3,8 @@ import { createSlice } from '@reduxjs/toolkit'
 const initialState = {
   user: null,
   session: null,
-  loading: false,
+  loading: true,        // Start as true to prevent flash before auth check
+  isAuthChecked: false, // Track if initial auth check has completed
   error: null,
 }
 
@@ -20,6 +21,9 @@ const authSlice = createSlice({
     setLoading: (state, action) => {
       state.loading = action.payload
     },
+    setAuthChecked: (state, action) => {
+      state.isAuthChecked = action.payload
+    },
     setError: (state, action) => {
       state.error = action.payload
     },
@@ -27,10 +31,10 @@ const authSlice = createSlice({
       state.user = null
       state.session = null
       state.error = null
+      state.isAuthChecked = true // Keep as checked after logout
     },
   },
 })
 
-export const { setUser, setSession, setLoading, setError, clearAuth } = authSlice.actions
+export const { setUser, setSession, setLoading, setAuthChecked, setError, clearAuth } = authSlice.actions
 export default authSlice.reducer
-

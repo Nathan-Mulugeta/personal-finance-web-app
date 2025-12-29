@@ -53,7 +53,6 @@ import {
   clearError,
 } from '../store/slices/borrowingsLendingsSlice';
 import { fetchTransactions } from '../store/slices/transactionsSlice';
-import { recalculateAccountBalance } from '../store/slices/accountsSlice';
 import {
   BORROWING_LENDING_TYPES,
   BORROWING_LENDING_STATUSES,
@@ -61,7 +60,6 @@ import {
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
 import { usePageRefresh } from '../hooks/usePageRefresh';
-import { refreshAllData } from '../utils/refreshAllData';
 import {
   formatCurrency,
   convertAmountWithExchangeRates,
@@ -382,9 +380,6 @@ function BorrowingsLendings() {
       await dispatch(createBorrowingLendingRecord(recordData)).unwrap();
       handleCloseDialog();
 
-      // Refresh all data to ensure all pages have fresh data
-      await refreshAllData(dispatch);
-
       // Also refresh summary
       dispatch(fetchSummary({}));
     } catch (err) {
@@ -415,9 +410,6 @@ function BorrowingsLendings() {
       ).unwrap();
       handleCloseEditDialog();
 
-      // Refresh all data to ensure all pages have fresh data
-      await refreshAllData(dispatch);
-
       // Also refresh summary
       dispatch(fetchSummary({}));
     } catch (err) {
@@ -446,22 +438,7 @@ function BorrowingsLendings() {
         })
       ).unwrap();
 
-      // Recalculate account balance
-      setTimeout(() => {
-        if (result.paymentTransaction?.account_id) {
-          dispatch(
-            recalculateAccountBalance({
-              accountId: result.paymentTransaction.account_id,
-              transactions: undefined,
-            })
-          );
-        }
-      }, 100);
-
       handleClosePaymentDialog();
-
-      // Refresh all data to ensure all pages have fresh data
-      await refreshAllData(dispatch);
 
       // Also refresh summary
       dispatch(fetchSummary({}));
@@ -479,25 +456,6 @@ function BorrowingsLendings() {
     setIsMarkingPaid(record.record_id);
     try {
       const result = await dispatch(markAsFullyPaid(record.record_id)).unwrap();
-
-      // Recalculate account balance
-      setTimeout(() => {
-        // Get the original transaction to find the account
-        const originalTransaction = allTransactions.find(
-          (txn) => txn.transaction_id === record.original_transaction_id
-        );
-        if (originalTransaction?.account_id) {
-          dispatch(
-            recalculateAccountBalance({
-              accountId: originalTransaction.account_id,
-              transactions: undefined,
-            })
-          );
-        }
-      }, 100);
-
-      // Refresh all data to ensure all pages have fresh data
-      await refreshAllData(dispatch);
 
       // Also refresh summary
       dispatch(fetchSummary({}));
@@ -519,9 +477,6 @@ function BorrowingsLendings() {
       ).unwrap();
       setDeleteConfirm(null);
       setDeleteError(null);
-
-      // Refresh all data to ensure all pages have fresh data
-      await refreshAllData(dispatch);
 
       // Also refresh summary
       dispatch(fetchSummary({}));

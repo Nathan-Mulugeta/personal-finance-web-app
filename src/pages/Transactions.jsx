@@ -1,5 +1,11 @@
-import { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, memo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import {
+  selectAccountNameGetter,
+  selectAccountCurrencyGetter,
+  selectCategoryNameGetter,
+  selectAccountMap,
+} from '../store/selectors';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -46,18 +52,17 @@ import TodayIcon from '@mui/icons-material/Today';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import {
   fetchTransactions,
-  createTransaction,
-  updateTransaction,
-  deleteTransaction,
   bulkDeleteTransactions as bulkDeleteTransactionsThunk,
   removeDeletedTransactions,
-  clearError,
   filterTransactions,
 } from '../store/slices/transactionsSlice';
-import { fetchAccounts, recalculateAccountBalance } from '../store/slices/accountsSlice';
+import { fetchAccounts } from '../store/slices/accountsSlice';
 import { fetchCategories } from '../store/slices/categoriesSlice';
-import { fetchTransfers, createTransfer, deleteTransfer } from '../store/slices/transfersSlice';
-import { transactionSchema } from '../schemas/transactionSchema';
+import {
+  fetchTransfers,
+  createTransfer,
+  deleteTransfer,
+} from '../store/slices/transfersSlice';
 import { transferSchema } from '../schemas/transferSchema';
 import {
   TRANSACTION_TYPES,
@@ -66,31 +71,632 @@ import {
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
 import CategoryAutocomplete from '../components/common/CategoryAutocomplete';
+import AddTransactionDialog from '../components/common/AddTransactionDialog';
+import EditTransactionDialog from '../components/common/EditTransactionDialog';
 import { formatCurrency } from '../utils/currencyConversion';
-import { format, addDays, subDays, isToday, isSameDay, parseISO } from 'date-fns';
+import {
+  format,
+  addDays,
+  subDays,
+  isToday,
+  isSameDay,
+  parseISO,
+} from 'date-fns';
 import { usePageRefresh } from '../hooks/usePageRefresh';
-import { refreshAllData } from '../utils/refreshAllData';
 import { flattenCategoryTree } from '../utils/categoryHierarchy';
+
+// ============================================
+// Memoized Row Components for Performance
+// ============================================
+
+/**
+ * Memoized Mobile Transaction Row Component
+ * Only re-renders when its specific props change
+ */
+const MobileTransactionRow = memo(function MobileTransactionRow({
+  transaction,
+  isSelected,
+  selectionMode,
+  isBulkDeleting,
+  getCategoryName,
+  getAccountName,
+  onLongPressStart,
+  onLongPressEnd,
+  onSelect,
+  onEdit,
+}) {
+  const description = transaction.description || '';
+  const dateDisplay = (() => {
+    try {
+      let dateTime;
+      if (transaction.created_at) {
+        dateTime = parseISO(transaction.created_at);
+      } else {
+        dateTime = parseISO(transaction.date);
+      }
+      if (isToday(dateTime)) {
+        return format(dateTime, 'h:mm a');
+      } else {
+        return format(dateTime, 'MMM dd');
+      }
+    } catch {
+      return transaction.date;
+    }
+  })();
+
+  return (
+    <Box
+      onTouchStart={() => onLongPressStart(transaction.transaction_id)}
+      onTouchEnd={onLongPressEnd}
+      onTouchCancel={onLongPressEnd}
+      onMouseDown={() => onLongPressStart(transaction.transaction_id)}
+      onMouseUp={onLongPressEnd}
+      onMouseLeave={onLongPressEnd}
+      onClick={() => {
+        if (selectionMode) {
+          onSelect(transaction.transaction_id, !isSelected);
+        } else if (!isBulkDeleting) {
+          onEdit(transaction);
+        }
+      }}
+      sx={{
+        py: 1,
+        px: 0.5,
+        borderBottom: '1px solid',
+        borderColor: 'divider',
+        backgroundColor: isSelected ? 'action.selected' : 'transparent',
+        cursor: isBulkDeleting ? 'default' : 'pointer',
+        display: 'flex',
+        gap: 0.75,
+        alignItems: 'flex-start',
+        '&:active': !selectionMode ? { backgroundColor: 'action.hover' } : {},
+        overflow: 'hidden',
+        width: '100%',
+        boxSizing: 'border-box',
+        userSelect: 'none',
+      }}
+    >
+      {selectionMode && (
+        <Checkbox
+          checked={isSelected}
+          onChange={(e) => {
+            e.stopPropagation();
+            onSelect(transaction.transaction_id, e.target.checked);
+          }}
+          onClick={(e) => e.stopPropagation()}
+          size="small"
+          sx={{ p: 0, mt: 0.25, flexShrink: 0 }}
+        />
+      )}
+      <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden', width: 0 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+            gap: 1,
+            width: '100%',
+          }}
+        >
+          <Typography
+            variant="body2"
+            fontWeight={600}
+            sx={{
+              fontSize: '0.8125rem',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              minWidth: 0,
+              flex: 1,
+            }}
+          >
+            {getCategoryName(transaction.category_id)}
+          </Typography>
+          <Typography
+            variant="body2"
+            fontWeight={600}
+            sx={{
+              fontSize: '0.8125rem',
+              color:
+                transaction.type === 'Income' || transaction.type === 'Transfer In'
+                  ? '#1e8e3e'
+                  : transaction.type === 'Expense' || transaction.type === 'Transfer Out'
+                  ? '#d93025'
+                  : 'text.primary',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+            }}
+          >
+            {transaction.currency}{' '}
+            {new Intl.NumberFormat('en-US', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            }).format(Math.abs(transaction.amount))}
+          </Typography>
+        </Box>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: 1,
+            width: '100%',
+          }}
+        >
+          <Typography
+            variant="body2"
+            component="div"
+            sx={{
+              fontSize: '0.6875rem',
+              color: 'text.secondary',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              minWidth: 0,
+              flex: 1,
+            }}
+          >
+            {getAccountName(transaction.account_id)}
+            {description && ` • ${description}`}
+          </Typography>
+          <Typography
+            variant="body2"
+            sx={{
+              fontSize: '0.6875rem',
+              color: 'text.secondary',
+              flexShrink: 0,
+            }}
+          >
+            {dateDisplay}
+          </Typography>
+        </Box>
+      </Box>
+    </Box>
+  );
+});
+
+/**
+ * Memoized Mobile Transfer Row Component
+ */
+const MobileTransferRow = memo(function MobileTransferRow({
+  transfer,
+  transferId,
+  isSelected,
+  selectionMode,
+  getAccountName,
+  getAccountCurrency,
+  onLongPressStart,
+  onLongPressEnd,
+  onSelect,
+}) {
+  const transferOut = transfer.transferOut;
+  const transferIn = transfer.transferIn;
+  const transferDate = transfer.date || transferOut?.date || transferIn?.date;
+
+  return (
+    <Box
+      onTouchStart={() => onLongPressStart(transferId)}
+      onTouchEnd={onLongPressEnd}
+      onTouchCancel={onLongPressEnd}
+      onMouseDown={() => onLongPressStart(transferId)}
+      onMouseUp={onLongPressEnd}
+      onMouseLeave={onLongPressEnd}
+      onClick={() => {
+        if (selectionMode) {
+          onSelect(transferId, !isSelected);
+        }
+      }}
+      sx={{
+        py: 1,
+        px: 0.5,
+        borderBottom: '1px solid',
+        borderColor: 'divider',
+        backgroundColor: isSelected ? 'action.selected' : 'transparent',
+        display: 'flex',
+        gap: 0.75,
+        alignItems: 'flex-start',
+        overflow: 'hidden',
+        width: '100%',
+        boxSizing: 'border-box',
+        cursor: selectionMode ? 'pointer' : 'default',
+        userSelect: 'none',
+      }}
+    >
+      {selectionMode && (
+        <Checkbox
+          checked={isSelected}
+          onChange={(e) => {
+            e.stopPropagation();
+            onSelect(transferId, e.target.checked);
+          }}
+          onClick={(e) => e.stopPropagation()}
+          size="small"
+          sx={{ p: 0, mt: 0.25, flexShrink: 0 }}
+        />
+      )}
+      <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden', width: 0 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+            gap: 1,
+            width: '100%',
+          }}
+        >
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.5,
+              minWidth: 0,
+              overflow: 'hidden',
+            }}
+          >
+            <SwapHorizIcon sx={{ fontSize: 14, color: 'primary.main', flexShrink: 0 }} />
+            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.8125rem', flexShrink: 0 }}>
+              Transfer
+            </Typography>
+            <Chip
+              label={transfer.exchangeRate ? 'Multi' : 'Same'}
+              size="small"
+              sx={{
+                height: 16,
+                fontSize: '0.5625rem',
+                '& .MuiChip-label': { px: 0.5 },
+                flexShrink: 0,
+              }}
+            />
+          </Box>
+          <Typography
+            variant="body2"
+            fontWeight={600}
+            sx={{
+              fontSize: '0.8125rem',
+              color: '#d93025',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+            }}
+          >
+            {getAccountCurrency(transferOut?.account_id)}{' '}
+            {new Intl.NumberFormat('en-US', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            }).format(Math.abs(transferOut?.amount || 0))}
+          </Typography>
+        </Box>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: 1,
+            width: '100%',
+          }}
+        >
+          <Typography
+            variant="body2"
+            component="div"
+            sx={{
+              fontSize: '0.6875rem',
+              color: 'text.secondary',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              minWidth: 0,
+              flex: 1,
+            }}
+          >
+            {getAccountName(transferOut?.account_id)} → {getAccountName(transferIn?.account_id)}
+            {transfer.exchangeRate &&
+              ` • ${getAccountCurrency(transferIn?.account_id)} ${new Intl.NumberFormat('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              }).format(Math.abs(transferIn?.amount || 0))}`}
+          </Typography>
+          <Typography
+            variant="body2"
+            sx={{ fontSize: '0.6875rem', color: 'text.secondary', flexShrink: 0 }}
+          >
+            {transferDate ? format(parseISO(transferDate), 'MMM dd') : '-'}
+          </Typography>
+        </Box>
+      </Box>
+    </Box>
+  );
+});
+
+/**
+ * Memoized Desktop Transaction Row Component
+ */
+const DesktopTransactionRow = memo(function DesktopTransactionRow({
+  transaction,
+  isSelected,
+  selectionMode,
+  isBulkDeleting,
+  getCategoryName,
+  getAccountName,
+  getTypeChipSx,
+  getStatusChipSx,
+  onLongPressStart,
+  onLongPressEnd,
+  onSelect,
+  onEdit,
+}) {
+  const dateDisplay = (() => {
+    try {
+      return format(parseISO(transaction.date), 'MMM dd, yyyy');
+    } catch {
+      return transaction.date;
+    }
+  })();
+
+  return (
+    <TableRow
+      hover
+      selected={isSelected}
+      onMouseDown={() => onLongPressStart(transaction.transaction_id)}
+      onMouseUp={onLongPressEnd}
+      onMouseLeave={onLongPressEnd}
+      onClick={() => {
+        if (selectionMode) {
+          onSelect(transaction.transaction_id, !isSelected);
+        } else if (!isBulkDeleting) {
+          onEdit(transaction);
+        }
+      }}
+      sx={{
+        backgroundColor: isSelected ? 'action.selected' : 'transparent',
+        cursor: isBulkDeleting ? 'default' : 'pointer',
+        userSelect: 'none',
+        '&:hover': {
+          backgroundColor: isSelected ? 'action.selected' : 'action.hover',
+        },
+        '& td': {
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+          py: 0.5,
+          fontSize: '0.8125rem',
+        },
+      }}
+    >
+      {selectionMode && (
+        <TableCell padding="checkbox">
+          <Checkbox
+            checked={isSelected}
+            onChange={(e) => {
+              e.stopPropagation();
+              onSelect(transaction.transaction_id, e.target.checked);
+            }}
+            onClick={(e) => e.stopPropagation()}
+            size="small"
+          />
+        </TableCell>
+      )}
+      <TableCell>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography variant="body2" fontWeight={500} sx={{ fontSize: '0.875rem' }}>
+            {getCategoryName(transaction.category_id)}
+          </Typography>
+          <Chip label={transaction.type} size="small" sx={{ ...getTypeChipSx(transaction.type), height: 20, fontSize: '0.6875rem' }} />
+        </Box>
+      </TableCell>
+      <TableCell>
+        <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
+          {getAccountName(transaction.account_id)}
+        </Typography>
+      </TableCell>
+      <TableCell>
+        <Typography
+          variant="body2"
+          sx={{
+            fontSize: '0.875rem',
+            color: 'text.secondary',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            maxWidth: 300,
+          }}
+          title={transaction.description || ''}
+        >
+          {transaction.description || '-'}
+        </Typography>
+      </TableCell>
+      <TableCell sx={{ whiteSpace: 'nowrap' }}>
+        <Typography variant="body2" sx={{ fontSize: '0.875rem', color: 'text.secondary' }}>
+          {dateDisplay}
+        </Typography>
+      </TableCell>
+      <TableCell align="right">
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.5 }}>
+          <Chip
+            label={transaction.status}
+            size="small"
+            sx={{ ...getStatusChipSx(transaction.status), height: 20, fontSize: '0.6875rem' }}
+          />
+          <Typography variant="body2" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+            {transaction.currency}
+          </Typography>
+          <Typography
+            variant="body2"
+            fontWeight={600}
+            sx={{
+              fontSize: '0.875rem',
+              color:
+                transaction.type === 'Income' || transaction.type === 'Transfer In'
+                  ? '#1e8e3e'
+                  : transaction.type === 'Expense' || transaction.type === 'Transfer Out'
+                  ? '#d93025'
+                  : 'text.primary',
+            }}
+          >
+            {new Intl.NumberFormat('en-US', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            }).format(Math.abs(transaction.amount))}
+          </Typography>
+        </Box>
+      </TableCell>
+    </TableRow>
+  );
+});
+
+/**
+ * Memoized Desktop Transfer Row Component
+ */
+const DesktopTransferRow = memo(function DesktopTransferRow({
+  transfer,
+  transferId,
+  isSelected,
+  selectionMode,
+  getAccountName,
+  getAccountCurrency,
+  onLongPressStart,
+  onLongPressEnd,
+  onSelect,
+}) {
+  const transferOut = transfer.transferOut;
+  const transferIn = transfer.transferIn;
+  const transferDate = transfer.date || transferOut?.date || transferIn?.date;
+
+  return (
+    <TableRow
+      hover
+      selected={isSelected}
+      onMouseDown={() => onLongPressStart(transferId)}
+      onMouseUp={onLongPressEnd}
+      onMouseLeave={onLongPressEnd}
+      onClick={() => {
+        if (selectionMode) {
+          onSelect(transferId, !isSelected);
+        }
+      }}
+      sx={{
+        backgroundColor: isSelected ? 'action.selected' : 'transparent',
+        cursor: selectionMode ? 'pointer' : 'default',
+        userSelect: 'none',
+        '&:hover': {
+          backgroundColor: isSelected ? 'action.selected' : 'action.hover',
+        },
+        '& td': {
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+          py: 0.5,
+          fontSize: '0.8125rem',
+        },
+      }}
+    >
+      {selectionMode && (
+        <TableCell padding="checkbox">
+          <Checkbox
+            checked={isSelected}
+            onChange={(e) => {
+              e.stopPropagation();
+              onSelect(transferId, e.target.checked);
+            }}
+            onClick={(e) => e.stopPropagation()}
+            size="small"
+          />
+        </TableCell>
+      )}
+      <TableCell>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
+          <SwapHorizIcon sx={{ fontSize: 18, color: 'primary.main' }} />
+          <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>
+            Transfer
+          </Typography>
+          <Chip
+            label={transfer.exchangeRate ? 'Multi-Currency' : 'Same Currency'}
+            size="small"
+            sx={{ height: 20, fontSize: '0.6875rem', '& .MuiChip-label': { px: 0.75 } }}
+          />
+        </Box>
+      </TableCell>
+      <TableCell>
+        <Typography variant="body2" sx={{ fontSize: '0.875rem', color: 'text.secondary' }}>
+          {getAccountName(transferOut?.account_id)} → {getAccountName(transferIn?.account_id)}
+        </Typography>
+      </TableCell>
+      <TableCell>
+        <Typography
+          variant="body2"
+          sx={{
+            fontSize: '0.875rem',
+            color: 'text.secondary',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            maxWidth: 300,
+          }}
+          title={transferOut?.description || ''}
+        >
+          {transferOut?.description || '-'}
+        </Typography>
+      </TableCell>
+      <TableCell sx={{ whiteSpace: 'nowrap' }}>
+        <Typography variant="body2" sx={{ fontSize: '0.875rem', color: 'text.secondary' }}>
+          {transferDate ? format(parseISO(transferDate), 'MMM dd, yyyy') : '-'}
+        </Typography>
+      </TableCell>
+      <TableCell align="right">
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.5, flexWrap: 'wrap' }}>
+          <Typography variant="body2" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+            {getAccountCurrency(transferOut?.account_id)}
+          </Typography>
+          <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem', color: '#d93025' }}>
+            {new Intl.NumberFormat('en-US', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            }).format(Math.abs(transferOut?.amount || 0))}
+          </Typography>
+          {transfer.exchangeRate && (
+            <>
+              <Typography variant="body2" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                →
+              </Typography>
+              <Typography variant="body2" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                {getAccountCurrency(transferIn?.account_id)}
+              </Typography>
+              <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem', color: '#1e8e3e' }}>
+                {new Intl.NumberFormat('en-US', {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                }).format(Math.abs(transferIn?.amount || 0))}
+              </Typography>
+            </>
+          )}
+        </Box>
+      </TableCell>
+    </TableRow>
+  );
+});
 
 function Transactions() {
   const dispatch = useDispatch();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const { transactions, allTransactions, loading, backgroundLoading, isInitialized, error } = useSelector(
-    (state) => state.transactions
-  );
+  const {
+    transactions,
+    allTransactions,
+    loading,
+    backgroundLoading,
+    isInitialized,
+    error,
+  } = useSelector((state) => state.transactions);
   const { accounts } = useSelector((state) => state.accounts);
   const { categories } = useSelector((state) => state.categories);
   const { transfers = [] } = useSelector((state) => state.transfers);
-  const [openDialog, setOpenDialog] = useState(false);
+  
+  // Memoized O(1) lookup functions from selectors
+  const getAccountName = useSelector(selectAccountNameGetter);
+  const getAccountCurrency = useSelector(selectAccountCurrencyGetter);
+  const getCategoryName = useSelector(selectCategoryNameGetter);
+  const accountMap = useSelector(selectAccountMap);
   const [openTransferDialog, setOpenTransferDialog] = useState(false);
+  const [addTransactionOpen, setAddTransactionOpen] = useState(false);
   const [showTransfers, setShowTransfers] = useState(true);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [actionError, setActionError] = useState(null);
-  const [deleteConfirm, setDeleteConfirm] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [filters, setFilters] = useState({
@@ -107,32 +713,6 @@ function Transactions() {
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [bulkDeleteError, setBulkDeleteError] = useState(null);
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
-
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-    reset,
-    setValue,
-    watch,
-  } = useForm({
-    resolver: zodResolver(transactionSchema),
-    defaultValues: {
-      accountId: '',
-      categoryId: '',
-      amount: '',
-      currency: '',
-      description: '',
-      type: 'Expense',
-      status: 'Cleared',
-      date: format(new Date(), 'yyyy-MM-dd'),
-    },
-  });
-
-  const watchedAccountId = watch('accountId');
-  const watchedCategoryId = watch('categoryId');
-  const watchedType = watch('type');
-  const watchedStatus = watch('status');
 
   // Transfer form
   const {
@@ -179,7 +759,13 @@ function Transactions() {
       // Apply current filters immediately when data loads
       dispatch(filterTransactions(filters));
     }
-  }, [dispatch, isInitialized, allTransactions.length, filters.startDate, filters.endDate]);
+  }, [
+    dispatch,
+    isInitialized,
+    allTransactions.length,
+    filters.startDate,
+    filters.endDate,
+  ]);
 
   // Apply client-side filtering instantly when filters change
   useEffect(() => {
@@ -187,9 +773,13 @@ function Transactions() {
     if (isInitialized && allTransactions.length > 0) {
       dispatch(filterTransactions(filters));
     }
-    
+
     // Update selectedDate when date filters change
-    if (filters.startDate && filters.endDate && filters.startDate === filters.endDate) {
+    if (
+      filters.startDate &&
+      filters.endDate &&
+      filters.startDate === filters.endDate
+    ) {
       try {
         const parsedDate = parseISO(filters.startDate);
         if (!isSameDay(parsedDate, selectedDate)) {
@@ -201,138 +791,20 @@ function Transactions() {
     }
   }, [dispatch, filters, isInitialized, allTransactions.length, selectedDate]);
 
-  // Auto-set currency when account is selected
-  useEffect(() => {
-    if (watchedAccountId) {
-      const account = accounts.find((acc) => acc.account_id === watchedAccountId);
-      if (account) {
-        setValue('currency', account.currency);
-      }
-    }
-  }, [watchedAccountId, accounts, setValue]);
+  const handleEditTransaction = useCallback((transaction) => {
+    setEditingTransaction(transaction);
+    setEditDialogOpen(true);
+  }, []);
 
-  const handleOpenDialog = (transaction = null) => {
-    if (transaction) {
-      setEditingTransaction(transaction);
-      reset({
-        accountId: transaction.account_id,
-        categoryId: transaction.category_id,
-        amount: transaction.amount,
-        currency: transaction.currency,
-        description: transaction.description || '',
-        type: transaction.type,
-        status: transaction.status,
-        date: transaction.date,
-      });
-    } else {
-      setEditingTransaction(null);
-      reset({
-        accountId: '',
-        categoryId: '',
-        amount: '',
-        currency: '',
-        description: '',
-        type: 'Expense',
-        status: 'Cleared',
-        date: format(new Date(), 'yyyy-MM-dd'),
-      });
-    }
-    setActionError(null);
-    setIsSubmitting(false);
-    setDeleteError(null);
-    setIsDeleting(false);
-    setOpenDialog(true);
-  };
-
-  const handleCloseDialog = () => {
-    setOpenDialog(false);
+  const handleCloseEditDialog = useCallback(() => {
+    setEditDialogOpen(false);
     setEditingTransaction(null);
-    setDeleteConfirm(false);
-    setActionError(null);
-    setIsSubmitting(false);
-    setDeleteError(null);
-    setIsDeleting(false);
-    reset();
-    dispatch(clearError());
-  };
-
-  const onSubmit = async (data) => {
-    // Don't submit if in delete confirmation mode
-    if (deleteConfirm) return;
-    
-    setIsSubmitting(true);
-    setActionError(null);
-    try {
-      let transaction
-      if (editingTransaction) {
-        transaction = await dispatch(
-          updateTransaction({
-            transactionId: editingTransaction.transaction_id,
-            updates: data,
-          })
-        ).unwrap();
-      } else {
-        transaction = await dispatch(createTransaction(data)).unwrap();
-      }
-      
-      handleCloseDialog();
-      
-      // Re-apply current filters to update the view
-      dispatch(filterTransactions(filters));
-      
-      // Refresh all data to ensure all pages have fresh data
-      await refreshAllData(dispatch);
-    } catch (err) {
-      console.error('Error saving transaction:', err);
-      const errorMessage = err?.message || 'Failed to save transaction. Please try again.';
-      setActionError(errorMessage);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleDeleteClick = () => {
-    setDeleteConfirm(true);
-  };
-
-  const handleDeleteConfirm = async () => {
-    if (!editingTransaction) return;
-
-    setIsDeleting(true);
-    setDeleteError(null);
-    try {
-      const deletedTransactionId = await dispatch(deleteTransaction(editingTransaction.transaction_id)).unwrap();
-      
-      // Recalculate balance for the affected account
-      // Use setTimeout to ensure transaction is removed from state
-      setTimeout(() => {
-        if (editingTransaction?.account_id) {
-          dispatch(recalculateAccountBalance({ 
-            accountId: editingTransaction.account_id,
-            transactions: undefined // Will use state.transactions.allTransactions
-          }))
-        }
-      }, 100)
-      
-      setDeleteConfirm(false);
-      handleCloseDialog();
-      
-      // Re-apply current filters to update the view
-      dispatch(filterTransactions(filters));
-      
-      // Refresh all data to ensure all pages have fresh data
-      await refreshAllData(dispatch);
-    } catch (err) {
-      console.error('Error deleting transaction:', err);
-      const errorMessage = err?.message || 'Failed to delete transaction. Please try again.';
-      setDeleteError(errorMessage);
-    } finally {
-      setIsDeleting(false);
-    }
-  };
+    // Re-apply current filters to update the view after edit/delete
+    dispatch(filterTransactions(filters));
+  }, [dispatch, filters]);
 
   // Transfer handlers
-  const handleOpenTransferDialog = () => {
+  const handleOpenTransferDialog = useCallback(() => {
     resetTransfer({
       fromAccountId: '',
       toAccountId: '',
@@ -347,14 +819,14 @@ function Transactions() {
     setTransferError(null);
     setIsSubmittingTransfer(false);
     setOpenTransferDialog(true);
-  };
+  }, [resetTransfer]);
 
-  const handleCloseTransferDialog = () => {
+  const handleCloseTransferDialog = useCallback(() => {
     setOpenTransferDialog(false);
     setTransferError(null);
     setIsSubmittingTransfer(false);
     resetTransfer();
-  };
+  }, [resetTransfer]);
 
   const onSubmitTransfer = async (data) => {
     setIsSubmittingTransfer(true);
@@ -385,12 +857,8 @@ function Transactions() {
 
       const sameCurrency = (() => {
         if (!cleanedData.fromAccountId || !cleanedData.toAccountId) return true;
-        const fromAccount = accounts.find(
-          (acc) => acc.account_id === cleanedData.fromAccountId
-        );
-        const toAccount = accounts.find(
-          (acc) => acc.account_id === cleanedData.toAccountId
-        );
+        const fromAccount = accountMap.get(cleanedData.fromAccountId);
+        const toAccount = accountMap.get(cleanedData.toAccountId);
         return fromAccount?.currency === toAccount?.currency;
       })();
 
@@ -435,12 +903,10 @@ function Transactions() {
       await dispatch(createTransfer(transferData)).unwrap();
 
       handleCloseTransferDialog();
-
-      // Refresh all data to ensure all pages have fresh data
-      await refreshAllData(dispatch);
     } catch (err) {
       console.error('Error creating transfer:', err);
-      const errorMessage = err?.message || 'Failed to create transfer. Please try again.';
+      const errorMessage =
+        err?.message || 'Failed to create transfer. Please try again.';
       setTransferError(errorMessage);
     } finally {
       setIsSubmittingTransfer(false);
@@ -462,16 +928,13 @@ function Transactions() {
       }
 
       const result = await dispatch(deleteTransfer(transactionId)).unwrap();
-      
+
       // Remove transactions from transactions Redux state
       if (result?.transactionIds && result.transactionIds.length > 0) {
         dispatch(removeDeletedTransactions(result.transactionIds));
       }
 
       setDeleteTransferConfirm(null);
-
-      // Refresh all data to ensure all pages have fresh data
-      await refreshAllData(dispatch);
     } catch (err) {
       console.error('Error deleting transfer:', err);
     } finally {
@@ -493,7 +956,9 @@ function Transactions() {
       selectedItems.forEach((itemId) => {
         if (itemId.startsWith('transfer-')) {
           // Find the transfer item
-          const transferItem = combinedItems.find((item) => getItemId(item) === itemId);
+          const transferItem = combinedItems.find(
+            (item) => getItemId(item) === itemId
+          );
           if (transferItem && transferItem.type === 'transfer') {
             transferItems.push(transferItem.data);
           }
@@ -505,8 +970,10 @@ function Transactions() {
 
       // Delete transactions in bulk
       if (transactionIds.length > 0) {
-        const result = await dispatch(bulkDeleteTransactionsThunk(transactionIds)).unwrap();
-        
+        const result = await dispatch(
+          bulkDeleteTransactionsThunk(transactionIds)
+        ).unwrap();
+
         // Update Redux state (already handled by thunk, but ensure filters are reapplied)
         dispatch(filterTransactions(filters));
       }
@@ -519,8 +986,10 @@ function Transactions() {
             transfer.transferIn?.transaction_id;
 
           if (transactionId) {
-            const result = await dispatch(deleteTransfer(transactionId)).unwrap();
-            
+            const result = await dispatch(
+              deleteTransfer(transactionId)
+            ).unwrap();
+
             // Remove transactions from transactions Redux state
             if (result?.transactionIds && result.transactionIds.length > 0) {
               dispatch(bulkDeleteTransactionsAction(result.transactionIds));
@@ -549,16 +1018,6 @@ function Transactions() {
         }
       });
 
-      // Recalculate balances
-      affectedAccountIds.forEach((accountId) => {
-        setTimeout(() => {
-          dispatch(recalculateAccountBalance({
-            accountId,
-            transactions: undefined,
-          }));
-        }, 100);
-      });
-
       // Clear selection and exit selection mode
       setSelectedItems(new Set());
       setSelectionMode(false);
@@ -566,12 +1025,10 @@ function Transactions() {
 
       // Re-apply current filters to update the view
       dispatch(filterTransactions(filters));
-
-      // Refresh all data to ensure all pages have fresh data
-      await refreshAllData(dispatch);
     } catch (err) {
       console.error('Error bulk deleting:', err);
-      const errorMessage = err?.message || 'Failed to delete items. Please try again.';
+      const errorMessage =
+        err?.message || 'Failed to delete items. Please try again.';
       setBulkDeleteError(errorMessage);
     } finally {
       setIsBulkDeleting(false);
@@ -579,31 +1036,35 @@ function Transactions() {
   };
 
   // Date navigation handlers - instant client-side filtering
-  const handlePreviousDay = () => {
-    const newDate = subDays(selectedDate, 1);
-    setSelectedDate(newDate);
-    const dateStr = format(newDate, 'yyyy-MM-dd');
-    setFilters((prev) => ({
-      ...prev,
-      startDate: dateStr,
-      endDate: dateStr,
-    }));
+  const handlePreviousDay = useCallback(() => {
+    setSelectedDate((prev) => {
+      const newDate = subDays(prev, 1);
+      const dateStr = format(newDate, 'yyyy-MM-dd');
+      setFilters((prevFilters) => ({
+        ...prevFilters,
+        startDate: dateStr,
+        endDate: dateStr,
+      }));
+      return newDate;
+    });
     // Filter is applied instantly via useEffect
-  };
+  }, []);
 
-  const handleNextDay = () => {
-    const newDate = addDays(selectedDate, 1);
-    setSelectedDate(newDate);
-    const dateStr = format(newDate, 'yyyy-MM-dd');
-    setFilters((prev) => ({
-      ...prev,
-      startDate: dateStr,
-      endDate: dateStr,
-    }));
+  const handleNextDay = useCallback(() => {
+    setSelectedDate((prev) => {
+      const newDate = addDays(prev, 1);
+      const dateStr = format(newDate, 'yyyy-MM-dd');
+      setFilters((prevFilters) => ({
+        ...prevFilters,
+        startDate: dateStr,
+        endDate: dateStr,
+      }));
+      return newDate;
+    });
     // Filter is applied instantly via useEffect
-  };
+  }, []);
 
-  const handleToday = () => {
+  const handleToday = useCallback(() => {
     const today = new Date();
     setSelectedDate(today);
     const dateStr = format(today, 'yyyy-MM-dd');
@@ -613,13 +1074,13 @@ function Transactions() {
       endDate: dateStr,
     }));
     // Filter is applied instantly via useEffect
-  };
+  }, []);
 
-  const handleFilterChange = (key, value) => {
+  const handleFilterChange = useCallback((key, value) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
-  };
+  }, []);
 
-  const clearFilters = () => {
+  const clearFilters = useCallback(() => {
     setFilters({
       accountId: '',
       categoryId: '',
@@ -628,7 +1089,7 @@ function Transactions() {
       startDate: '',
       endDate: '',
     });
-  };
+  }, []);
 
   // Google-style chip styling for status badges
   const getStatusChipSx = (status) => {
@@ -698,33 +1159,11 @@ function Transactions() {
     }
   };
 
-  // Get category name helper
-  const getCategoryName = (categoryId) => {
-    const category = categories.find((cat) => cat.category_id === categoryId);
-    return category?.name || 'Unknown';
-  };
-
-  // Get account name helper
-  const getAccountName = (accountId) => {
-    const account = accounts.find((acc) => acc.account_id === accountId);
-    return account?.name || 'Unknown';
-  };
-
-  // Get account currency helper
-  const getAccountCurrency = (accountId) => {
-    const account = accounts.find((acc) => acc.account_id === accountId);
-    return account?.currency || '';
-  };
-
   // Determine if same currency or multi-currency for transfers
   const isSameCurrency = () => {
     if (!watchedFromAccountId || !watchedToAccountId) return true;
-    const fromAccount = accounts.find(
-      (acc) => acc.account_id === watchedFromAccountId
-    );
-    const toAccount = accounts.find(
-      (acc) => acc.account_id === watchedToAccountId
-    );
+    const fromAccount = accountMap.get(watchedFromAccountId);
+    const toAccount = accountMap.get(watchedToAccountId);
     return fromAccount?.currency === toAccount?.currency;
   };
 
@@ -736,7 +1175,7 @@ function Transactions() {
         t.date === selectedDateStr &&
         (t.type === 'Expense' || t.type === 'Transfer Out')
     );
-    
+
     const expensesByCurrency = {};
     dateTransactions.forEach((t) => {
       const currency = t.currency;
@@ -745,7 +1184,7 @@ function Transactions() {
       }
       expensesByCurrency[currency] += Math.abs(t.amount);
     });
-    
+
     return expensesByCurrency;
   };
 
@@ -774,68 +1213,102 @@ function Transactions() {
   // Combine transactions and transfers for display
   const combinedItems = useMemo(() => {
     const items = [];
-    
+
     // Add transactions
-    transactions.forEach(txn => {
+    transactions.forEach((txn) => {
       items.push({ type: 'transaction', data: txn });
     });
-    
+
     // Add transfers if enabled
     if (showTransfers && transfers && Array.isArray(transfers)) {
-      transfers.forEach(transfer => {
-        const transferDate = transfer.date || transfer.transferOut?.date || transfer.transferIn?.date;
+      transfers.forEach((transfer) => {
+        const transferDate =
+          transfer.date ||
+          transfer.transferOut?.date ||
+          transfer.transferIn?.date;
         // Check if transfer matches current date filter
         if (filters.startDate && filters.endDate) {
           // Skip transfers with no date or invalid date
-          if (!transferDate || typeof transferDate !== 'string' || transferDate.trim() === '') {
+          if (
+            !transferDate ||
+            typeof transferDate !== 'string' ||
+            transferDate.trim() === ''
+          ) {
             return;
           }
-          
+
           // Normalize dates to YYYY-MM-DD format for comparison (handle dates with time components)
           const normalizedTransferDate = transferDate.split('T')[0].trim();
           const normalizedStartDate = filters.startDate.split('T')[0].trim();
           const normalizedEndDate = filters.endDate.split('T')[0].trim();
-          
+
           // Validate normalized dates are in correct format (YYYY-MM-DD)
           if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedTransferDate)) {
             return; // Skip invalid date formats
           }
-          
+
           // Skip transfers outside date range
-          if (normalizedTransferDate < normalizedStartDate || normalizedTransferDate > normalizedEndDate) {
+          if (
+            normalizedTransferDate < normalizedStartDate ||
+            normalizedTransferDate > normalizedEndDate
+          ) {
             return;
           }
         }
         items.push({ type: 'transfer', data: transfer });
       });
     }
-    
+
     // Sort by date descending
     items.sort((a, b) => {
-      const dateA = a.type === 'transaction' 
-        ? new Date(a.data.date || 0)
-        : new Date(a.data.date || a.data.transferOut?.date || a.data.transferIn?.date || 0);
-      const dateB = b.type === 'transaction'
-        ? new Date(b.data.date || 0)
-        : new Date(b.data.date || b.data.transferOut?.date || b.data.transferIn?.date || 0);
+      const dateA =
+        a.type === 'transaction'
+          ? new Date(a.data.date || 0)
+          : new Date(
+              a.data.date ||
+                a.data.transferOut?.date ||
+                a.data.transferIn?.date ||
+                0
+            );
+      const dateB =
+        b.type === 'transaction'
+          ? new Date(b.data.date || 0)
+          : new Date(
+              b.data.date ||
+                b.data.transferOut?.date ||
+                b.data.transferIn?.date ||
+                0
+            );
       return dateB - dateA;
     });
-    
-    return items;
-  }, [transactions, transfers, showTransfers, filters.startDate, filters.endDate]);
 
-  const activeFilterCount = Object.values(filters).filter((v) => v !== '').length;
+    return items;
+  }, [
+    transactions,
+    transfers,
+    showTransfers,
+    filters.startDate,
+    filters.endDate,
+  ]);
+
+  const activeFilterCount = Object.values(filters).filter(
+    (v) => v !== ''
+  ).length;
 
   // Selection handlers
-  const getItemId = (item) => {
+  const getItemId = useCallback((item) => {
     if (item.type === 'transfer') {
       const transfer = item.data;
-      return `transfer-${transfer.transferId || transfer.transferOut?.transaction_id || transfer.transferIn?.transaction_id}`;
+      return `transfer-${
+        transfer.transferId ||
+        transfer.transferOut?.transaction_id ||
+        transfer.transferIn?.transaction_id
+      }`;
     }
     return item.data.transaction_id;
-  };
+  }, []);
 
-  const handleItemSelect = (itemId, checked) => {
+  const handleItemSelect = useCallback((itemId, checked) => {
     setSelectedItems((prev) => {
       const newSet = new Set(prev);
       if (checked) {
@@ -845,43 +1318,54 @@ function Transactions() {
       }
       return newSet;
     });
-  };
+  }, []);
 
   // Long-press handlers for selection mode
-  const handleLongPressStart = (itemId) => {
+  const handleLongPressStart = useCallback((itemId) => {
     const timer = setTimeout(() => {
       setSelectionMode(true);
       setSelectedItems(new Set([itemId]));
     }, 500); // 500ms long press
     setLongPressTimer(timer);
-  };
+  }, []);
 
-  const handleLongPressEnd = () => {
+  const handleLongPressEnd = useCallback(() => {
     if (longPressTimer) {
       clearTimeout(longPressTimer);
       setLongPressTimer(null);
     }
-  };
+  }, [longPressTimer]);
 
-  const exitSelectionMode = () => {
+  const exitSelectionMode = useCallback(() => {
     setSelectionMode(false);
     setSelectedItems(new Set());
-  };
+  }, []);
 
-  const handleSelectAll = (checked) => {
+  const handleSelectAll = useCallback((checked) => {
     if (checked) {
       const allIds = combinedItems.map((item) => getItemId(item));
       setSelectedItems(new Set(allIds));
     } else {
       setSelectedItems(new Set());
     }
-  };
+  }, [combinedItems, getItemId]);
 
-  const isAllSelected = combinedItems.length > 0 && combinedItems.every((item) => selectedItems.has(getItemId(item)));
-  const isIndeterminate = combinedItems.some((item) => selectedItems.has(getItemId(item))) && !isAllSelected;
+  const isAllSelected =
+    combinedItems.length > 0 &&
+    combinedItems.every((item) => selectedItems.has(getItemId(item)));
+  const isIndeterminate =
+    combinedItems.some((item) => selectedItems.has(getItemId(item))) &&
+    !isAllSelected;
 
   return (
-    <Box sx={{ px: { xs: 1, sm: 0 }, overflow: 'hidden', width: '100%', boxSizing: 'border-box' }}>
+    <Box
+      sx={{
+        px: { xs: 1, sm: 0 },
+        overflow: 'hidden',
+        width: '100%',
+        boxSizing: 'border-box',
+      }}
+    >
       <Box
         sx={{
           display: 'flex',
@@ -892,9 +1376,9 @@ function Transactions() {
           gap: { xs: 1.5, sm: 0 },
         }}
       >
-        <Typography 
-          variant="h5" 
-          sx={{ 
+        <Typography
+          variant="h5"
+          sx={{
             fontSize: { xs: '1.25rem', sm: '1.5rem' },
             fontWeight: 500,
             color: 'text.primary',
@@ -902,113 +1386,135 @@ function Transactions() {
         >
           Transactions
         </Typography>
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', width: { xs: '100%', sm: 'auto' } }}>
+        <Box
+          sx={{
+            display: 'flex',
+            gap: 0.5,
+            flexWrap: 'wrap',
+            width: { xs: '100%', sm: 'auto' },
+          }}
+        >
           <Button
             variant="outlined"
-            startIcon={<FilterListIcon sx={{ fontSize: 18 }} />}
+            startIcon={isMobile ? null : <FilterListIcon sx={{ fontSize: 16 }} />}
             onClick={() => setFiltersOpen(!filtersOpen)}
             color={activeFilterCount > 0 ? 'primary' : 'inherit'}
             size="small"
-            sx={{ 
+            sx={{
               flex: { xs: '1 1 auto', sm: 'none' },
               textTransform: 'none',
-              fontSize: '0.875rem',
-              minHeight: 36,
+              fontSize: { xs: '0.75rem', sm: '0.8rem' },
+              minHeight: { xs: 32, sm: 34 },
+              px: { xs: 1, sm: 1.5 },
             }}
           >
-            Filters {activeFilterCount > 0 && `(${activeFilterCount})`}
+            {isMobile ? <FilterListIcon sx={{ fontSize: 16, mr: activeFilterCount > 0 ? 0.5 : 0 }} /> : null}
+            {isMobile ? (activeFilterCount > 0 ? activeFilterCount : '') : `Filters ${activeFilterCount > 0 ? `(${activeFilterCount})` : ''}`}
           </Button>
           <Button
             variant="outlined"
-            startIcon={<SwapHorizIcon sx={{ fontSize: 18 }} />}
+            startIcon={isMobile ? null : <SwapHorizIcon sx={{ fontSize: 16 }} />}
             onClick={handleOpenTransferDialog}
             size="small"
-            sx={{ 
+            sx={{
               flex: { xs: '1 1 auto', sm: 'none' },
               textTransform: 'none',
-              fontSize: '0.875rem',
-              minHeight: 36,
+              fontSize: { xs: '0.75rem', sm: '0.8rem' },
+              minHeight: { xs: 32, sm: 34 },
+              px: { xs: 1, sm: 1.5 },
             }}
           >
-            Transfer
+            {isMobile ? <SwapHorizIcon sx={{ fontSize: 16 }} /> : 'Transfer'}
           </Button>
           <Button
             variant="contained"
-            startIcon={<AddIcon sx={{ fontSize: 18 }} />}
-            onClick={() => handleOpenDialog()}
+            startIcon={isMobile ? null : <AddIcon sx={{ fontSize: 16 }} />}
+            onClick={() => setAddTransactionOpen(true)}
             size="small"
-            sx={{ 
+            sx={{
               flex: { xs: '1 1 auto', sm: 'none' },
               textTransform: 'none',
-              fontSize: '0.875rem',
-              minHeight: 36,
+              fontSize: { xs: '0.75rem', sm: '0.8rem' },
+              minHeight: { xs: 32, sm: 34 },
+              px: { xs: 1, sm: 1.5 },
             }}
           >
-            Add Transaction
+            {isMobile ? <AddIcon sx={{ fontSize: 16 }} /> : 'Add'}
           </Button>
         </Box>
       </Box>
 
-      {/* Date Navigation */}
-      <Box 
-        sx={{ 
-          mb: 2, 
-          p: 1.5,
+      {/* Date Navigation - Compact */}
+      <Box
+        sx={{
+          mb: 1.5,
+          p: { xs: 0.75, sm: 1 },
           borderBottom: '1px solid',
           borderColor: 'divider',
           display: 'flex',
           flexDirection: { xs: 'column', sm: 'row' },
           alignItems: { xs: 'flex-start', sm: 'center' },
           justifyContent: 'space-between',
-          gap: { xs: 1.5, sm: 0 },
+          gap: { xs: 1, sm: 0 },
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, width: { xs: '100%', sm: 'auto' } }}>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 0.25,
+            width: { xs: '100%', sm: 'auto' },
+          }}
+        >
           <IconButton
             onClick={handlePreviousDay}
             size="small"
-            sx={{ 
+            sx={{
               color: 'text.secondary',
-              minWidth: 36,
-              minHeight: 36,
-              '&:hover': { backgroundColor: 'action.hover' }
+              width: { xs: 28, sm: 32 },
+              height: { xs: 28, sm: 32 },
+              p: 0.5,
+              '&:hover': { backgroundColor: 'action.hover' },
             }}
           >
-            <ChevronLeftIcon sx={{ fontSize: 20 }} />
+            <ChevronLeftIcon sx={{ fontSize: { xs: 18, sm: 20 } }} />
           </IconButton>
           <Button
             variant={isToday(selectedDate) ? 'contained' : 'outlined'}
-            startIcon={<TodayIcon sx={{ fontSize: 18 }} />}
+            startIcon={isMobile ? null : <TodayIcon sx={{ fontSize: 16 }} />}
             onClick={handleToday}
+            size="small"
             sx={{
-              minWidth: { xs: 'auto', sm: 180 },
+              minWidth: { xs: 'auto', sm: 160 },
               flex: { xs: 1, sm: 'none' },
               textTransform: 'none',
               fontWeight: 500,
-              fontSize: '0.875rem',
-              minHeight: 36,
+              fontSize: { xs: '0.75rem', sm: '0.8rem' },
+              minHeight: { xs: 28, sm: 32 },
+              px: { xs: 1, sm: 1.5 },
             }}
           >
-            {format(selectedDate, 'MMM dd, yyyy')}
-            {isToday(selectedDate) && ' (Today)'}
+            {format(selectedDate, isMobile ? 'MMM dd' : 'MMM dd, yyyy')}
+            {isToday(selectedDate) && (isMobile ? '' : ' (Today)')}
           </Button>
           <IconButton
             onClick={handleNextDay}
             size="small"
-            sx={{ 
+            sx={{
               color: 'text.secondary',
-              minWidth: 36,
-              minHeight: 36,
-              '&:hover': { backgroundColor: 'action.hover' }
+              width: { xs: 28, sm: 32 },
+              height: { xs: 28, sm: 32 },
+              p: 0.5,
+              '&:hover': { backgroundColor: 'action.hover' },
             }}
           >
-            <ChevronRightIcon sx={{ fontSize: 20 }} />
+            <ChevronRightIcon sx={{ fontSize: { xs: 18, sm: 20 } }} />
           </IconButton>
         </Box>
-        <Typography 
-          variant="body2" 
-          color="text.secondary" 
-          sx={{ 
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          sx={{
             alignSelf: { xs: 'flex-end', sm: 'auto' },
             fontSize: '0.8125rem',
           }}
@@ -1016,49 +1522,67 @@ function Transactions() {
           {(() => {
             // Calculate total expenses
             const expensesByCurrency = calculateExpensesByCurrency();
-            const totalParts = Object.entries(expensesByCurrency).map(([currency, total]) => 
-              formatCurrency(total, currency)
+            const totalParts = Object.entries(expensesByCurrency).map(
+              ([currency, total]) => formatCurrency(total, currency)
             );
-            const totalStr = totalParts.length > 0 
-              ? `Total: ${totalParts.join(', ')}` 
-              : 'Total: 0';
-            
+            const totalStr =
+              totalParts.length > 0
+                ? `Total: ${totalParts.join(', ')}`
+                : 'Total: 0';
+
             // Count filtered transfers (same logic as combinedItems)
             let transferCount = 0;
             if (showTransfers && transfers && Array.isArray(transfers)) {
-              transfers.forEach(transfer => {
-                const transferDate = transfer.date || transfer.transferOut?.date || transfer.transferIn?.date;
+              transfers.forEach((transfer) => {
+                const transferDate =
+                  transfer.date ||
+                  transfer.transferOut?.date ||
+                  transfer.transferIn?.date;
                 // Check if transfer matches current date filter
                 if (filters.startDate && filters.endDate) {
                   // Skip transfers with no date or invalid date
-                  if (!transferDate || typeof transferDate !== 'string' || transferDate.trim() === '') {
+                  if (
+                    !transferDate ||
+                    typeof transferDate !== 'string' ||
+                    transferDate.trim() === ''
+                  ) {
                     return;
                   }
-                  
+
                   // Normalize dates to YYYY-MM-DD format for comparison (handle dates with time components)
-                  const normalizedTransferDate = transferDate.split('T')[0].trim();
-                  const normalizedStartDate = filters.startDate.split('T')[0].trim();
-                  const normalizedEndDate = filters.endDate.split('T')[0].trim();
-                  
+                  const normalizedTransferDate = transferDate
+                    .split('T')[0]
+                    .trim();
+                  const normalizedStartDate = filters.startDate
+                    .split('T')[0]
+                    .trim();
+                  const normalizedEndDate = filters.endDate
+                    .split('T')[0]
+                    .trim();
+
                   // Validate normalized dates are in correct format (YYYY-MM-DD)
                   if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedTransferDate)) {
                     return; // Skip invalid date formats
                   }
-                  
+
                   // Skip transfers outside date range
-                  if (normalizedTransferDate < normalizedStartDate || normalizedTransferDate > normalizedEndDate) {
+                  if (
+                    normalizedTransferDate < normalizedStartDate ||
+                    normalizedTransferDate > normalizedEndDate
+                  ) {
                     return;
                   }
                 }
                 transferCount++;
               });
             }
-            
+
             const totalItemCount = transactions.length + transferCount;
-            const countStr = totalItemCount === 0 
-              ? 'No items' 
-              : `${totalItemCount} item${totalItemCount !== 1 ? 's' : ''}`;
-            
+            const countStr =
+              totalItemCount === 0
+                ? 'No items'
+                : `${totalItemCount} item${totalItemCount !== 1 ? 's' : ''}`;
+
             return `${totalStr} • ${countStr}`;
           })()}
         </Typography>
@@ -1088,8 +1612,8 @@ function Transactions() {
               onChange={(e) => handleSelectAll(e.target.checked)}
               size="small"
             />
-            <Typography 
-              variant="body2" 
+            <Typography
+              variant="body2"
               color="text.secondary"
               sx={{ fontSize: '0.875rem' }}
             >
@@ -1134,9 +1658,9 @@ function Transactions() {
 
       {/* Filters Section */}
       <Collapse in={filtersOpen}>
-        <Box 
-          sx={{ 
-            mb: 2, 
+        <Box
+          sx={{
+            mb: 2,
             p: 1.5,
             borderBottom: '1px solid',
             borderColor: 'divider',
@@ -1150,12 +1674,20 @@ function Transactions() {
                 <Select
                   value={filters.accountId}
                   label="Account"
-                  onChange={(e) => handleFilterChange('accountId', e.target.value)}
+                  onChange={(e) =>
+                    handleFilterChange('accountId', e.target.value)
+                  }
                   sx={{ fontSize: '0.875rem', minHeight: 36 }}
                 >
-                  <MenuItem value="" sx={{ fontSize: '0.875rem' }}>All Accounts</MenuItem>
+                  <MenuItem value="" sx={{ fontSize: '0.875rem' }}>
+                    All Accounts
+                  </MenuItem>
                   {accounts.map((account) => (
-                    <MenuItem key={account.account_id} value={account.account_id} sx={{ fontSize: '0.875rem' }}>
+                    <MenuItem
+                      key={account.account_id}
+                      value={account.account_id}
+                      sx={{ fontSize: '0.875rem' }}
+                    >
                       {account.name}
                     </MenuItem>
                   ))}
@@ -1168,15 +1700,19 @@ function Transactions() {
                 <Select
                   value={filters.categoryId}
                   label="Category"
-                  onChange={(e) => handleFilterChange('categoryId', e.target.value)}
+                  onChange={(e) =>
+                    handleFilterChange('categoryId', e.target.value)
+                  }
                   sx={{ fontSize: '0.875rem', minHeight: 36 }}
                 >
-                  <MenuItem value="" sx={{ fontSize: '0.875rem' }}>All Categories</MenuItem>
+                  <MenuItem value="" sx={{ fontSize: '0.875rem' }}>
+                    All Categories
+                  </MenuItem>
                   {flattenCategoryTree(categories).map((category) => (
-                    <MenuItem 
-                      key={category.category_id} 
-                      value={category.category_id} 
-                      sx={{ 
+                    <MenuItem
+                      key={category.category_id}
+                      value={category.category_id}
+                      sx={{
                         fontSize: '0.875rem',
                         pl: 2 + (category.depth || 0) * 1.5,
                         fontWeight: category.hasChildren ? 600 : 400,
@@ -1197,9 +1733,15 @@ function Transactions() {
                   onChange={(e) => handleFilterChange('type', e.target.value)}
                   sx={{ fontSize: '0.875rem', minHeight: 36 }}
                 >
-                  <MenuItem value="" sx={{ fontSize: '0.875rem' }}>All Types</MenuItem>
+                  <MenuItem value="" sx={{ fontSize: '0.875rem' }}>
+                    All Types
+                  </MenuItem>
                   {TRANSACTION_TYPES.map((type) => (
-                    <MenuItem key={type} value={type} sx={{ fontSize: '0.875rem' }}>
+                    <MenuItem
+                      key={type}
+                      value={type}
+                      sx={{ fontSize: '0.875rem' }}
+                    >
                       {type}
                     </MenuItem>
                   ))}
@@ -1215,9 +1757,15 @@ function Transactions() {
                   onChange={(e) => handleFilterChange('status', e.target.value)}
                   sx={{ fontSize: '0.875rem', minHeight: 36 }}
                 >
-                  <MenuItem value="" sx={{ fontSize: '0.875rem' }}>All Statuses</MenuItem>
+                  <MenuItem value="" sx={{ fontSize: '0.875rem' }}>
+                    All Statuses
+                  </MenuItem>
                   {TRANSACTION_STATUSES.map((status) => (
-                    <MenuItem key={status} value={status} sx={{ fontSize: '0.875rem' }}>
+                    <MenuItem
+                      key={status}
+                      value={status}
+                      sx={{ fontSize: '0.875rem' }}
+                    >
                       {status}
                     </MenuItem>
                   ))}
@@ -1231,10 +1779,15 @@ function Transactions() {
                 type="date"
                 label="Start Date"
                 value={filters.startDate}
-                onChange={(e) => handleFilterChange('startDate', e.target.value)}
+                onChange={(e) =>
+                  handleFilterChange('startDate', e.target.value)
+                }
                 InputLabelProps={{ shrink: true }}
-                sx={{ 
-                  '& .MuiInputBase-root': { fontSize: '0.875rem', minHeight: 36 },
+                sx={{
+                  '& .MuiInputBase-root': {
+                    fontSize: '0.875rem',
+                    minHeight: 36,
+                  },
                   '& .MuiInputLabel-root': { fontSize: '0.875rem' },
                 }}
               />
@@ -1248,14 +1801,24 @@ function Transactions() {
                 value={filters.endDate}
                 onChange={(e) => handleFilterChange('endDate', e.target.value)}
                 InputLabelProps={{ shrink: true }}
-                sx={{ 
-                  '& .MuiInputBase-root': { fontSize: '0.875rem', minHeight: 36 },
+                sx={{
+                  '& .MuiInputBase-root': {
+                    fontSize: '0.875rem',
+                    minHeight: 36,
+                  },
                   '& .MuiInputLabel-root': { fontSize: '0.875rem' },
                 }}
               />
             </Grid>
             <Grid item xs={12}>
-              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  gap: 1,
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                }}
+              >
                 <Button
                   variant="outlined"
                   size="small"
@@ -1272,11 +1835,17 @@ function Transactions() {
                 <FormControl size="small">
                   <Select
                     value={showTransfers ? 'show' : 'hide'}
-                    onChange={(e) => setShowTransfers(e.target.value === 'show')}
+                    onChange={(e) =>
+                      setShowTransfers(e.target.value === 'show')
+                    }
                     sx={{ minWidth: 150, fontSize: '0.875rem', minHeight: 36 }}
                   >
-                    <MenuItem value="show" sx={{ fontSize: '0.875rem' }}>Show Transfers</MenuItem>
-                    <MenuItem value="hide" sx={{ fontSize: '0.875rem' }}>Hide Transfers</MenuItem>
+                    <MenuItem value="show" sx={{ fontSize: '0.875rem' }}>
+                      Show Transfers
+                    </MenuItem>
+                    <MenuItem value="hide" sx={{ fontSize: '0.875rem' }}>
+                      Hide Transfers
+                    </MenuItem>
                   </Select>
                 </FormControl>
               </Box>
@@ -1286,9 +1855,9 @@ function Transactions() {
       </Collapse>
 
       {combinedItems.length === 0 ? (
-        <Box 
-          sx={{ 
-            textAlign: 'center', 
+        <Box
+          sx={{
+            textAlign: 'center',
             py: { xs: 4, sm: 6 },
             border: '1px solid',
             borderColor: 'divider',
@@ -1297,18 +1866,32 @@ function Transactions() {
           }}
         >
           <ReceiptIcon
-            sx={{ fontSize: { xs: 40, sm: 48 }, color: 'text.secondary', mb: 1.5, opacity: 0.5 }}
+            sx={{
+              fontSize: { xs: 40, sm: 48 },
+              color: 'text.secondary',
+              mb: 1.5,
+              opacity: 0.5,
+            }}
           />
-          <Typography variant="h6" color="text.secondary" gutterBottom sx={{ fontSize: { xs: '0.9375rem', sm: '1rem' }, fontWeight: 500 }}>
+          <Typography
+            variant="h6"
+            color="text.secondary"
+            gutterBottom
+            sx={{ fontSize: { xs: '0.9375rem', sm: '1rem' }, fontWeight: 500 }}
+          >
             No transactions yet
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}>
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ mb: 2, fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}
+          >
             Create your first transaction to start tracking your finances
           </Typography>
           <Button
             variant="contained"
             startIcon={<AddIcon sx={{ fontSize: 18 }} />}
-            onClick={() => handleOpenDialog()}
+            onClick={() => setAddTransactionOpen(true)}
             sx={{
               textTransform: 'none',
               fontSize: '0.875rem',
@@ -1321,228 +1904,55 @@ function Transactions() {
       ) : (
         <>
           {/* Mobile Card View */}
-          <Box sx={{ display: { xs: 'block', md: 'none' }, overflow: 'hidden', width: '100%' }}>
+          <Box
+            sx={{
+              display: { xs: 'block', md: 'none' },
+              overflow: 'hidden',
+              width: '100%',
+            }}
+          >
             {combinedItems.map((item) => {
               if (item.type === 'transfer') {
                 const transfer = item.data;
-                const transferOut = transfer.transferOut;
-                const transferIn = transfer.transferIn;
-                const transferDate = transfer.date || transferOut?.date || transferIn?.date;
-                const transferId = `transfer-${transfer.transferId || transferOut?.transaction_id || transferIn?.transaction_id}`;
+                const transferId = `transfer-${
+                  transfer.transferId ||
+                  transfer.transferOut?.transaction_id ||
+                  transfer.transferIn?.transaction_id
+                }`;
                 const isSelected = selectedItems.has(transferId);
 
                 return (
-                  <Box
+                  <MobileTransferRow
                     key={transferId}
-                    onTouchStart={() => handleLongPressStart(transferId)}
-                    onTouchEnd={handleLongPressEnd}
-                    onTouchCancel={handleLongPressEnd}
-                    onMouseDown={() => handleLongPressStart(transferId)}
-                    onMouseUp={handleLongPressEnd}
-                    onMouseLeave={handleLongPressEnd}
-                    onClick={() => {
-                      if (selectionMode) {
-                        handleItemSelect(transferId, !isSelected);
-                      }
-                    }}
-                    sx={{
-                      py: 1,
-                      px: 0.5,
-                      borderBottom: '1px solid',
-                      borderColor: 'divider',
-                      backgroundColor: isSelected ? 'action.selected' : 'transparent',
-                      display: 'flex',
-                      gap: 0.75,
-                      alignItems: 'flex-start',
-                      overflow: 'hidden',
-                      width: '100%',
-                      boxSizing: 'border-box',
-                      cursor: selectionMode ? 'pointer' : 'default',
-                      userSelect: 'none',
-                    }}
-                  >
-                    {selectionMode && (
-                      <Checkbox
-                        checked={isSelected}
-                        onChange={(e) => {
-                          e.stopPropagation();
-                          handleItemSelect(transferId, e.target.checked);
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                        size="small"
-                        sx={{ p: 0, mt: 0.25, flexShrink: 0 }}
-                      />
-                    )}
-                    <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden', width: 0 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1, width: '100%' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0, overflow: 'hidden' }}>
-                          <SwapHorizIcon sx={{ fontSize: 14, color: 'primary.main', flexShrink: 0 }} />
-                          <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.8125rem', flexShrink: 0 }}>
-                            Transfer
-                          </Typography>
-                          <Chip 
-                            label={transfer.exchangeRate ? 'Multi' : 'Same'} 
-                            size="small" 
-                            sx={{ height: 16, fontSize: '0.5625rem', '& .MuiChip-label': { px: 0.5 }, flexShrink: 0 }} 
-                          />
-                        </Box>
-                        <Typography 
-                          variant="body2" 
-                          fontWeight={600}
-                          sx={{ fontSize: '0.8125rem', color: '#d93025', whiteSpace: 'nowrap', flexShrink: 0 }}
-                        >
-                          {getAccountCurrency(transferOut?.account_id)} {new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(transferOut?.amount || 0))}
-                        </Typography>
-                      </Box>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1, width: '100%' }}>
-                        <Typography 
-                          variant="body2" 
-                          component="div"
-                          sx={{ 
-                            fontSize: '0.6875rem', 
-                            color: 'text.secondary', 
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            minWidth: 0,
-                            flex: 1,
-                          }}
-                        >
-                          {getAccountName(transferOut?.account_id)} → {getAccountName(transferIn?.account_id)}
-                          {transfer.exchangeRate && ` • ${getAccountCurrency(transferIn?.account_id)} ${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(transferIn?.amount || 0))}`}
-                        </Typography>
-                        <Typography variant="body2" sx={{ fontSize: '0.6875rem', color: 'text.secondary', flexShrink: 0 }}>
-                          {transferDate ? format(parseISO(transferDate), 'MMM dd') : '-'}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  </Box>
+                    transfer={transfer}
+                    transferId={transferId}
+                    isSelected={isSelected}
+                    selectionMode={selectionMode}
+                    getAccountName={getAccountName}
+                    getAccountCurrency={getAccountCurrency}
+                    onLongPressStart={handleLongPressStart}
+                    onLongPressEnd={handleLongPressEnd}
+                    onSelect={handleItemSelect}
+                  />
                 );
               } else {
                 const transaction = item.data;
-                const description = transaction.description || '';
                 const isSelected = selectedItems.has(transaction.transaction_id);
-                const dateDisplay = (() => {
-                  try {
-                    let dateTime;
-                    if (transaction.created_at) {
-                      dateTime = parseISO(transaction.created_at);
-                    } else {
-                      dateTime = parseISO(transaction.date);
-                    }
-                    if (isToday(dateTime)) {
-                      return format(dateTime, 'h:mm a');
-                    } else {
-                      return format(dateTime, 'MMM dd');
-                    }
-                  } catch {
-                    return transaction.date;
-                  }
-                })();
 
                 return (
-                  <Box
+                  <MobileTransactionRow
                     key={transaction.transaction_id}
-                    onTouchStart={() => handleLongPressStart(transaction.transaction_id)}
-                    onTouchEnd={handleLongPressEnd}
-                    onTouchCancel={handleLongPressEnd}
-                    onMouseDown={() => handleLongPressStart(transaction.transaction_id)}
-                    onMouseUp={handleLongPressEnd}
-                    onMouseLeave={handleLongPressEnd}
-                    onClick={() => {
-                      if (selectionMode) {
-                        handleItemSelect(transaction.transaction_id, !isSelected);
-                      } else if (!isBulkDeleting) {
-                        handleOpenDialog(transaction);
-                      }
-                    }}
-                    sx={{
-                      py: 1,
-                      px: 0.5,
-                      borderBottom: '1px solid',
-                      borderColor: 'divider',
-                      backgroundColor: isSelected ? 'action.selected' : 'transparent',
-                      cursor: isBulkDeleting ? 'default' : 'pointer',
-                      display: 'flex',
-                      gap: 0.75,
-                      alignItems: 'flex-start',
-                      '&:active': !selectionMode ? { backgroundColor: 'action.hover' } : {},
-                      overflow: 'hidden',
-                      width: '100%',
-                      boxSizing: 'border-box',
-                      userSelect: 'none',
-                    }}
-                  >
-                    {selectionMode && (
-                      <Checkbox
-                        checked={isSelected}
-                        onChange={(e) => {
-                          e.stopPropagation();
-                          handleItemSelect(transaction.transaction_id, e.target.checked);
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                        size="small"
-                        sx={{ p: 0, mt: 0.25, flexShrink: 0 }}
-                      />
-                    )}
-                    <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden', width: 0 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1, width: '100%' }}>
-                        <Typography 
-                          variant="body2" 
-                          fontWeight={600} 
-                          sx={{ 
-                            fontSize: '0.8125rem',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            minWidth: 0,
-                            flex: 1,
-                          }}
-                        >
-                          {getCategoryName(transaction.category_id)}
-                        </Typography>
-                        <Typography 
-                          variant="body2" 
-                          fontWeight={600}
-                          sx={{
-                            fontSize: '0.8125rem',
-                            color: transaction.type === 'Income' || transaction.type === 'Transfer In'
-                              ? '#1e8e3e'
-                              : transaction.type === 'Expense' || transaction.type === 'Transfer Out'
-                              ? '#d93025'
-                              : 'text.primary',
-                            whiteSpace: 'nowrap',
-                            flexShrink: 0,
-                          }}
-                        >
-                          {transaction.currency} {new Intl.NumberFormat('en-US', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          }).format(Math.abs(transaction.amount))}
-                        </Typography>
-                      </Box>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1, width: '100%' }}>
-                        <Typography 
-                          variant="body2" 
-                          component="div"
-                          sx={{ 
-                            fontSize: '0.6875rem', 
-                            color: 'text.secondary',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            minWidth: 0,
-                            flex: 1,
-                          }}
-                        >
-                          {getAccountName(transaction.account_id)}{description && ` • ${description}`}
-                        </Typography>
-                        <Typography variant="body2" sx={{ fontSize: '0.6875rem', color: 'text.secondary', flexShrink: 0 }}>
-                          {dateDisplay}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  </Box>
+                    transaction={transaction}
+                    isSelected={isSelected}
+                    selectionMode={selectionMode}
+                    isBulkDeleting={isBulkDeleting}
+                    getCategoryName={getCategoryName}
+                    getAccountName={getAccountName}
+                    onLongPressStart={handleLongPressStart}
+                    onLongPressEnd={handleLongPressEnd}
+                    onSelect={handleItemSelect}
+                    onEdit={handleEditTransaction}
+                  />
                 );
               }
             })}
@@ -1600,10 +2010,15 @@ function Transactions() {
                     const transfer = item.data;
                     const transferOut = transfer.transferOut;
                     const transferIn = transfer.transferIn;
-                    const transferDate = transfer.date || transferOut?.date || transferIn?.date;
-                    const transferId = `transfer-${transfer.transferId || transferOut?.transaction_id || transferIn?.transaction_id}`;
+                    const transferDate =
+                      transfer.date || transferOut?.date || transferIn?.date;
+                    const transferId = `transfer-${
+                      transfer.transferId ||
+                      transferOut?.transaction_id ||
+                      transferIn?.transaction_id
+                    }`;
                     const isSelected = selectedItems.has(transferId);
-                    
+
                     return (
                       <TableRow
                         key={transferId}
@@ -1618,11 +2033,15 @@ function Transactions() {
                           }
                         }}
                         sx={{
-                          backgroundColor: isSelected ? 'action.selected' : 'transparent',
+                          backgroundColor: isSelected
+                            ? 'action.selected'
+                            : 'transparent',
                           cursor: selectionMode ? 'pointer' : 'default',
                           userSelect: 'none',
                           '&:hover': {
-                            backgroundColor: isSelected ? 'action.selected' : 'action.hover',
+                            backgroundColor: isSelected
+                              ? 'action.selected'
+                              : 'action.hover',
                           },
                           '& td': {
                             borderBottom: '1px solid',
@@ -1646,27 +2065,55 @@ function Transactions() {
                           </TableCell>
                         )}
                         <TableCell>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
-                            <SwapHorizIcon sx={{ fontSize: 18, color: 'primary.main' }} />
-                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 0.75,
+                              flexWrap: 'wrap',
+                            }}
+                          >
+                            <SwapHorizIcon
+                              sx={{ fontSize: 18, color: 'primary.main' }}
+                            />
+                            <Typography
+                              variant="body2"
+                              fontWeight={600}
+                              sx={{ fontSize: '0.875rem' }}
+                            >
                               Transfer
                             </Typography>
-                            <Chip 
-                              label={transfer.exchangeRate ? 'Multi-Currency' : 'Same Currency'} 
-                              size="small" 
-                              sx={{ height: 20, fontSize: '0.6875rem', '& .MuiChip-label': { px: 0.75 } }} 
+                            <Chip
+                              label={
+                                transfer.exchangeRate
+                                  ? 'Multi-Currency'
+                                  : 'Same Currency'
+                              }
+                              size="small"
+                              sx={{
+                                height: 20,
+                                fontSize: '0.6875rem',
+                                '& .MuiChip-label': { px: 0.75 },
+                              }}
                             />
                           </Box>
                         </TableCell>
                         <TableCell>
-                          <Typography variant="body2" sx={{ fontSize: '0.875rem', color: 'text.secondary' }}>
-                            {getAccountName(transferOut?.account_id)} → {getAccountName(transferIn?.account_id)}
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              fontSize: '0.875rem',
+                              color: 'text.secondary',
+                            }}
+                          >
+                            {getAccountName(transferOut?.account_id)} →{' '}
+                            {getAccountName(transferIn?.account_id)}
                           </Typography>
                         </TableCell>
                         <TableCell>
-                          <Typography 
-                            variant="body2" 
-                            sx={{ 
+                          <Typography
+                            variant="body2"
+                            sx={{
                               fontSize: '0.875rem',
                               color: 'text.secondary',
                               overflow: 'hidden',
@@ -1680,26 +2127,79 @@ function Transactions() {
                           </Typography>
                         </TableCell>
                         <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                          <Typography variant="body2" sx={{ fontSize: '0.875rem', color: 'text.secondary' }}>
-                            {transferDate ? format(parseISO(transferDate), 'MMM dd, yyyy') : '-'}
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              fontSize: '0.875rem',
+                              color: 'text.secondary',
+                            }}
+                          >
+                            {transferDate
+                              ? format(parseISO(transferDate), 'MMM dd, yyyy')
+                              : '-'}
                           </Typography>
                         </TableCell>
                         <TableCell align="right">
-                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.5, flexWrap: 'wrap' }}>
-                            <Typography variant="body2" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'flex-end',
+                              gap: 0.5,
+                              flexWrap: 'wrap',
+                            }}
+                          >
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                fontSize: '0.75rem',
+                                color: 'text.secondary',
+                              }}
+                            >
                               {getAccountCurrency(transferOut?.account_id)}
                             </Typography>
-                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem', color: '#d93025' }}>
-                              {new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(transferOut?.amount || 0))}
+                            <Typography
+                              variant="body2"
+                              fontWeight={600}
+                              sx={{ fontSize: '0.875rem', color: '#d93025' }}
+                            >
+                              {new Intl.NumberFormat('en-US', {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              }).format(Math.abs(transferOut?.amount || 0))}
                             </Typography>
                             {transfer.exchangeRate && (
                               <>
-                                <Typography variant="body2" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>→</Typography>
-                                <Typography variant="body2" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    fontSize: '0.75rem',
+                                    color: 'text.secondary',
+                                  }}
+                                >
+                                  →
+                                </Typography>
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    fontSize: '0.75rem',
+                                    color: 'text.secondary',
+                                  }}
+                                >
                                   {getAccountCurrency(transferIn?.account_id)}
                                 </Typography>
-                                <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem', color: '#1e8e3e' }}>
-                                  {new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(transferIn?.amount || 0))}
+                                <Typography
+                                  variant="body2"
+                                  fontWeight={600}
+                                  sx={{
+                                    fontSize: '0.875rem',
+                                    color: '#1e8e3e',
+                                  }}
+                                >
+                                  {new Intl.NumberFormat('en-US', {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  }).format(Math.abs(transferIn?.amount || 0))}
                                 </Typography>
                               </>
                             )}
@@ -1710,7 +2210,9 @@ function Transactions() {
                   } else {
                     const transaction = item.data;
                     const description = transaction.description || '';
-                    const isSelected = selectedItems.has(transaction.transaction_id);
+                    const isSelected = selectedItems.has(
+                      transaction.transaction_id
+                    );
                     const dateDisplay = (() => {
                       try {
                         let dateTime;
@@ -1728,28 +2230,37 @@ function Transactions() {
                         return transaction.date;
                       }
                     })();
-                    
+
                     return (
                       <TableRow
                         key={transaction.transaction_id}
                         hover
                         selected={isSelected}
-                        onMouseDown={() => handleLongPressStart(transaction.transaction_id)}
+                        onMouseDown={() =>
+                          handleLongPressStart(transaction.transaction_id)
+                        }
                         onMouseUp={handleLongPressEnd}
                         onMouseLeave={handleLongPressEnd}
                         onClick={() => {
                           if (selectionMode) {
-                            handleItemSelect(transaction.transaction_id, !isSelected);
+                            handleItemSelect(
+                              transaction.transaction_id,
+                              !isSelected
+                            );
                           } else if (!isBulkDeleting) {
-                            handleOpenDialog(transaction);
+                            handleEditTransaction(transaction);
                           }
                         }}
                         sx={{
                           cursor: isBulkDeleting ? 'default' : 'pointer',
-                          backgroundColor: isSelected ? 'action.selected' : 'transparent',
+                          backgroundColor: isSelected
+                            ? 'action.selected'
+                            : 'transparent',
                           userSelect: 'none',
                           '&:hover': {
-                            backgroundColor: isSelected ? 'action.selected' : 'action.hover',
+                            backgroundColor: isSelected
+                              ? 'action.selected'
+                              : 'action.hover',
                           },
                           '& td': {
                             borderBottom: '1px solid',
@@ -1765,7 +2276,10 @@ function Transactions() {
                               checked={isSelected}
                               onChange={(e) => {
                                 e.stopPropagation();
-                                handleItemSelect(transaction.transaction_id, e.target.checked);
+                                handleItemSelect(
+                                  transaction.transaction_id,
+                                  e.target.checked
+                                );
                               }}
                               onClick={(e) => e.stopPropagation()}
                               size="small"
@@ -1773,19 +2287,29 @@ function Transactions() {
                           </TableCell>
                         )}
                         <TableCell>
-                          <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.8125rem' }}>
+                          <Typography
+                            variant="body2"
+                            fontWeight={600}
+                            sx={{ fontSize: '0.8125rem' }}
+                          >
                             {getCategoryName(transaction.category_id)}
                           </Typography>
                         </TableCell>
                         <TableCell>
-                          <Typography variant="body2" sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              fontSize: '0.8125rem',
+                              color: 'text.secondary',
+                            }}
+                          >
                             {getAccountName(transaction.account_id)}
                           </Typography>
                         </TableCell>
                         <TableCell>
-                          <Typography 
-                            variant="body2" 
-                            sx={{ 
+                          <Typography
+                            variant="body2"
+                            sx={{
                               fontSize: '0.8125rem',
                               color: 'text.secondary',
                               overflow: 'hidden',
@@ -1799,25 +2323,47 @@ function Transactions() {
                           </Typography>
                         </TableCell>
                         <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                          <Typography variant="body2" sx={{ fontSize: '0.875rem', color: 'text.secondary' }}>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              fontSize: '0.875rem',
+                              color: 'text.secondary',
+                            }}
+                          >
                             {dateDisplay}
                           </Typography>
                         </TableCell>
                         <TableCell align="right">
-                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.5 }}>
-                            <Typography variant="body2" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'flex-end',
+                              gap: 0.5,
+                            }}
+                          >
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                fontSize: '0.75rem',
+                                color: 'text.secondary',
+                              }}
+                            >
                               {transaction.currency}
                             </Typography>
-                            <Typography 
-                              variant="body2" 
+                            <Typography
+                              variant="body2"
                               fontWeight={600}
                               sx={{
                                 fontSize: '0.875rem',
-                                color: transaction.type === 'Income' || transaction.type === 'Transfer In'
-                                  ? '#1e8e3e'
-                                  : transaction.type === 'Expense' || transaction.type === 'Transfer Out'
-                                  ? '#d93025'
-                                  : 'text.primary',
+                                color:
+                                  transaction.type === 'Income' ||
+                                  transaction.type === 'Transfer In'
+                                    ? '#1e8e3e'
+                                    : transaction.type === 'Expense' ||
+                                      transaction.type === 'Transfer Out'
+                                    ? '#d93025'
+                                    : 'text.primary',
                               }}
                             >
                               {new Intl.NumberFormat('en-US', {
@@ -1837,293 +2383,12 @@ function Transactions() {
         </>
       )}
 
-      {/* Create/Edit Dialog */}
-      <Dialog
-        open={openDialog}
-        onClose={handleCloseDialog}
-        maxWidth="sm"
-        fullWidth
-        fullScreen={isMobile}
-        PaperProps={{
-          sx: isMobile ? {
-            display: 'flex',
-            flexDirection: 'column',
-            height: '100%',
-            maxHeight: '100%',
-          } : {},
-        }}
-      >
-        <form onSubmit={handleSubmit(onSubmit)} style={isMobile ? { display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' } : {}}>
-          <DialogTitle sx={{ flexShrink: 0, pb: { xs: 1, sm: 2 } }}>
-            {deleteConfirm
-              ? 'Delete Transaction'
-              : editingTransaction
-              ? 'Edit Transaction'
-              : 'Create New Transaction'}
-          </DialogTitle>
-          <DialogContent sx={{ flexGrow: 1, overflow: 'auto', pt: { xs: 1, sm: 2 } }}>
-            {actionError && (
-              <Alert severity="error" sx={{ mb: 2 }}>
-                {actionError}
-              </Alert>
-            )}
-            {deleteError && (
-              <Alert severity="error" sx={{ mb: 2 }}>
-                {deleteError}
-              </Alert>
-            )}
-            {deleteConfirm && editingTransaction ? (
-              <Box>
-                <Alert severity="warning" sx={{ mb: 2 }}>
-                  Are you sure you want to delete this transaction? This action cannot be undone.
-                  If this is part of a transfer, both transactions will be deleted.
-                </Alert>
-                <Box sx={{ mt: 2 }}>
-                  <Typography variant="body2" color="text.secondary" gutterBottom>
-                    <strong>Date:</strong> {format(new Date(editingTransaction.date), 'MMM dd, yyyy')}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" gutterBottom>
-                    <strong>Account:</strong> {getAccountName(editingTransaction.account_id)}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" gutterBottom>
-                    <strong>Category:</strong> {getCategoryName(editingTransaction.category_id)}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" gutterBottom>
-                    <strong>Amount:</strong>{' '}
-                    {formatCurrency(editingTransaction.amount, editingTransaction.currency)}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    <strong>Description:</strong> {editingTransaction.description || '-'}
-                  </Typography>
-                </Box>
-              </Box>
-            ) : (
-            <Grid container spacing={{ xs: 1.5, sm: 2 }} sx={{ mt: { xs: 0.5, sm: 1 } }}>
-              <Grid item xs={12} sm={6}>
-                <FormControl fullWidth error={!!errors.accountId}>
-                  <InputLabel>Account *</InputLabel>
-                  <Select
-                    {...register('accountId')}
-                    label="Account *"
-                    value={watchedAccountId || ''}
-                    onChange={(e) => setValue('accountId', e.target.value)}
-                  >
-                    {accounts
-                      .filter((acc) => acc.status === 'Active')
-                      .map((account) => (
-                        <MenuItem key={account.account_id} value={account.account_id}>
-                          {account.name} ({account.currency})
-                        </MenuItem>
-                      ))}
-                  </Select>
-                  {errors.accountId && (
-                    <FormHelperText>{errors.accountId.message}</FormHelperText>
-                  )}
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <FormControl fullWidth error={!!errors.type}>
-                  <InputLabel>Type *</InputLabel>
-                  <Select
-                    {...register('type')}
-                    label="Type *"
-                    value={watchedType || ''}
-                    onChange={(e) => setValue('type', e.target.value)}
-                  >
-                    {TRANSACTION_TYPES.filter(
-                      (t) => !t.includes('Transfer')
-                    ).map((type) => (
-                      <MenuItem key={type} value={type}>
-                        {type}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                  {errors.type && (
-                    <FormHelperText>{errors.type.message}</FormHelperText>
-                  )}
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <CategoryAutocomplete
-                  categories={getFilteredCategories()}
-                  value={watchedCategoryId || ''}
-                  onChange={(id) => setValue('categoryId', id)}
-                  label="Category *"
-                  error={!!errors.categoryId}
-                  helperText={
-                    errors.categoryId?.message ||
-                    (!watchedType ? 'Please select a transaction type first' : undefined)
-                  }
-                  disabled={!watchedType}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  type="date"
-                  label="Date *"
-                  {...register('date')}
-                  error={!!errors.date}
-                  helperText={errors.date?.message}
-                  InputLabelProps={{ shrink: true }}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  type="number"
-                  label="Amount *"
-                  {...register('amount', { valueAsNumber: true })}
-                  error={!!errors.amount}
-                  helperText={errors.amount?.message}
-                  inputProps={{ step: '0.01', min: '0.01' }}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Currency"
-                  {...register('currency')}
-                  error={!!errors.currency}
-                  helperText={
-                    errors.currency?.message ||
-                    'Auto-filled from account selection'
-                  }
-                  disabled
-                  InputLabelProps={{
-                    shrink: !!watch('currency'),
-                  }}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Description"
-                  {...register('description')}
-                  error={!!errors.description}
-                  helperText={errors.description?.message}
-                  multiline
-                  rows={2}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <FormControl fullWidth error={!!errors.status}>
-                  <InputLabel>Status</InputLabel>
-                  <Select
-                    {...register('status')}
-                    label="Status"
-                    value={watchedStatus || ''}
-                    onChange={(e) => setValue('status', e.target.value)}
-                  >
-                    {TRANSACTION_STATUSES.map((status) => (
-                      <MenuItem key={status} value={status}>
-                        {status}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                  {errors.status && (
-                    <FormHelperText>{errors.status.message}</FormHelperText>
-                  )}
-                </FormControl>
-              </Grid>
-            </Grid>
-            )}
-          </DialogContent>
-          <DialogActions sx={{ flexShrink: 0, p: { xs: 1.5, sm: 2 } }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', flexWrap: 'wrap', gap: 1 }}>
-              <Box sx={{ flex: { xs: editingTransaction && !deleteConfirm ? '0 0 100%' : 'none', sm: 'none' }, mb: { xs: editingTransaction && !deleteConfirm ? 1 : 0, sm: 0 } }}>
-                {editingTransaction && !deleteConfirm && (
-                  <Button
-                    onClick={handleDeleteClick}
-                    color="error"
-                    startIcon={<DeleteIcon sx={{ fontSize: { xs: 18, sm: 20 } }} />}
-                    size="medium"
-                    sx={{ 
-                      textTransform: 'none',
-                      minWidth: { xs: '100%', sm: 100 },
-                      minHeight: 42,
-                    }}
-                  >
-                    Delete
-                  </Button>
-                )}
-              </Box>
-              <Box sx={{ display: 'flex', gap: 1, flex: { xs: '1 1 100%', sm: 'none' } }}>
-                {deleteConfirm ? (
-                  <>
-                    <Button
-                      onClick={() => setDeleteConfirm(false)}
-                      disabled={isDeleting}
-                      size="medium"
-                      sx={{ 
-                        textTransform: 'none',
-                        flex: { xs: 1, sm: 'none' },
-                        minWidth: { xs: 'auto', sm: 100 },
-                        minHeight: 42,
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      onClick={handleDeleteConfirm}
-                      color="error"
-                      variant="contained"
-                      disabled={isDeleting}
-                      size="medium"
-                      startIcon={isDeleting ? <CircularProgress size={16} color="inherit" /> : <DeleteIcon sx={{ fontSize: 20 }} />}
-                      sx={{ 
-                        textTransform: 'none',
-                        flex: { xs: 1, sm: 'none' },
-                        minWidth: { xs: 'auto', sm: 100 },
-                        minHeight: 42,
-                      }}
-                    >
-                      {isDeleting ? 'Deleting...' : 'Confirm'}
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button
-                      onClick={handleCloseDialog}
-                      disabled={isSubmitting}
-                      size="medium"
-                      sx={{ 
-                        textTransform: 'none',
-                        flex: { xs: 1, sm: 'none' },
-                        minWidth: { xs: 'auto', sm: 100 },
-                        minHeight: 42,
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="submit"
-                      variant="contained"
-                      disabled={isSubmitting}
-                      size="medium"
-                      startIcon={isSubmitting ? <CircularProgress size={16} color="inherit" /> : null}
-                      sx={{ 
-                        textTransform: 'none',
-                        flex: { xs: 1, sm: 'none' },
-                        minWidth: { xs: 'auto', sm: 100 },
-                        minHeight: 42,
-                      }}
-                    >
-                      {isSubmitting
-                        ? editingTransaction
-                          ? 'Updating...'
-                          : 'Creating...'
-                        : editingTransaction
-                        ? 'Update'
-                        : 'Create'}
-                    </Button>
-                  </>
-                )}
-              </Box>
-            </Box>
-          </DialogActions>
-        </form>
-      </Dialog>
+      {/* Edit Transaction Dialog */}
+      <EditTransactionDialog
+        open={editDialogOpen}
+        onClose={handleCloseEditDialog}
+        transaction={editingTransaction}
+      />
 
       {/* Create Transfer Dialog */}
       <Dialog
@@ -2133,28 +2398,47 @@ function Transactions() {
         fullWidth
         fullScreen={isMobile}
         PaperProps={{
-          sx: isMobile ? {
-            display: 'flex',
-            flexDirection: 'column',
-            height: '100%',
-            maxHeight: '100%',
-          } : {},
+          sx: isMobile
+            ? {
+                display: 'flex',
+                flexDirection: 'column',
+                height: '100%',
+                maxHeight: '100%',
+              }
+            : {},
         }}
       >
         <form
           onSubmit={handleSubmitTransfer(onSubmitTransfer, (errors) => {
             console.log('Form validation errors:', errors);
           })}
-          style={isMobile ? { display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' } : {}}
+          style={
+            isMobile
+              ? {
+                  display: 'flex',
+                  flexDirection: 'column',
+                  height: '100%',
+                  overflow: 'hidden',
+                }
+              : {}
+          }
         >
-          <DialogTitle sx={{ flexShrink: 0, pb: { xs: 1, sm: 2 } }}>Create New Transfer</DialogTitle>
-          <DialogContent sx={{ flexGrow: 1, overflow: 'auto', pt: { xs: 1, sm: 2 } }}>
+          <DialogTitle sx={{ flexShrink: 0, pb: { xs: 1, sm: 2 } }}>
+            Create New Transfer
+          </DialogTitle>
+          <DialogContent
+            sx={{ flexGrow: 1, overflow: 'auto', pt: { xs: 1, sm: 2 } }}
+          >
             {transferError && (
               <Alert severity="error" sx={{ mb: 2 }}>
                 {transferError}
               </Alert>
             )}
-            <Grid container spacing={{ xs: 1.5, sm: 2 }} sx={{ mt: { xs: 0.5, sm: 1 } }}>
+            <Grid
+              container
+              spacing={{ xs: 1.5, sm: 2 }}
+              sx={{ mt: { xs: 0.5, sm: 1 } }}
+            >
               <Grid item xs={12} sm={6}>
                 <FormControl fullWidth error={!!transferErrors.fromAccountId}>
                   <InputLabel>From Account *</InputLabel>
@@ -2162,7 +2446,9 @@ function Transactions() {
                     {...registerTransfer('fromAccountId')}
                     label="From Account *"
                     value={watchedFromAccountId || ''}
-                    onChange={(e) => setValueTransfer('fromAccountId', e.target.value)}
+                    onChange={(e) =>
+                      setValueTransfer('fromAccountId', e.target.value)
+                    }
                   >
                     {accounts
                       .filter((acc) => acc.status === 'Active')
@@ -2189,7 +2475,9 @@ function Transactions() {
                     {...registerTransfer('toAccountId')}
                     label="To Account *"
                     value={watchedToAccountId || ''}
-                    onChange={(e) => setValueTransfer('toAccountId', e.target.value)}
+                    onChange={(e) =>
+                      setValueTransfer('toAccountId', e.target.value)
+                    }
                   >
                     {accounts
                       .filter((acc) => acc.status === 'Active')
@@ -2224,9 +2512,10 @@ function Transactions() {
                     fullWidth
                     type="number"
                     label="Amount *"
-                    {...registerTransfer('amount', { 
+                    {...registerTransfer('amount', {
                       valueAsNumber: true,
-                      setValueAs: (v) => v === '' || v === null ? undefined : Number(v)
+                      setValueAs: (v) =>
+                        v === '' || v === null ? undefined : Number(v),
                     })}
                     error={!!transferErrors.amount}
                     helperText={transferErrors.amount?.message}
@@ -2242,9 +2531,10 @@ function Transactions() {
                       label={`From Amount (${getAccountCurrency(
                         watchedFromAccountId
                       )}) *`}
-                      {...registerTransfer('fromAmount', { 
+                      {...registerTransfer('fromAmount', {
                         valueAsNumber: true,
-                        setValueAs: (v) => v === '' || v === null ? undefined : Number(v)
+                        setValueAs: (v) =>
+                          v === '' || v === null ? undefined : Number(v),
                       })}
                       error={!!transferErrors.fromAmount}
                       helperText={transferErrors.fromAmount?.message}
@@ -2258,9 +2548,10 @@ function Transactions() {
                       label={`To Amount (${getAccountCurrency(
                         watchedToAccountId
                       )}) *`}
-                      {...registerTransfer('toAmount', { 
+                      {...registerTransfer('toAmount', {
                         valueAsNumber: true,
-                        setValueAs: (v) => v === '' || v === null ? undefined : Number(v)
+                        setValueAs: (v) =>
+                          v === '' || v === null ? undefined : Number(v),
                       })}
                       error={!!transferErrors.toAmount}
                       helperText={transferErrors.toAmount?.message}
@@ -2296,7 +2587,9 @@ function Transactions() {
                     ))}
                   </Select>
                   {transferErrors.status && (
-                    <FormHelperText>{transferErrors.status.message}</FormHelperText>
+                    <FormHelperText>
+                      {transferErrors.status.message}
+                    </FormHelperText>
                   )}
                 </FormControl>
               </Grid>
@@ -2326,7 +2619,7 @@ function Transactions() {
               onClick={handleCloseTransferDialog}
               disabled={isSubmittingTransfer}
               size="medium"
-              sx={{ 
+              sx={{
                 textTransform: 'none',
                 flex: { xs: 1, sm: 'none' },
                 minWidth: { xs: 'auto', sm: 100 },
@@ -2340,8 +2633,12 @@ function Transactions() {
               variant="contained"
               disabled={isSubmittingTransfer}
               size="medium"
-              startIcon={isSubmittingTransfer ? <CircularProgress size={16} color="inherit" /> : null}
-              sx={{ 
+              startIcon={
+                isSubmittingTransfer ? (
+                  <CircularProgress size={16} color="inherit" />
+                ) : null
+              }
+              sx={{
                 textTransform: 'none',
                 flex: { xs: 1, sm: 'none' },
                 minWidth: { xs: 'auto', sm: 100 },
@@ -2373,11 +2670,16 @@ function Transactions() {
             </Alert>
           )}
           <Alert severity="warning" sx={{ mb: 2 }}>
-            Are you sure you want to delete {selectedItems.size} item{selectedItems.size !== 1 ? 's' : ''}? This action cannot be undone.
+            Are you sure you want to delete {selectedItems.size} item
+            {selectedItems.size !== 1 ? 's' : ''}? This action cannot be undone.
             {(() => {
-              const transferCount = Array.from(selectedItems).filter((id) => id.startsWith('transfer-')).length;
+              const transferCount = Array.from(selectedItems).filter((id) =>
+                id.startsWith('transfer-')
+              ).length;
               if (transferCount > 0) {
-                return ` Note: Deleting ${transferCount} transfer${transferCount !== 1 ? 's' : ''} will delete both associated transactions.`;
+                return ` Note: Deleting ${transferCount} transfer${
+                  transferCount !== 1 ? 's' : ''
+                } will delete both associated transactions.`;
               }
               return '';
             })()}
@@ -2398,7 +2700,13 @@ function Transactions() {
             color="error"
             variant="contained"
             disabled={isBulkDeleting}
-            startIcon={isBulkDeleting ? <CircularProgress size={20} color="inherit" /> : <DeleteIcon />}
+            startIcon={
+              isBulkDeleting ? (
+                <CircularProgress size={20} color="inherit" />
+              ) : (
+                <DeleteIcon />
+              )
+            }
           >
             {isBulkDeleting ? 'Deleting...' : 'Confirm Delete'}
           </Button>
@@ -2460,13 +2768,22 @@ function Transactions() {
             color="error"
             variant="contained"
             disabled={isDeletingTransfer}
-            startIcon={isDeletingTransfer ? <CircularProgress size={20} color="inherit" /> : null}
+            startIcon={
+              isDeletingTransfer ? (
+                <CircularProgress size={20} color="inherit" />
+              ) : null
+            }
           >
             {isDeletingTransfer ? 'Deleting...' : 'Delete Transfer'}
           </Button>
         </DialogActions>
       </Dialog>
 
+      {/* Add Transaction Dialog - Same as Home page */}
+      <AddTransactionDialog
+        open={addTransactionOpen}
+        onClose={() => setAddTransactionOpen(false)}
+      />
     </Box>
   );
 }

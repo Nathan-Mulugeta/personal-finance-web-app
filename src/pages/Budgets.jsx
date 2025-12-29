@@ -1,5 +1,6 @@
-import { useEffect, useState, useMemo, Fragment } from 'react';
+import { useEffect, useState, useMemo, Fragment, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import { selectCategoryMap, selectCategoryNameGetter } from '../store/selectors';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -51,16 +52,13 @@ import {
   deleteBudget,
   clearError,
 } from '../store/slices/budgetsSlice';
-import {
-  fetchCategories,
-} from '../store/slices/categoriesSlice';
+import { fetchCategories } from '../store/slices/categoriesSlice';
 import { budgetSchema } from '../schemas/budgetSchema';
 import { BUDGET_STATUSES } from '../lib/api/budgets';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
 import CategoryAutocomplete from '../components/common/CategoryAutocomplete';
 import { usePageRefresh } from '../hooks/usePageRefresh';
-import { refreshAllData } from '../utils/refreshAllData';
 import {
   formatCurrency,
   convertAmountWithExchangeRates,
@@ -78,6 +76,10 @@ function Budgets() {
   const { settings } = useSelector((state) => state.settings);
   const { exchangeRates } = useSelector((state) => state.exchangeRates);
   const appInitialized = useSelector((state) => state.appInit.isInitialized);
+  
+  // Memoized O(1) lookup functions from selectors
+  const categoryMap = useSelector(selectCategoryMap);
+  const getCategoryName = useSelector(selectCategoryNameGetter);
   const [openDialog, setOpenDialog] = useState(false);
   const [editingBudget, setEditingBudget] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -144,9 +146,7 @@ function Budgets() {
   // Auto-set currency from category when category is selected
   useEffect(() => {
     if (watchedCategoryId) {
-      const category = categories.find(
-        (cat) => cat.category_id === watchedCategoryId
-      );
+      const category = categoryMap.get(watchedCategoryId);
       if (category) {
         // Try to get currency from settings or default to USD
         const baseCurrency =
@@ -155,17 +155,27 @@ function Budgets() {
         setValue('currency', baseCurrency);
       }
     }
-  }, [watchedCategoryId, categories, settings, setValue]);
+  }, [watchedCategoryId, categoryMap, settings, setValue]);
 
   // Calculate actual spending for a budget
-  const calculateActualSpending = (budget) => {
+  // Optional forMonth parameter to calculate spending for a specific month (used for stats)
+  const calculateActualSpending = (budget, forMonth = null) => {
     if (!allTransactions || allTransactions.length === 0) return 0;
 
-    const budgetMonth = budget.month
-      ? parseISO(
-          `${budget.month.split('-')[0]}-${budget.month.split('-')[1]}-01`
-        )
-      : null;
+    // For recurring budgets with forMonth, use that month for filtering
+    // For non-recurring or when forMonth is not specified, use budget's own month
+    let targetMonth;
+    if (forMonth && budget.recurring) {
+      // Use the selected month for recurring budgets
+      targetMonth = parseISO(`${forMonth}-01`);
+    } else if (budget.month) {
+      targetMonth = parseISO(
+        `${budget.month.split('-')[0]}-${budget.month.split('-')[1]}-01`
+      );
+    } else {
+      targetMonth = null;
+    }
+
     const startMonthDate = budget.start_month
       ? parseISO(
           `${budget.start_month.split('-')[0]}-${
@@ -193,32 +203,40 @@ function Budgets() {
         return false;
       }
 
+      const txnDate = parseISO(txn.date);
+
       // Check date range based on budget type
       if (budget.recurring) {
-        // Recurring budget: check if transaction date is within start_month and end_month (if set)
-        if (startMonthDate) {
-          const txnDate = parseISO(txn.date);
-          if (txnDate < startOfMonth(startMonthDate)) {
+        // For recurring budgets, check if transaction is within the target month
+        // AND within the budget's start/end range
+        if (startMonthDate && txnDate < startOfMonth(startMonthDate)) {
+          return false;
+        }
+        if (budget.end_month) {
+          const endMonthDate = parseISO(
+            `${budget.end_month.split('-')[0]}-${
+              budget.end_month.split('-')[1]
+            }-01`
+          );
+          if (txnDate > endOfMonth(endMonthDate)) {
             return false;
           }
-          if (budget.end_month) {
-            const endMonthDate = parseISO(
-              `${budget.end_month.split('-')[0]}-${
-                budget.end_month.split('-')[1]
-              }-01`
-            );
-            if (txnDate > endOfMonth(endMonthDate)) {
-              return false;
-            }
+        }
+        // Also check if within the target month (for monthly view)
+        if (targetMonth) {
+          if (
+            txnDate < startOfMonth(targetMonth) ||
+            txnDate > endOfMonth(targetMonth)
+          ) {
+            return false;
           }
         }
       } else {
         // Non-recurring budget: check if transaction date is in the budget month
-        if (budgetMonth) {
-          const txnDate = parseISO(txn.date);
+        if (targetMonth) {
           if (
-            txnDate < startOfMonth(budgetMonth) ||
-            txnDate > endOfMonth(budgetMonth)
+            txnDate < startOfMonth(targetMonth) ||
+            txnDate > endOfMonth(targetMonth)
           ) {
             return false;
           }
@@ -288,7 +306,7 @@ function Budgets() {
     return filtered;
   }, [budgets, selectedMonth, filters]);
 
-  // Calculate budget statistics
+  // Calculate budget statistics - only for expense budgets
   const budgetStats = useMemo(() => {
     const baseCurrency =
       settings.find((s) => s.setting_key === 'BaseCurrency')?.setting_value ||
@@ -298,49 +316,59 @@ function Budgets() {
       totalBudget: 0,
       totalSpent: 0,
       totalRemaining: 0,
-      overBudget: 0,
       baseCurrency,
     };
 
-    filteredBudgets.forEach((budget) => {
-      const actualSpending = calculateActualSpending(budget);
-      const budgetAmount = parseFloat(budget.amount || 0);
-      const remaining = budgetAmount - actualSpending;
-      const budgetCurrency = budget.currency || 'USD';
+    // Only include expense budgets in the stats
+    filteredBudgets
+      .filter((budget) => {
+        const category = categoryMap.get(budget.category_id);
+        return category?.type === 'Expense';
+      })
+      .forEach((budget) => {
+        // Pass selectedMonth to get spending for the selected month (important for recurring budgets)
+        const actualSpending = calculateActualSpending(budget, selectedMonth);
+        const budgetAmount = parseFloat(budget.amount || 0);
+        const remaining = budgetAmount - actualSpending;
+        const budgetCurrency = budget.currency || 'USD';
 
-      // Convert amounts to base currency
-      const convertedBudgetAmount = convertAmountWithExchangeRates(
-        budgetAmount,
-        budgetCurrency,
-        baseCurrency,
-        exchangeRates
-      );
-      const convertedActualSpending = convertAmountWithExchangeRates(
-        actualSpending,
-        budgetCurrency,
-        baseCurrency,
-        exchangeRates
-      );
-      const convertedRemaining =
-        convertedBudgetAmount !== null && convertedActualSpending !== null
-          ? convertedBudgetAmount - convertedActualSpending
-          : remaining;
+        // Convert amounts to base currency
+        const convertedBudgetAmount = convertAmountWithExchangeRates(
+          budgetAmount,
+          budgetCurrency,
+          baseCurrency,
+          exchangeRates
+        );
+        const convertedActualSpending = convertAmountWithExchangeRates(
+          actualSpending,
+          budgetCurrency,
+          baseCurrency,
+          exchangeRates
+        );
+        const convertedRemaining =
+          convertedBudgetAmount !== null && convertedActualSpending !== null
+            ? convertedBudgetAmount - convertedActualSpending
+            : remaining;
 
-      // Use converted amounts if available, otherwise use original
-      stats.totalBudget +=
-        convertedBudgetAmount !== null ? convertedBudgetAmount : budgetAmount;
-      stats.totalSpent +=
-        convertedActualSpending !== null
-          ? convertedActualSpending
-          : actualSpending;
-      stats.totalRemaining += convertedRemaining;
-      if (convertedRemaining < 0) {
-        stats.overBudget += Math.abs(convertedRemaining);
-      }
-    });
+        // Use converted amounts if available, otherwise use original
+        stats.totalBudget +=
+          convertedBudgetAmount !== null ? convertedBudgetAmount : budgetAmount;
+        stats.totalSpent +=
+          convertedActualSpending !== null
+            ? convertedActualSpending
+            : actualSpending;
+        stats.totalRemaining += convertedRemaining;
+      });
 
     return stats;
-  }, [filteredBudgets, allTransactions, settings, exchangeRates]);
+  }, [
+    filteredBudgets,
+    allTransactions,
+    settings,
+    exchangeRates,
+    categoryMap,
+    selectedMonth,
+  ]);
 
   const handleOpenDialog = (budget = null) => {
     if (budget) {
@@ -446,9 +474,6 @@ function Budgets() {
         await dispatch(createBudget(budgetData)).unwrap();
       }
       handleCloseDialog();
-
-      // Refresh all data to ensure all pages have fresh data
-      await refreshAllData(dispatch);
     } catch (err) {
       console.error('Error saving budget:', err);
       const errorMessage =
@@ -474,9 +499,6 @@ function Budgets() {
       setDeleteConfirm(null);
       setDeleteError(null);
       handleCloseDialog();
-
-      // Refresh all data to ensure all pages have fresh data
-      await refreshAllData(dispatch);
     } catch (err) {
       console.error('Error deleting budget:', err);
       const errorMessage =
@@ -499,22 +521,13 @@ function Budgets() {
     });
   };
 
-  // Get category name helper
-  const getCategoryName = (categoryId) => {
-    const category = categories.find((cat) => cat.category_id === categoryId);
-    return category?.name || 'Unknown';
-  };
-
-  // Get category by ID
-  const getCategory = (categoryId) => {
-    return categories.find((cat) => cat.category_id === categoryId);
-  };
+  // Get category by ID (using memoized Map for O(1) lookup)
+  const getCategory = useCallback((categoryId) => {
+    return categoryMap.get(categoryId);
+  }, [categoryMap]);
 
   // Organize budgets by category hierarchy
   const organizeBudgetsByCategory = useMemo(() => {
-    const categoryMap = new Map();
-    categories.forEach((cat) => categoryMap.set(cat.category_id, cat));
-
     return (budgetsToOrganize) => {
       const grouped = {};
 
@@ -563,7 +576,7 @@ function Budgets() {
 
       return grouped;
     };
-  }, [categories]);
+  }, [categoryMap]);
 
   // Separate budgets by type and organize by category
   const organizedBudgets = useMemo(() => {
@@ -666,7 +679,11 @@ function Budgets() {
             onClick={() => setFiltersOpen(!filtersOpen)}
             color={activeFilterCount > 0 ? 'primary' : 'inherit'}
             size="small"
-            sx={{ flex: { xs: '1 1 auto', sm: 'none' }, textTransform: 'none', minHeight: 36 }}
+            sx={{
+              flex: { xs: '1 1 auto', sm: 'none' },
+              textTransform: 'none',
+              minHeight: 36,
+            }}
           >
             Filters {activeFilterCount > 0 && `(${activeFilterCount})`}
           </Button>
@@ -675,7 +692,11 @@ function Budgets() {
             startIcon={<AddIcon sx={{ fontSize: 18 }} />}
             onClick={() => handleOpenDialog()}
             size="small"
-            sx={{ flex: { xs: '1 1 auto', sm: 'none' }, textTransform: 'none', minHeight: 36 }}
+            sx={{
+              flex: { xs: '1 1 auto', sm: 'none' },
+              textTransform: 'none',
+              minHeight: 36,
+            }}
           >
             Add Budget
           </Button>
@@ -708,106 +729,136 @@ function Budgets() {
             />
           </Grid>
           <Grid item xs={12} sm={6} md={8}>
-            <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}>
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}
+            >
               Select a month to view budgets and spending for that period
             </Typography>
           </Grid>
         </Grid>
       </Box>
 
-      {/* Summary Cards */}
+      {/* Summary Cards - 3 cards: Expense Budget, Spent, Remaining/Over - Stack vertically on mobile */}
       {filteredBudgets.length > 0 && (
-        <Grid container spacing={{ xs: 1.5, sm: 2 }} sx={{ mb: { xs: 2, sm: 3, md: 4 } }}>
-          <Grid item xs={6} sm={6} md={3}>
+        <Grid
+          container
+          spacing={{ xs: 1, sm: 2 }}
+          sx={{ mb: { xs: 2, sm: 3, md: 4 } }}
+        >
+          <Grid item xs={12} sm={4} md={4}>
             <Box
               sx={{
-                p: { xs: 1.5, sm: 2 },
+                p: { xs: 1.25, sm: 2 },
                 border: '1px solid',
                 borderColor: 'divider',
                 borderRadius: 1,
                 backgroundColor: 'background.paper',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
               }}
             >
-              <Typography variant="body2" color="text.secondary" gutterBottom sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
-                Total Budget
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{
+                  fontSize: { xs: '0.8rem', sm: '0.85rem' },
+                }}
+              >
+                Expense Budget
               </Typography>
-              <Typography variant="h5" fontWeight="bold" sx={{ fontSize: { xs: '1.125rem', sm: '1.5rem' } }}>
-                {formatCurrency(budgetStats.totalBudget, budgetStats.baseCurrency)}
+              <Typography
+                variant="h5"
+                fontWeight="bold"
+                color="text.primary"
+                sx={{
+                  fontSize: { xs: '1rem', sm: '1.25rem' },
+                }}
+              >
+                {formatCurrency(
+                  budgetStats.totalBudget,
+                  budgetStats.baseCurrency
+                )}
               </Typography>
             </Box>
           </Grid>
-          <Grid item xs={6} sm={6} md={3}>
+          <Grid item xs={12} sm={4} md={4}>
             <Box
               sx={{
-                p: { xs: 1.5, sm: 2 },
+                p: { xs: 1.25, sm: 2 },
                 border: '1px solid',
                 borderColor: 'divider',
                 borderRadius: 1,
                 backgroundColor: 'background.paper',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
               }}
             >
-              <Typography variant="body2" color="text.secondary" gutterBottom sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{
+                  fontSize: { xs: '0.8rem', sm: '0.85rem' },
+                }}
+              >
                 Total Spent
               </Typography>
               <Typography
                 variant="h5"
                 fontWeight="bold"
+                color="text.primary"
                 sx={{
-                  fontSize: { xs: '1.125rem', sm: '1.5rem' },
-                  color: budgetStats.totalSpent > budgetStats.totalBudget ? 'softRed.main' : 'softGreen.main',
+                  fontSize: { xs: '1rem', sm: '1.25rem' },
                 }}
               >
-                {formatCurrency(budgetStats.totalSpent, budgetStats.baseCurrency)}
+                {formatCurrency(
+                  budgetStats.totalSpent,
+                  budgetStats.baseCurrency
+                )}
               </Typography>
             </Box>
           </Grid>
-          <Grid item xs={6} sm={6} md={3}>
+          <Grid item xs={12} sm={4} md={4}>
             <Box
               sx={{
-                p: { xs: 1.5, sm: 2 },
+                p: { xs: 1.25, sm: 2 },
                 border: '1px solid',
-                borderColor: 'divider',
+                borderColor:
+                  budgetStats.totalRemaining >= 0 ? 'divider' : 'error.light',
                 borderRadius: 1,
                 backgroundColor: 'background.paper',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
               }}
             >
-              <Typography variant="body2" color="text.secondary" gutterBottom sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
-                Remaining
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{
+                  fontSize: { xs: '0.8rem', sm: '0.85rem' },
+                }}
+              >
+                {budgetStats.totalRemaining >= 0 ? 'Remaining' : 'Over Budget'}
               </Typography>
               <Typography
                 variant="h5"
                 fontWeight="bold"
                 sx={{
-                  fontSize: { xs: '1.125rem', sm: '1.5rem' },
-                  color: budgetStats.totalRemaining >= 0 ? 'softGreen.main' : 'softRed.main',
+                  fontSize: { xs: '1rem', sm: '1.25rem' },
+                  color:
+                    budgetStats.totalRemaining >= 0
+                      ? 'text.primary'
+                      : 'error.main',
                 }}
               >
-                {formatCurrency(budgetStats.totalRemaining, budgetStats.baseCurrency)}
-              </Typography>
-            </Box>
-          </Grid>
-          <Grid item xs={6} sm={6} md={3}>
-            <Box
-              sx={{
-                p: { xs: 1.5, sm: 2 },
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 1,
-                backgroundColor: 'background.paper',
-              }}
-            >
-              <Typography variant="body2" color="text.secondary" gutterBottom sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
-                Over Budget
-              </Typography>
-              <Typography
-                variant="h5"
-                fontWeight="bold"
-                sx={{
-                  fontSize: { xs: '1.125rem', sm: '1.5rem' },
-                  color: budgetStats.overBudget > 0 ? 'softRed.main' : 'text.secondary',
-                }}
-              >
-                {formatCurrency(budgetStats.overBudget, budgetStats.baseCurrency)}
+                {formatCurrency(
+                  Math.abs(budgetStats.totalRemaining),
+                  budgetStats.baseCurrency
+                )}
               </Typography>
             </Box>
           </Grid>
@@ -827,76 +878,74 @@ function Budgets() {
           }}
         >
           <Grid container spacing={{ xs: 1.5, sm: 2 }} alignItems="center">
-              <Grid item xs={12} sm={6} md={4}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Category</InputLabel>
-                  <Select
-                    value={filters.categoryId}
-                    label="Category"
-                    onChange={(e) =>
-                      handleFilterChange('categoryId', e.target.value)
-                    }
-                  >
-                    <MenuItem value="">All Categories</MenuItem>
-                    {categories
-                      .filter((cat) => cat.status === 'Active')
-                      .map((category) => (
-                        <MenuItem
-                          key={category.category_id}
-                          value={category.category_id}
-                        >
-                          {category.name}
-                        </MenuItem>
-                      ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} sm={6} md={4}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  label="Currency"
-                  value={filters.currency}
+            <Grid item xs={12} sm={6} md={4}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Category</InputLabel>
+                <Select
+                  value={filters.categoryId}
+                  label="Category"
                   onChange={(e) =>
-                    handleFilterChange('currency', e.target.value.toUpperCase())
+                    handleFilterChange('categoryId', e.target.value)
                   }
-                  inputProps={{
-                    maxLength: 3,
-                    style: { textTransform: 'uppercase' },
-                  }}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6} md={4}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Status</InputLabel>
-                  <Select
-                    value={filters.status}
-                    label="Status"
-                    onChange={(e) =>
-                      handleFilterChange('status', e.target.value)
-                    }
-                  >
-                    {BUDGET_STATUSES.map((status) => (
-                      <MenuItem key={status} value={status}>
-                        {status}
+                >
+                  <MenuItem value="">All Categories</MenuItem>
+                  {categories
+                    .filter((cat) => cat.status === 'Active')
+                    .map((category) => (
+                      <MenuItem
+                        key={category.category_id}
+                        value={category.category_id}
+                      >
+                        {category.name}
                       </MenuItem>
                     ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12}>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  onClick={clearFilters}
-                  disabled={activeFilterCount === 0}
-                  sx={{ textTransform: 'none', minHeight: 36 }}
-                >
-                  Clear Filters
-                </Button>
-              </Grid>
+                </Select>
+              </FormControl>
             </Grid>
-          </Box>
+            <Grid item xs={12} sm={6} md={4}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Currency"
+                value={filters.currency}
+                onChange={(e) =>
+                  handleFilterChange('currency', e.target.value.toUpperCase())
+                }
+                inputProps={{
+                  maxLength: 3,
+                  style: { textTransform: 'uppercase' },
+                }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={4}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Status</InputLabel>
+                <Select
+                  value={filters.status}
+                  label="Status"
+                  onChange={(e) => handleFilterChange('status', e.target.value)}
+                >
+                  {BUDGET_STATUSES.map((status) => (
+                    <MenuItem key={status} value={status}>
+                      {status}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12}>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={clearFilters}
+                disabled={activeFilterCount === 0}
+                sx={{ textTransform: 'none', minHeight: 36 }}
+              >
+                Clear Filters
+              </Button>
+            </Grid>
+          </Grid>
+        </Box>
       </Collapse>
 
       {filteredBudgets.length === 0 ? (
@@ -910,11 +959,29 @@ function Budgets() {
             backgroundColor: 'background.paper',
           }}
         >
-          <AccountBalanceWalletIcon sx={{ fontSize: { xs: 48, sm: 64 }, color: 'text.secondary', mb: { xs: 1.5, sm: 2 } }} />
-          <Typography variant="h6" color="text.secondary" gutterBottom sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}>
+          <AccountBalanceWalletIcon
+            sx={{
+              fontSize: { xs: 48, sm: 64 },
+              color: 'text.secondary',
+              mb: { xs: 1.5, sm: 2 },
+            }}
+          />
+          <Typography
+            variant="h6"
+            color="text.secondary"
+            gutterBottom
+            sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}
+          >
             No budgets yet
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: { xs: 1.5, sm: 2 }, fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}>
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{
+              mb: { xs: 1.5, sm: 2 },
+              fontSize: { xs: '0.8125rem', sm: '0.875rem' },
+            }}
+          >
             Create your first budget to track your spending
           </Typography>
           <Button
@@ -933,7 +1000,10 @@ function Budgets() {
             {/* Helper function to render a budget card */}
             {(() => {
               const renderBudgetCard = (budget) => {
-                const actualSpending = calculateActualSpending(budget);
+                const actualSpending = calculateActualSpending(
+                  budget,
+                  selectedMonth
+                );
                 const budgetAmount = parseFloat(budget.amount || 0);
                 const percentage =
                   budgetAmount > 0 ? (actualSpending / budgetAmount) * 100 : 0;
@@ -955,47 +1025,107 @@ function Budgets() {
                     onClick={() => handleRowClick(budget)}
                   >
                     <Box sx={{ mb: 1 }}>
-                      <Typography variant="body1" fontWeight="medium" sx={{ fontSize: '0.875rem', mb: 0.5 }}>
+                      <Typography
+                        variant="body1"
+                        fontWeight="medium"
+                        sx={{ fontSize: '0.875rem', mb: 0.5 }}
+                      >
                         {getCategoryName(budget.category_id)}
                       </Typography>
                       <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                        <Chip label={budget.currency} size="small" variant="outlined" sx={{ height: 20, fontSize: '0.6875rem' }} />
-                        <Chip label={budget.status} size="small" sx={{ height: 20, fontSize: '0.6875rem', ...getStatusChipSx(budget.status) }} />
+                        <Chip
+                          label={budget.currency}
+                          size="small"
+                          variant="outlined"
+                          sx={{ height: 20, fontSize: '0.6875rem' }}
+                        />
+                        <Chip
+                          label={budget.status}
+                          size="small"
+                          sx={{
+                            height: 20,
+                            fontSize: '0.6875rem',
+                            ...getStatusChipSx(budget.status),
+                          }}
+                        />
                       </Box>
                     </Box>
 
                     {/* Progress Bar */}
                     <Box sx={{ mb: 1 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.25 }}>
-                        <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                          Spent: {formatCurrency(actualSpending, budget.currency)}
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          mb: 0.25,
+                        }}
+                      >
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{ fontSize: '0.75rem' }}
+                        >
+                          Spent:{' '}
+                          {formatCurrency(actualSpending, budget.currency)}
                         </Typography>
-                        <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                          Budget: {formatCurrency(budgetAmount, budget.currency)}
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{ fontSize: '0.75rem' }}
+                        >
+                          Budget:{' '}
+                          {formatCurrency(budgetAmount, budget.currency)}
                         </Typography>
                       </Box>
                       <LinearProgress
                         variant="determinate"
                         value={Math.min(percentage, 100)}
-                        color={percentage > 100 ? 'error' : percentage > 80 ? 'warning' : 'success'}
+                        color={
+                          percentage > 100
+                            ? 'error'
+                            : percentage > 80
+                            ? 'warning'
+                            : 'success'
+                        }
                         sx={{ height: 6, borderRadius: 1 }}
                       />
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.25 }}>
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          mt: 0.25,
+                        }}
+                      >
                         <Typography
                           variant="caption"
-                          sx={{ color: remaining >= 0 ? 'softGreen.main' : 'softRed.main', fontSize: '0.6875rem' }}
+                          sx={{
+                            color:
+                              remaining >= 0
+                                ? 'softGreen.main'
+                                : 'softRed.main',
+                            fontSize: '0.6875rem',
+                          }}
                           fontWeight="medium"
                         >
-                          {remaining >= 0 ? 'Remaining' : 'Over'}: {formatCurrency(Math.abs(remaining), budget.currency)}
+                          {remaining >= 0 ? 'Remaining' : 'Over'}:{' '}
+                          {formatCurrency(Math.abs(remaining), budget.currency)}
                         </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6875rem' }}>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ fontSize: '0.6875rem' }}
+                        >
                           {percentage.toFixed(1)}%
                         </Typography>
                       </Box>
                     </Box>
 
                     {budget.notes && (
-                      <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ fontSize: '0.75rem' }}
+                      >
                         {budget.notes}
                       </Typography>
                     )}
@@ -1029,7 +1159,9 @@ function Budgets() {
                       }}
                       onClick={() => toggleParentExpansion(parentId)}
                     >
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <Box
+                        sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
+                      >
                         <IconButton
                           size="small"
                           onClick={(e) => {
@@ -1038,16 +1170,33 @@ function Budgets() {
                           }}
                           sx={{ p: 0.5 }}
                         >
-                            {isExpanded ? <ExpandMoreIcon sx={{ fontSize: 20 }} /> : <ChevronRightIcon sx={{ fontSize: 20 }} />}
-                          </IconButton>
-                          <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>
-                            {parentName}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary" sx={{ ml: 'auto', fontSize: '0.75rem' }}>
-                            Total: {formatCurrency(group.totalAmount, Object.values(group.subcategories)[0]?.budgets[0]?.currency || 'USD')}
-                          </Typography>
-                        </Box>
+                          {isExpanded ? (
+                            <ExpandMoreIcon sx={{ fontSize: 20 }} />
+                          ) : (
+                            <ChevronRightIcon sx={{ fontSize: 20 }} />
+                          )}
+                        </IconButton>
+                        <Typography
+                          variant="body2"
+                          fontWeight={600}
+                          sx={{ fontSize: '0.875rem' }}
+                        >
+                          {parentName}
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{ ml: 'auto', fontSize: '0.75rem' }}
+                        >
+                          Total:{' '}
+                          {formatCurrency(
+                            group.totalAmount,
+                            Object.values(group.subcategories)[0]?.budgets[0]
+                              ?.currency || 'USD'
+                          )}
+                        </Typography>
                       </Box>
+                    </Box>
                     {/* Subcategory Budgets */}
                     <Collapse in={isExpanded}>
                       <Box sx={{ pl: 1 }}>
@@ -1081,7 +1230,13 @@ function Budgets() {
                         }}
                         onClick={() => toggleTypeExpansion('oneTime')}
                       >
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 0.5,
+                          }}
+                        >
                           <IconButton
                             size="small"
                             onClick={(e) => {
@@ -1090,9 +1245,20 @@ function Budgets() {
                             }}
                             sx={{ p: 0.5, color: '#5f6368' }}
                           >
-                            {expandedTypes.oneTime ? <ExpandMoreIcon sx={{ fontSize: 20 }} /> : <ChevronRightIcon sx={{ fontSize: 20 }} />}
+                            {expandedTypes.oneTime ? (
+                              <ExpandMoreIcon sx={{ fontSize: 20 }} />
+                            ) : (
+                              <ChevronRightIcon sx={{ fontSize: 20 }} />
+                            )}
                           </IconButton>
-                          <Typography variant="body1" sx={{ fontSize: '0.9375rem', fontWeight: 500, color: '#202124' }}>
+                          <Typography
+                            variant="body1"
+                            sx={{
+                              fontSize: '0.9375rem',
+                              fontWeight: 500,
+                              color: '#202124',
+                            }}
+                          >
                             One-time Budgets
                           </Typography>
                         </Box>
@@ -1127,7 +1293,13 @@ function Budgets() {
                         }}
                         onClick={() => toggleTypeExpansion('recurring')}
                       >
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 0.5,
+                          }}
+                        >
                           <IconButton
                             size="small"
                             onClick={(e) => {
@@ -1136,9 +1308,20 @@ function Budgets() {
                             }}
                             sx={{ p: 0.5, color: '#5f6368' }}
                           >
-                            {expandedTypes.recurring ? <ExpandMoreIcon sx={{ fontSize: 20 }} /> : <ChevronRightIcon sx={{ fontSize: 20 }} />}
+                            {expandedTypes.recurring ? (
+                              <ExpandMoreIcon sx={{ fontSize: 20 }} />
+                            ) : (
+                              <ChevronRightIcon sx={{ fontSize: 20 }} />
+                            )}
                           </IconButton>
-                          <Typography variant="body1" sx={{ fontSize: '0.9375rem', fontWeight: 500, color: '#202124' }}>
+                          <Typography
+                            variant="body1"
+                            sx={{
+                              fontSize: '0.9375rem',
+                              fontWeight: 500,
+                              color: '#202124',
+                            }}
+                          >
                             Recurring Budgets
                           </Typography>
                         </Box>
@@ -1183,7 +1366,10 @@ function Budgets() {
                 {/* Helper function to render a budget row */}
                 {(() => {
                   const renderBudgetRow = (budget) => {
-                    const actualSpending = calculateActualSpending(budget);
+                    const actualSpending = calculateActualSpending(
+                      budget,
+                      selectedMonth
+                    );
                     const budgetAmount = parseFloat(budget.amount || 0);
                     const percentage =
                       budgetAmount > 0
@@ -1385,7 +1571,11 @@ function Budgets() {
                           >
                             <TableCell
                               colSpan={7}
-                              sx={{ backgroundColor: 'transparent', borderBottom: '1px solid', borderColor: 'divider' }}
+                              sx={{
+                                backgroundColor: 'transparent',
+                                borderBottom: '1px solid',
+                                borderColor: 'divider',
+                              }}
                             >
                               <Box
                                 sx={{
@@ -1409,7 +1599,10 @@ function Budgets() {
                                     <ChevronRightIcon />
                                   )}
                                 </IconButton>
-                                <Typography variant="h6" sx={{ fontWeight: 500, color: '#202124' }}>
+                                <Typography
+                                  variant="h6"
+                                  sx={{ fontWeight: 500, color: '#202124' }}
+                                >
                                   One-time Budgets
                                 </Typography>
                               </Box>
@@ -1450,7 +1643,11 @@ function Budgets() {
                           >
                             <TableCell
                               colSpan={7}
-                              sx={{ backgroundColor: 'transparent', borderBottom: '1px solid', borderColor: 'divider' }}
+                              sx={{
+                                backgroundColor: 'transparent',
+                                borderBottom: '1px solid',
+                                borderColor: 'divider',
+                              }}
                             >
                               <Box
                                 sx={{
@@ -1474,7 +1671,10 @@ function Budgets() {
                                     <ChevronRightIcon />
                                   )}
                                 </IconButton>
-                                <Typography variant="h6" sx={{ fontWeight: 500, color: '#202124' }}>
+                                <Typography
+                                  variant="h6"
+                                  sx={{ fontWeight: 500, color: '#202124' }}
+                                >
                                   Recurring Budgets
                                 </Typography>
                               </Box>

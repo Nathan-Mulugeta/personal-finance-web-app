@@ -28,7 +28,6 @@ import {
   TRANSACTION_STATUSES,
 } from '../../lib/api/transactions';
 import CategoryAutocomplete from './CategoryAutocomplete';
-import { refreshAllData } from '../../utils/refreshAllData';
 import { flattenCategoryTree } from '../../utils/categoryHierarchy';
 import { useKeyboardAwareHeight } from '../../hooks/useKeyboardAwareHeight';
 
@@ -154,9 +153,6 @@ function AddTransactionDialog({ open, onClose }) {
     try {
       await dispatch(createTransaction(data)).unwrap();
       handleClose();
-      
-      // Refresh all data to ensure all pages have fresh data
-      await refreshAllData(dispatch);
     } catch (err) {
       console.error('Error saving transaction:', err);
       const errorMessage = err?.message || 'Failed to save transaction. Please try again.';

@@ -1,81 +1,52 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback, memo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
+import {
+  selectAccountNameGetter,
+  selectCategoryNameGetter,
+  selectCategoryMap,
+} from '../store/selectors';
 import {
   Box,
-  Button,
-  Chip,
-  CircularProgress,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Fab,
-  FormControl,
-  FormHelperText,
-  Grid,
   IconButton,
   InputAdornment,
-  InputLabel,
-  MenuItem,
-  Select,
+  Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   TextField,
   Typography,
-  List,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
-  Divider,
-  Alert,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
 import ReceiptIcon from '@mui/icons-material/Receipt';
-import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd';
 import CameraAltIcon from '@mui/icons-material/CameraAlt';
 import ChatIcon from '@mui/icons-material/Chat';
 import AddTransactionDialog from '../components/common/AddTransactionDialog';
+import EditTransactionDialog from '../components/common/EditTransactionDialog';
 import BatchTransactionDialog from '../components/common/BatchTransactionDialog';
 import ReceiptCaptureDialog from '../components/common/ReceiptCaptureDialog';
 import NaturalLanguageDialog from '../components/common/NaturalLanguageDialog';
 import AITransactionsReviewModal from '../components/common/AITransactionsReviewModal';
-import {
-  updateTransaction,
-  deleteTransaction,
-  clearError,
-  fetchTransactions,
-} from '../store/slices/transactionsSlice';
-import { recalculateAccountBalance } from '../store/slices/accountsSlice';
-import { transactionSchema } from '../schemas/transactionSchema';
-import {
-  TRANSACTION_TYPES,
-  TRANSACTION_STATUSES,
-} from '../lib/api/transactions';
 import ErrorMessage from '../components/common/ErrorMessage';
-import CategoryAutocomplete from '../components/common/CategoryAutocomplete';
-import { formatCurrency } from '../utils/currencyConversion';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, isToday, isYesterday } from 'date-fns';
 import { usePageRefresh } from '../hooks/usePageRefresh';
-import { refreshAllData } from '../utils/refreshAllData';
 
 function Home() {
   const dispatch = useDispatch();
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
-  const [openDialog, setOpenDialog] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [actionError, setActionError] = useState(null);
-  const [deleteConfirm, setDeleteConfirm] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState(null);
   const [addTransactionOpen, setAddTransactionOpen] = useState(false);
   const [batchTransactionOpen, setBatchTransactionOpen] = useState(false);
   const [receiptCaptureOpen, setReceiptCaptureOpen] = useState(false);
@@ -85,10 +56,15 @@ function Home() {
   const [isReceiptParsing, setIsReceiptParsing] = useState(false);
   const searchInputRef = useRef(null);
 
-  // Get data from Redux - only what we need for transactions
+  // Get data from Redux
   const { allTransactions, error } = useSelector((state) => state.transactions);
   const { categories } = useSelector((state) => state.categories);
   const { accounts } = useSelector((state) => state.accounts);
+  
+  // Memoized O(1) lookup functions from selectors
+  const getAccountName = useSelector(selectAccountNameGetter);
+  const getCategoryName = useSelector(selectCategoryNameGetter);
+  const categoryMap = useSelector(selectCategoryMap);
 
   // Refresh data on navigation
   usePageRefresh({
@@ -99,32 +75,6 @@ function Home() {
     },
   });
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-    reset,
-    setValue,
-    watch,
-  } = useForm({
-    resolver: zodResolver(transactionSchema),
-    defaultValues: {
-      accountId: '',
-      categoryId: '',
-      amount: '',
-      currency: '',
-      description: '',
-      type: 'Expense',
-      status: 'Cleared',
-      date: format(new Date(), 'yyyy-MM-dd'),
-    },
-  });
-
-  const watchedAccountId = watch('accountId');
-  const watchedCategoryId = watch('categoryId');
-  const watchedType = watch('type');
-  const watchedStatus = watch('status');
-
   // Debounce search query with 300ms delay
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -133,18 +83,6 @@ function Home() {
 
     return () => clearTimeout(timer);
   }, [searchQuery]);
-
-  // Auto-set currency when account is selected
-  useEffect(() => {
-    if (watchedAccountId) {
-      const account = accounts.find(
-        (acc) => acc.account_id === watchedAccountId
-      );
-      if (account) {
-        setValue('currency', account.currency);
-      }
-    }
-  }, [watchedAccountId, accounts, setValue]);
 
   // Search transactions by category name and description
   const searchResults = useMemo(() => {
@@ -170,10 +108,8 @@ function Home() {
         return true;
       }
 
-      // Search by category name
-      const category = categories.find(
-        (cat) => cat.category_id === txn.category_id
-      );
+      // Search by category name using O(1) Map lookup
+      const category = categoryMap.get(txn.category_id);
       if (category) {
         const categoryName = (category.name || '').toLowerCase();
         if (categoryName.includes(query)) {
@@ -183,161 +119,47 @@ function Home() {
 
       return false;
     });
-  }, [debouncedSearchQuery, allTransactions, categories]);
+  }, [debouncedSearchQuery, allTransactions, categoryMap]);
 
-  // Get category name helper
-  const getCategoryName = (categoryId) => {
-    const category = categories.find((cat) => cat.category_id === categoryId);
-    return category?.name || 'Unknown';
-  };
-
-  // Get account name helper
-  const getAccountName = (accountId) => {
-    const account = accounts.find((acc) => acc.account_id === accountId);
-    return account?.name || 'Unknown';
-  };
-
-  // Filter categories by type
-  const getFilteredCategories = () => {
-    if (!watchedType) return categories;
-    if (watchedType === 'Income') {
-      return categories.filter((cat) => cat.type === 'Income');
-    } else if (watchedType === 'Expense') {
-      return categories.filter((cat) => cat.type === 'Expense');
+  // Recent transactions (10 most recent, excluding deleted/cancelled)
+  const recentTransactions = useMemo(() => {
+    if (!allTransactions || allTransactions.length === 0) {
+      return [];
     }
-    return categories;
-  };
 
-  const handleOpenDialog = (transaction) => {
-    if (transaction) {
-      setEditingTransaction(transaction);
-      reset({
-        accountId: transaction.account_id,
-        categoryId: transaction.category_id,
-        amount: transaction.amount,
-        currency: transaction.currency,
-        description: transaction.description || '',
-        type: transaction.type,
-        status: transaction.status,
-        date: transaction.date,
-      });
-    } else {
-      setEditingTransaction(null);
-      reset({
-        accountId: '',
-        categoryId: '',
-        amount: '',
-        currency: '',
-        description: '',
-        type: 'Expense',
-        status: 'Cleared',
-        date: format(new Date(), 'yyyy-MM-dd'),
-      });
+    return allTransactions
+      .filter((txn) => !txn.deleted_at && txn.status !== 'Cancelled')
+      .sort((a, b) => {
+        // Sort by created_at or date, most recent first
+        const dateA = new Date(a.created_at || a.date);
+        const dateB = new Date(b.created_at || b.date);
+        return dateB - dateA;
+      })
+      .slice(0, 10);
+  }, [allTransactions]);
+
+  // Get date display (Today, Yesterday, or formatted date)
+  const getDateDisplay = useCallback((transaction) => {
+    const txnDate = parseISO(transaction.date);
+    if (isToday(txnDate)) {
+      return 'Today';
+    } else if (isYesterday(txnDate)) {
+      return 'Yesterday';
     }
-    setActionError(null);
-    setIsSubmitting(false);
-    setDeleteError(null);
-    setIsDeleting(false);
-    setOpenDialog(true);
-    setDeleteConfirm(false);
-  };
+    return format(txnDate, 'MMM dd, yyyy');
+  }, []);
 
-  const handleCloseDialog = () => {
-    setOpenDialog(false);
+  const handleOpenEditDialog = useCallback((transaction) => {
+    setEditingTransaction(transaction);
+    setEditDialogOpen(true);
+  }, []);
+
+  const handleCloseEditDialog = useCallback(() => {
+    setEditDialogOpen(false);
     setEditingTransaction(null);
-    setDeleteConfirm(false);
-    setActionError(null);
-    setIsSubmitting(false);
-    setDeleteError(null);
-    setIsDeleting(false);
-    reset();
-    dispatch(clearError());
-  };
+  }, []);
 
-  const onSubmit = async (data) => {
-    // Don't submit if in delete confirmation mode
-    if (deleteConfirm) return;
-
-    setIsSubmitting(true);
-    setActionError(null);
-    try {
-      let transaction;
-      if (editingTransaction) {
-        transaction = await dispatch(
-          updateTransaction({
-            transactionId: editingTransaction.transaction_id,
-            updates: data,
-          })
-        ).unwrap();
-      }
-
-      handleCloseDialog();
-
-      // Refresh all data to ensure all pages have fresh data
-      await refreshAllData(dispatch);
-    } catch (err) {
-      console.error('Error saving transaction:', err);
-      const errorMessage =
-        err?.message || 'Failed to save transaction. Please try again.';
-      setActionError(errorMessage);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleDeleteClick = () => {
-    // Close the edit dialog and open the delete confirmation dialog
-    setOpenDialog(false);
-    setDeleteConfirm(true);
-  };
-
-  const handleDeleteConfirm = async () => {
-    if (!editingTransaction) return;
-
-    setIsDeleting(true);
-    setDeleteError(null);
-    try {
-      await dispatch(
-        deleteTransaction(editingTransaction.transaction_id)
-      ).unwrap();
-
-      // Recalculate balance for the affected account
-      setTimeout(() => {
-        if (editingTransaction?.account_id) {
-          dispatch(
-            recalculateAccountBalance({
-              accountId: editingTransaction.account_id,
-              transactions: undefined, // Will use state.transactions.allTransactions
-            })
-          );
-        }
-      }, 100);
-
-      // Close delete confirmation and clean up
-      setDeleteConfirm(false);
-      setEditingTransaction(null);
-      setDeleteError(null);
-
-      // Refresh all data to ensure all pages have fresh data
-      await refreshAllData(dispatch);
-    } catch (err) {
-      console.error('Error deleting transaction:', err);
-      const errorMessage =
-        err?.message || 'Failed to delete transaction. Please try again.';
-      setDeleteError(errorMessage);
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  const handleCancelDelete = () => {
-    setDeleteConfirm(false);
-    setDeleteError(null);
-    // Re-open the edit dialog
-    setOpenDialog(true);
-  };
-
-  const handleClearSearch = () => {
+  const handleClearSearch = useCallback(() => {
     setSearchQuery('');
     setDebouncedSearchQuery('');
     // Focus the search input after clearing
@@ -346,20 +168,346 @@ function Home() {
         searchInputRef.current.focus();
       }
     }, 0);
-  };
+  }, []);
 
   // Handle AI parsed data from receipt or natural language
-  const handleAiParsed = (data) => {
+  const handleAiParsed = useCallback((data) => {
     setAiParsedData(data);
     setIsReceiptParsing(data.type === 'receipt');
     setAiReviewOpen(true);
-  };
+  }, []);
 
   // Close AI review modal
-  const handleAiReviewClose = () => {
+  const handleAiReviewClose = useCallback(() => {
     setAiReviewOpen(false);
     setAiParsedData(null);
     setIsReceiptParsing(false);
+  }, []);
+
+  // Render mobile transaction row
+  const renderMobileTransaction = (transaction) => {
+    const description = transaction.description || '';
+    const dateDisplay = getDateDisplay(transaction);
+
+    return (
+      <Box
+        key={transaction.transaction_id}
+        onClick={() => handleOpenEditDialog(transaction)}
+        sx={{
+          py: 1,
+          px: 0.5,
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+          cursor: 'pointer',
+          display: 'flex',
+          gap: 0.75,
+          alignItems: 'flex-start',
+          '&:active': { backgroundColor: 'action.hover' },
+          overflow: 'hidden',
+          width: '100%',
+          boxSizing: 'border-box',
+          userSelect: 'none',
+        }}
+      >
+        <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: 1,
+              width: '100%',
+            }}
+          >
+            <Typography
+              variant="body2"
+              component="div"
+              sx={{
+                fontSize: '0.8125rem',
+                fontWeight: 500,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                minWidth: 0,
+                flex: 1,
+              }}
+            >
+              {getCategoryName(transaction.category_id)}
+            </Typography>
+            <Typography
+              variant="body2"
+              fontWeight={600}
+              sx={{
+                fontSize: '0.875rem',
+                color:
+                  transaction.type === 'Income' ||
+                  transaction.type === 'Transfer In'
+                    ? '#1e8e3e'
+                    : transaction.type === 'Expense' ||
+                      transaction.type === 'Transfer Out'
+                    ? '#d93025'
+                    : 'text.primary',
+                flexShrink: 0,
+              }}
+            >
+              {transaction.currency}{' '}
+              {new Intl.NumberFormat('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              }).format(Math.abs(transaction.amount))}
+            </Typography>
+          </Box>
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: 1,
+              width: '100%',
+            }}
+          >
+            <Typography
+              variant="body2"
+              component="div"
+              sx={{
+                fontSize: '0.6875rem',
+                color: 'text.secondary',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                minWidth: 0,
+                flex: 1,
+              }}
+            >
+              {getAccountName(transaction.account_id)}
+              {description && ` • ${description}`}
+            </Typography>
+            <Typography
+              variant="body2"
+              sx={{
+                fontSize: '0.6875rem',
+                color: 'text.secondary',
+                flexShrink: 0,
+              }}
+            >
+              {dateDisplay}
+            </Typography>
+          </Box>
+        </Box>
+      </Box>
+    );
+  };
+
+  // Render desktop table row
+  const renderDesktopTableRow = (transaction) => {
+    const dateDisplay = getDateDisplay(transaction);
+
+    return (
+      <TableRow
+        key={transaction.transaction_id}
+        hover
+        onClick={() => handleOpenEditDialog(transaction)}
+        sx={{
+          cursor: 'pointer',
+          userSelect: 'none',
+          '&:hover': {
+            backgroundColor: 'action.hover',
+          },
+          '& td': {
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+            py: 0.5,
+            fontSize: '0.8125rem',
+          },
+        }}
+      >
+        <TableCell>
+          <Typography
+            variant="body2"
+            sx={{
+              fontSize: '0.8125rem',
+              fontWeight: 500,
+            }}
+          >
+            {getCategoryName(transaction.category_id)}
+          </Typography>
+        </TableCell>
+        <TableCell>
+          <Typography variant="body2" sx={{ fontSize: '0.8125rem' }}>
+            {getAccountName(transaction.account_id)}
+          </Typography>
+        </TableCell>
+        <TableCell>
+          <Typography
+            variant="body2"
+            sx={{
+              fontSize: '0.8125rem',
+              color: 'text.secondary',
+              maxWidth: 200,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {transaction.description || '-'}
+          </Typography>
+        </TableCell>
+        <TableCell>
+          <Typography
+            variant="body2"
+            sx={{
+              fontSize: '0.8125rem',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {dateDisplay}
+          </Typography>
+        </TableCell>
+        <TableCell align="right">
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'flex-end',
+              gap: 0.5,
+            }}
+          >
+            <Typography
+              variant="body2"
+              sx={{
+                fontSize: '0.75rem',
+                color: 'text.secondary',
+              }}
+            >
+              {transaction.currency}
+            </Typography>
+            <Typography
+              variant="body2"
+              fontWeight={600}
+              sx={{
+                fontSize: '0.875rem',
+                color:
+                  transaction.type === 'Income' ||
+                  transaction.type === 'Transfer In'
+                    ? '#1e8e3e'
+                    : transaction.type === 'Expense' ||
+                      transaction.type === 'Transfer Out'
+                    ? '#d93025'
+                    : 'text.primary',
+              }}
+            >
+              {new Intl.NumberFormat('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              }).format(Math.abs(transaction.amount))}
+            </Typography>
+          </Box>
+        </TableCell>
+      </TableRow>
+    );
+  };
+
+  // Render transactions list/table
+  const renderTransactions = (transactions, title) => {
+    if (transactions.length === 0) {
+      return (
+        <Box
+          sx={{
+            textAlign: 'center',
+            py: { xs: 4, sm: 6 },
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 1,
+            backgroundColor: 'background.paper',
+          }}
+        >
+          <ReceiptIcon
+            sx={{
+              fontSize: { xs: 48, sm: 64 },
+              color: 'text.secondary',
+              mb: { xs: 1.5, sm: 2 },
+            }}
+          />
+          <Typography
+            variant="h6"
+            color="text.secondary"
+            gutterBottom
+            sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}
+          >
+            {debouncedSearchQuery ? 'No transactions found' : 'No transactions yet'}
+          </Typography>
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}
+          >
+            {debouncedSearchQuery
+              ? 'Try searching by category name or transaction description'
+              : 'Add your first transaction to get started'}
+          </Typography>
+        </Box>
+      );
+    }
+
+    return (
+      <>
+        {/* Mobile View */}
+        <Box
+          sx={{
+            display: { xs: 'block', md: 'none' },
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 1,
+            backgroundColor: 'background.paper',
+            overflow: 'hidden',
+          }}
+        >
+          {transactions.map((txn) => renderMobileTransaction(txn))}
+        </Box>
+
+        {/* Desktop Table View */}
+        <TableContainer
+          component={Paper}
+          elevation={0}
+          sx={{
+            display: { xs: 'none', md: 'block' },
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 1,
+            overflow: 'hidden',
+          }}
+        >
+          <Table size="small">
+            <TableHead>
+              <TableRow
+                sx={{
+                  backgroundColor: 'background.default',
+                  '& th': {
+                    borderBottom: '1px solid',
+                    borderColor: 'divider',
+                    py: 0.75,
+                    fontSize: '0.6875rem',
+                    fontWeight: 600,
+                    color: 'text.secondary',
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.5,
+                  },
+                }}
+              >
+                <TableCell>Category</TableCell>
+                <TableCell>Account</TableCell>
+                <TableCell>Description</TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>Date</TableCell>
+                <TableCell align="right">Amount</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {transactions.map((txn) => renderDesktopTableRow(txn))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </>
+    );
   };
 
   return (
@@ -434,6 +582,13 @@ function Home() {
       <AddTransactionDialog
         open={addTransactionOpen}
         onClose={() => setAddTransactionOpen(false)}
+      />
+
+      {/* Edit Transaction Dialog */}
+      <EditTransactionDialog
+        open={editDialogOpen}
+        onClose={handleCloseEditDialog}
+        transaction={editingTransaction}
       />
 
       {/* Batch Transaction Dialog */}
@@ -522,491 +677,25 @@ function Home() {
 
       {/* Search Results */}
       {debouncedSearchQuery && (
-        <Box>
-          {searchResults.length > 0 ? (
-            <Box
-              sx={{
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 1,
-                backgroundColor: 'background.paper',
-                overflow: 'hidden',
-              }}
-            >
-              <List disablePadding>
-                {searchResults.map((txn, index) => (
-                  <Box key={txn.transaction_id}>
-                    <ListItemButton
-                      onClick={() => handleOpenDialog(txn)}
-                      sx={{ py: { xs: 1, sm: 1.5 }, px: { xs: 1.5, sm: 2 } }}
-                    >
-                      <ListItemIcon sx={{ minWidth: { xs: 36, sm: 48 } }}>
-                        <ReceiptIcon
-                          color="primary"
-                          sx={{ fontSize: { xs: 20, sm: 24 } }}
-                        />
-                      </ListItemIcon>
-                      <ListItemText
-                        primary={
-                          <Box
-                            component="span"
-                            sx={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 0.75,
-                              flexWrap: 'wrap',
-                            }}
-                          >
-                            <Typography
-                              component="span"
-                              variant="body1"
-                              fontWeight="medium"
-                              sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}
-                            >
-                              {txn.description || 'No description'}
-                            </Typography>
-                            <Chip
-                              label={txn.type}
-                              size="small"
-                              color={
-                                txn.type === 'Income' ? 'success' : 'error'
-                              }
-                              sx={{ height: 20, fontSize: '0.6875rem' }}
-                            />
-                          </Box>
-                        }
-                        secondary={
-                          <Box component="span">
-                            <Typography
-                              component="span"
-                              variant="body2"
-                              color="text.secondary"
-                              sx={{
-                                fontSize: { xs: '0.75rem', sm: '0.8125rem' },
-                                display: 'block',
-                              }}
-                            >
-                              {getCategoryName(txn.category_id)} •{' '}
-                              {getAccountName(txn.account_id)}
-                            </Typography>
-                            <Typography
-                              component="span"
-                              variant="body2"
-                              color="text.secondary"
-                              sx={{
-                                fontSize: { xs: '0.75rem', sm: '0.8125rem' },
-                                display: 'block',
-                              }}
-                            >
-                              {format(
-                                parseISO(txn.created_at || txn.date),
-                                'MMM dd, yyyy h:mm a'
-                              )}{' '}
-                              •{' '}
-                              {formatCurrency(
-                                Math.abs(txn.amount),
-                                txn.currency
-                              )}
-                            </Typography>
-                          </Box>
-                        }
-                      />
-                    </ListItemButton>
-                    {index < searchResults.length - 1 && <Divider />}
-                  </Box>
-                ))}
-              </List>
-            </Box>
-          ) : (
-            <Box
-              sx={{
-                textAlign: 'center',
-                py: { xs: 3, sm: 4 },
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 1,
-                backgroundColor: 'background.paper',
-              }}
-            >
-              <SearchIcon
-                sx={{
-                  fontSize: { xs: 48, sm: 64 },
-                  color: 'text.secondary',
-                  mb: { xs: 1.5, sm: 2 },
-                }}
-              />
-              <Typography
-                variant="h6"
-                color="text.secondary"
-                gutterBottom
-                sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}
-              >
-                No transactions found
-              </Typography>
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{ fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}
-              >
-                Try searching by category name or transaction description
-              </Typography>
-            </Box>
-          )}
-        </Box>
+        <Box>{renderTransactions(searchResults, 'Search Results')}</Box>
       )}
 
-      {/* Empty State */}
+      {/* Recent Transactions (shown when no search query) */}
       {!debouncedSearchQuery && (
-        <Box
-          sx={{
-            textAlign: 'center',
-            py: { xs: 4, sm: 6 },
-            border: '1px solid',
-            borderColor: 'divider',
-            borderRadius: 1,
-            backgroundColor: 'background.paper',
-          }}
-        >
-          <SearchIcon
-            sx={{
-              fontSize: { xs: 48, sm: 64 },
-              color: 'text.secondary',
-              mb: { xs: 1.5, sm: 2 },
-            }}
-          />
+        <Box>
           <Typography
             variant="h6"
-            color="text.secondary"
-            gutterBottom
-            sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}
-          >
-            Search transactions
-          </Typography>
-          <Typography
-            variant="body2"
-            color="text.secondary"
             sx={{
-              mb: { xs: 2, sm: 3 },
-              fontSize: { xs: '0.8125rem', sm: '0.875rem' },
+              mb: 1.5,
+              fontSize: { xs: '1rem', sm: '1.125rem' },
+              fontWeight: 500,
             }}
           >
-            Search by category name or transaction description
+            Recent Transactions
           </Typography>
+          {renderTransactions(recentTransactions, 'Recent Transactions')}
         </Box>
       )}
-
-      {/* Edit Transaction Dialog */}
-      <Dialog
-        open={openDialog}
-        onClose={handleCloseDialog}
-        maxWidth="sm"
-        fullWidth
-        fullScreen={isMobile}
-        PaperProps={{
-          sx: isMobile
-            ? {
-                display: 'flex',
-                flexDirection: 'column',
-                height: '100%',
-                maxHeight: '100%',
-              }
-            : {},
-        }}
-      >
-        <form
-          onSubmit={handleSubmit(onSubmit)}
-          style={
-            isMobile
-              ? {
-                  display: 'flex',
-                  flexDirection: 'column',
-                  height: '100%',
-                  overflow: 'hidden',
-                }
-              : {}
-          }
-        >
-          <DialogTitle sx={{ flexShrink: 0, pb: { xs: 1, sm: 2 } }}>
-            {editingTransaction ? 'Edit Transaction' : 'Create New Transaction'}
-          </DialogTitle>
-          <DialogContent
-            sx={{ flexGrow: 1, overflow: 'auto', pt: { xs: 1, sm: 2 } }}
-          >
-            {actionError && (
-              <Alert severity="error" sx={{ mb: 2 }}>
-                {actionError}
-              </Alert>
-            )}
-            <Grid
-                container
-                spacing={{ xs: 1.5, sm: 2 }}
-                sx={{ mt: { xs: 0.5, sm: 1 } }}
-              >
-                <Grid item xs={12} sm={6}>
-                  <FormControl fullWidth error={!!errors.accountId}>
-                    <InputLabel>Account *</InputLabel>
-                    <Select
-                      {...register('accountId')}
-                      label="Account *"
-                      value={watchedAccountId || ''}
-                      onChange={(e) => setValue('accountId', e.target.value)}
-                    >
-                      {accounts
-                        .filter((acc) => acc.status === 'Active')
-                        .map((account) => (
-                          <MenuItem
-                            key={account.account_id}
-                            value={account.account_id}
-                          >
-                            {account.name} ({account.currency})
-                          </MenuItem>
-                        ))}
-                    </Select>
-                    {errors.accountId && (
-                      <FormHelperText>
-                        {errors.accountId.message}
-                      </FormHelperText>
-                    )}
-                  </FormControl>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <FormControl fullWidth error={!!errors.type}>
-                    <InputLabel>Type *</InputLabel>
-                    <Select
-                      {...register('type')}
-                      label="Type *"
-                      value={watchedType || ''}
-                      onChange={(e) => setValue('type', e.target.value)}
-                    >
-                      {TRANSACTION_TYPES.filter(
-                        (t) => !t.includes('Transfer')
-                      ).map((type) => (
-                        <MenuItem key={type} value={type}>
-                          {type}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                    {errors.type && (
-                      <FormHelperText>{errors.type.message}</FormHelperText>
-                    )}
-                  </FormControl>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <CategoryAutocomplete
-                    categories={getFilteredCategories()}
-                    value={watchedCategoryId || ''}
-                    onChange={(id) => setValue('categoryId', id)}
-                    label="Category *"
-                    error={!!errors.categoryId}
-                    helperText={
-                      errors.categoryId?.message ||
-                      (!watchedType
-                        ? 'Please select a transaction type first'
-                        : undefined)
-                    }
-                    disabled={!watchedType}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    type="date"
-                    label="Date *"
-                    {...register('date')}
-                    error={!!errors.date}
-                    helperText={errors.date?.message}
-                    InputLabelProps={{ shrink: true }}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    type="number"
-                    label="Amount *"
-                    {...register('amount', { valueAsNumber: true })}
-                    error={!!errors.amount}
-                    helperText={errors.amount?.message}
-                    inputProps={{ step: '0.01', min: '0.01' }}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    label="Currency"
-                    {...register('currency')}
-                    error={!!errors.currency}
-                    helperText={
-                      errors.currency?.message ||
-                      'Auto-filled from account selection'
-                    }
-                    disabled
-                    InputLabelProps={{
-                      shrink: !!watch('currency'),
-                    }}
-                  />
-                </Grid>
-                <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    label="Description"
-                    {...register('description')}
-                    error={!!errors.description}
-                    helperText={errors.description?.message}
-                    multiline
-                    rows={2}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <FormControl fullWidth error={!!errors.status}>
-                    <InputLabel>Status</InputLabel>
-                    <Select
-                      {...register('status')}
-                      label="Status"
-                      value={watchedStatus || ''}
-                      onChange={(e) => setValue('status', e.target.value)}
-                    >
-                      {TRANSACTION_STATUSES.map((status) => (
-                        <MenuItem key={status} value={status}>
-                          {status}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                    {errors.status && (
-                      <FormHelperText>{errors.status.message}</FormHelperText>
-                    )}
-                  </FormControl>
-                </Grid>
-              </Grid>
-          </DialogContent>
-          <DialogActions
-            sx={{
-              flexShrink: 0,
-              p: { xs: 1.5, sm: 2 },
-              borderTop: { xs: '1px solid', sm: 'none' },
-              borderColor: 'divider',
-            }}
-          >
-            <Box
-              sx={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                width: '100%',
-                flexWrap: 'wrap',
-                gap: 1,
-              }}
-            >
-              <Box>
-                {editingTransaction && (
-                  <Button
-                    onClick={handleDeleteClick}
-                    color="error"
-                    startIcon={
-                      <DeleteIcon sx={{ fontSize: { xs: 18, sm: 20 } }} />
-                    }
-                    size={isMobile ? 'small' : 'medium'}
-                    sx={{ textTransform: 'none' }}
-                  >
-                    Delete
-                  </Button>
-                )}
-              </Box>
-              <Box sx={{ display: 'flex', gap: 1 }}>
-                <Button
-                  onClick={handleCloseDialog}
-                  disabled={isSubmitting}
-                  size={isMobile ? 'small' : 'medium'}
-                  sx={{ textTransform: 'none' }}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  variant="contained"
-                  disabled={isSubmitting}
-                  size={isMobile ? 'small' : 'medium'}
-                  startIcon={
-                    isSubmitting ? (
-                      <CircularProgress size={16} color="inherit" />
-                    ) : null
-                  }
-                  sx={{ textTransform: 'none' }}
-                >
-                  {isSubmitting
-                    ? editingTransaction
-                      ? 'Updating...'
-                      : 'Creating...'
-                    : editingTransaction
-                    ? 'Update'
-                    : 'Create'}
-                </Button>
-              </Box>
-            </Box>
-          </DialogActions>
-        </form>
-      </Dialog>
-
-      {/* Delete Confirmation Dialog - Popup Modal */}
-      <Dialog
-        open={deleteConfirm}
-        onClose={handleCancelDelete}
-        maxWidth="xs"
-        fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: 2,
-            p: 1,
-          },
-        }}
-      >
-        <DialogTitle sx={{ textAlign: 'center', pb: 1 }}>
-          Delete Transaction?
-        </DialogTitle>
-        <DialogContent sx={{ textAlign: 'center', pb: 2 }}>
-          {deleteError && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {deleteError}
-            </Alert>
-          )}
-          <Typography variant="body2" color="text.secondary">
-            This action cannot be undone.
-            {editingTransaction?.type?.includes('Transfer') && (
-              <> Both transfer transactions will be deleted.</>
-            )}
-          </Typography>
-        </DialogContent>
-        <DialogActions sx={{ justifyContent: 'center', gap: 2, px: 3, pb: 3 }}>
-          <Button
-            onClick={handleCancelDelete}
-            disabled={isDeleting}
-            variant="outlined"
-            size="large"
-            sx={{
-              textTransform: 'none',
-              minWidth: 120,
-              py: 1.5,
-            }}
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleDeleteConfirm}
-            color="error"
-            variant="contained"
-            disabled={isDeleting}
-            size="large"
-            startIcon={
-              isDeleting ? <CircularProgress size={20} color="inherit" /> : null
-            }
-            sx={{
-              textTransform: 'none',
-              minWidth: 120,
-              py: 1.5,
-            }}
-          >
-            {isDeleting ? 'Deleting...' : 'Delete'}
-          </Button>
-        </DialogActions>
-      </Dialog>
 
       {/* Floating Action Buttons for AI Features */}
       <Box

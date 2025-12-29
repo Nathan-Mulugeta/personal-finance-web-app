@@ -13,7 +13,6 @@ import {
   Fade,
 } from '@mui/material'
 import MenuIcon from '@mui/icons-material/Menu'
-import AccountCircleIcon from '@mui/icons-material/AccountCircle'
 import { supabase } from '../../lib/supabase'
 import { clearAuth } from '../../store/slices/authSlice'
 
@@ -103,8 +102,8 @@ function Header({ onMenuClick }) {
             onClick={handleMenuOpen}
             sx={{ color: 'text.primary' }}
           >
-            <Avatar sx={{ width: 32, height: 32, bgcolor: 'action.hover' }}>
-              <AccountCircleIcon />
+            <Avatar sx={{ width: 32, height: 32, bgcolor: 'white', color: 'primary.main', border: '2px solid', borderColor: 'primary.main', fontSize: '0.875rem', fontWeight: 600 }}>
+              {user?.email?.charAt(0)?.toUpperCase() || '?'}
             </Avatar>
           </IconButton>
           <Menu

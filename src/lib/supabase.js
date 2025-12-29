@@ -32,11 +32,64 @@ export function generateId(prefix) {
   return `${prefix}_${timestamp}_${random}`
 }
 
-// Helper function to get current user
+// Cached user state to avoid redundant auth calls
+let cachedUser = null
+let userCacheTimestamp = 0
+const USER_CACHE_TTL = 5000 // 5 seconds cache
+
+/**
+ * Get current user with caching to reduce redundant auth calls.
+ * The cache is invalidated after 5 seconds or when auth state changes.
+ * @returns {Promise<Object|null>} User object or null
+ */
 export async function getCurrentUser() {
+  const now = Date.now()
+  
+  // Return cached user if still valid
+  if (cachedUser && (now - userCacheTimestamp) < USER_CACHE_TTL) {
+    return cachedUser
+  }
+  
   const { data: { user }, error } = await supabase.auth.getUser()
   if (error) throw error
+  
+  // Cache the user
+  cachedUser = user
+  userCacheTimestamp = now
+  
   return user
+}
+
+/**
+ * Get current user synchronously from cache.
+ * Returns null if no cached user available.
+ * Use this only when you're certain the user has been fetched recently.
+ * @returns {Object|null} Cached user object or null
+ */
+export function getCachedUser() {
+  const now = Date.now()
+  if (cachedUser && (now - userCacheTimestamp) < USER_CACHE_TTL) {
+    return cachedUser
+  }
+  return null
+}
+
+/**
+ * Clear the user cache. Call this on logout.
+ */
+export function clearUserCache() {
+  cachedUser = null
+  userCacheTimestamp = 0
+}
+
+/**
+ * Set the cached user directly.
+ * Use this when you receive the user from auth state change.
+ * @param {Object|null} user - User object to cache
+ */
+export function setCachedUser(user) {
+  cachedUser = user
+  userCacheTimestamp = Date.now()
 }
 
 // Helper function to get current session
@@ -46,3 +99,11 @@ export async function getCurrentSession() {
   return session
 }
 
+// Listen for auth changes and update cache
+supabase.auth.onAuthStateChange((_event, session) => {
+  if (session?.user) {
+    setCachedUser(session.user)
+  } else {
+    clearUserCache()
+  }
+})

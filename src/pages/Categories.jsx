@@ -45,7 +45,6 @@ import { CATEGORY_TYPES, CATEGORY_STATUSES } from '../lib/api/categories';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
 import { usePageRefresh } from '../hooks/usePageRefresh';
-import { refreshAllData } from '../utils/refreshAllData';
 import { buildCategoryTree } from '../utils/categoryHierarchy';
 
 function Categories() {
@@ -165,9 +164,6 @@ function Categories() {
         await dispatch(createCategory(data)).unwrap();
       }
       handleCloseDialog();
-
-      // Refresh all data to ensure all pages have fresh data
-      await refreshAllData(dispatch);
     } catch (err) {
       console.error('Error saving category:', err);
       const errorMessage =
@@ -187,9 +183,6 @@ function Categories() {
       await dispatch(deleteCategory(deleteConfirm.category_id)).unwrap();
       setDeleteConfirm(null);
       setDeleteError(null);
-
-      // Refresh all data to ensure all pages have fresh data
-      await refreshAllData(dispatch);
     } catch (err) {
       console.error('Error deleting category:', err);
       const errorMessage =

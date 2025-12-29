@@ -1,21 +1,18 @@
 /**
- * Calculate currency totals from account balances
- * @param {Array} accounts - Array of account objects
- * @param {Object} balances - Map of account_id to balance objects
+ * Calculate currency totals from accounts
+ * Now uses account.current_balance directly (stored in database)
+ * @param {Array} accounts - Array of account objects with current_balance
  * @returns {Object} Map of currency code to total balance
  */
-export function calculateCurrencyTotals(accounts, balances) {
+export function calculateCurrencyTotals(accounts) {
   const currencyTotals = {}
   
   accounts.forEach((account) => {
-    const balance = balances[account.account_id]
-    if (balance) {
-      const currency = account.currency
-      if (!currencyTotals[currency]) {
-        currencyTotals[currency] = 0
-      }
-      currencyTotals[currency] += balance.current_balance || 0
+    const currency = account.currency
+    if (!currencyTotals[currency]) {
+      currencyTotals[currency] = 0
     }
+    currencyTotals[currency] += account.current_balance || 0
   })
   
   return currencyTotals
@@ -102,28 +99,27 @@ export function convertAmountWithCache(amount, fromCurrency, toCurrency, exchang
 
 /**
  * Calculate converted balances for all accounts
- * @param {Array} accounts - Array of account objects
- * @param {Object} balances - Map of account_id to balance objects
+ * Now uses account.current_balance directly (stored in database)
+ * @param {Array} accounts - Array of account objects with current_balance
  * @param {string} baseCurrency - Base currency for conversion
  * @param {Array} exchangeRates - Array of exchange rate objects
- * @returns {Object} Map of account_id to balance object with convertedBalance
+ * @returns {Object} Map of account_id to balance info with convertedBalance
  */
-export function calculateConvertedBalances(accounts, balances, baseCurrency, exchangeRates) {
+export function calculateConvertedBalances(accounts, baseCurrency, exchangeRates) {
   const convertedBalances = {}
   
   accounts.forEach((account) => {
-    const balance = balances[account.account_id]
-    if (!balance) return
+    const currentBalance = account.current_balance || 0
     
     let convertedBalance = null
     let exchangeRate = null
     
     if (account.currency === baseCurrency) {
-      convertedBalance = balance.current_balance
+      convertedBalance = currentBalance
       exchangeRate = 1
     } else {
       const conversion = convertAmountWithCache(
-        balance.current_balance,
+        currentBalance,
         account.currency,
         baseCurrency,
         exchangeRates
@@ -136,7 +132,11 @@ export function calculateConvertedBalances(accounts, balances, baseCurrency, exc
     }
     
     convertedBalances[account.account_id] = {
-      ...balance,
+      account_id: account.account_id,
+      name: account.name,
+      opening_balance: account.opening_balance,
+      current_balance: currentBalance,
+      currency: account.currency,
       convertedBalance,
       exchangeRate,
     }
@@ -144,6 +144,3 @@ export function calculateConvertedBalances(accounts, balances, baseCurrency, exc
   
   return convertedBalances
 }
-
-
-

@@ -26,7 +26,6 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import CategoryAutocomplete from './CategoryAutocomplete';
 import { batchCreateTransactions } from '../../store/slices/transactionsSlice';
-import { refreshAllData } from '../../utils/refreshAllData';
 import { format } from 'date-fns';
 import { formatCurrency } from '../../utils/currencyConversion';
 
@@ -205,9 +204,6 @@ function AITransactionsReviewModal({
 
       // Use batch create
       await dispatch(batchCreateTransactions(transactionsToCreate)).unwrap();
-
-      // Refresh all data
-      await refreshAllData(dispatch);
 
       // Close modal on success
       onClose();

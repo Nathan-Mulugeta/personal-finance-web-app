@@ -87,10 +87,10 @@ Deno.serve(async (req: Request) => {
             return errorResponse('accountID query parameter is required');
           }
 
-          // Get account details
+          // Get account with pre-computed balance in a single query
           const { data: account, error: accountError } = await supabase
             .from('accounts')
-            .select('account_id, name, currency, opening_balance')
+            .select('account_id, name, currency, current_balance')
             .eq('account_id', accountID)
             .eq('user_id', userId)
             .single();
@@ -99,24 +99,10 @@ Deno.serve(async (req: Request) => {
             return errorResponse('Account not found', 404);
           }
 
-          // Calculate balance using the database function
-          const { data: balance, error: balanceError } = await supabase.rpc(
-            'calculate_account_balance',
-            {
-              p_account_id: accountID,
-              p_user_id: userId,
-            }
-          );
-
-          if (balanceError) {
-            console.error('Balance calculation error:', balanceError);
-            return errorResponse('Failed to calculate balance', 500);
-          }
-
           // Format for Tasker: %http_data.data.CurrentBalance
           return jsonResponse({
             data: {
-              CurrentBalance: balance ?? account.opening_balance ?? 0,
+              CurrentBalance: account.current_balance ?? 0,
               Currency: account.currency,
               AccountID: account.account_id,
               Name: account.name,

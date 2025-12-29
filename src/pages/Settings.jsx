@@ -35,7 +35,6 @@ import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
 import CategoryAutocomplete from '../components/common/CategoryAutocomplete';
 import { usePageRefresh } from '../hooks/usePageRefresh';
-import { refreshAllData } from '../utils/refreshAllData';
 import { persistor } from '../store';
 import RefreshIcon from '@mui/icons-material/Refresh';
 
@@ -204,9 +203,6 @@ function Settings() {
 
       await dispatch(updateSettings(updates)).unwrap();
       handleCloseDialog();
-
-      // Refresh all data to ensure all pages have fresh data
-      await refreshAllData(dispatch);
     } catch (err) {
       console.error('Error updating settings:', err);
       const errorMessage =

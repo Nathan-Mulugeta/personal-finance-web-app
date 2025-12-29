@@ -17,7 +17,8 @@ export const TRANSACTION_STATUSES = [
   'Cancelled',
 ];
 
-// Create transaction
+// Create transaction using validated RPC function
+// This reduces multiple database round trips to a single call
 export async function createTransaction(transactionData) {
   const user = await getCurrentUser();
   if (!user) throw new Error('User not authenticated');
@@ -35,8 +36,7 @@ export async function createTransaction(transactionData) {
     linkedTransactionId = null,
   } = transactionData;
 
-  // Validation
-  // Allow null categoryId for Transfer Out/In transactions
+  // Basic client-side validation
   const isTransferType = type === 'Transfer Out' || type === 'Transfer In';
   if (
     !accountId ||
@@ -48,83 +48,34 @@ export async function createTransaction(transactionData) {
       'Account ID, category ID, amount, and currency are required'
     );
   }
-  if (!TRANSACTION_TYPES.includes(type)) {
-    throw new Error(
-      `Invalid transaction type. Must be one of: ${TRANSACTION_TYPES.join(
-        ', '
-      )}`
-    );
-  }
-  if (!TRANSACTION_STATUSES.includes(status)) {
-    throw new Error(
-      `Invalid status. Must be one of: ${TRANSACTION_STATUSES.join(', ')}`
-    );
-  }
   if (currency.length !== 3) {
     throw new Error('Currency must be a 3-letter ISO code');
   }
 
-  // Verify account exists and is active
-  const { data: account } = await supabase
-    .from('accounts')
-    .select('*')
-    .eq('account_id', accountId)
-    .eq('user_id', user.id)
-    .eq('status', 'Active')
-    .single();
-
-  if (!account) {
-    throw new Error('Account not found or is not active');
-  }
-
-  // Verify currency matches account
-  if (currency.toUpperCase() !== account.currency) {
-    throw new Error(
-      `Currency must match account currency: ${account.currency}`
-    );
-  }
-
-  // Verify category exists and is active (skip for transfer types with null category)
-  if (categoryId && !isTransferType) {
-    const { data: category } = await supabase
-      .from('categories')
-      .select('*')
-      .eq('category_id', categoryId)
-      .eq('user_id', user.id)
-      .eq('status', 'Active')
-      .single();
-
-    if (!category) {
-      throw new Error('Category not found or is not active');
-    }
-  }
-
   const transactionId = generateId('TXN');
   const transactionDate = date ? new Date(date) : new Date();
-  // Preserve the actual creation timestamp
-  const now = new Date();
 
-  const { data, error } = await supabase
-    .from('transactions')
-    .insert({
-      transaction_id: transactionId,
-      user_id: user.id,
-      account_id: accountId,
-      category_id: categoryId,
-      date: transactionDate.toISOString().split('T')[0],
-      amount,
-      currency: currency.toUpperCase(),
-      description,
-      type,
-      status,
-      transfer_id: transferId,
-      linked_transaction_id: linkedTransactionId,
-      created_at: now.toISOString(),
-    })
-    .select()
-    .single();
+  // Use RPC function for validated creation (single database call)
+  const { data, error } = await supabase.rpc('create_transaction_validated', {
+    p_transaction_id: transactionId,
+    p_user_id: user.id,
+    p_account_id: accountId,
+    p_category_id: categoryId,
+    p_date: transactionDate.toISOString().split('T')[0],
+    p_amount: amount,
+    p_currency: currency.toUpperCase(),
+    p_description: description,
+    p_type: type,
+    p_status: status,
+    p_transfer_id: transferId,
+    p_linked_transaction_id: linkedTransactionId,
+  });
 
-  if (error) throw error;
+  if (error) {
+    // Parse Postgres error messages for user-friendly display
+    const message = error.message || 'Failed to create transaction';
+    throw new Error(message);
+  }
 
   // Auto-create borrowing/lending record if category matches
   try {

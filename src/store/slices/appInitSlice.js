@@ -1,6 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
-import { calculateAccountBalance } from '../../utils/accountBalance'
-import { fetchAccounts, setBalances } from './accountsSlice'
+import { fetchAccounts } from './accountsSlice'
 import { fetchTransactions } from './transactionsSlice'
 import { fetchCategories } from './categoriesSlice'
 import { fetchBudgets } from './budgetsSlice'
@@ -20,6 +19,8 @@ export const initializeApp = createAsyncThunk(
       const hasPersisted = await hasPersistedData()
       
       // Fetch all data in parallel
+      // Note: Account balances are now stored in account.current_balance
+      // and updated automatically by database triggers
       const [
         accountsResult,
         transactionsResult,
@@ -31,7 +32,7 @@ export const initializeApp = createAsyncThunk(
         exchangeRates,
       ] = await Promise.all([
         dispatch(fetchAccounts({ status: 'Active' })),
-        dispatch(fetchTransactions({})), // Fetch all transactions for balance calculations
+        dispatch(fetchTransactions({})),
         dispatch(fetchCategories({})),
         dispatch(fetchBudgets({})),
         dispatch(fetchTransfers({})),
@@ -50,8 +51,6 @@ export const initializeApp = createAsyncThunk(
       const settings = (settingsResult.payload?.data || settingsResult.payload) || []
 
       // Detect if backend is empty but we have persisted data
-      // This indicates backend was cleared but local cache still has old data
-      // Only check on first initialization to avoid infinite reload loops
       const state = getState()
       const isFirstInit = !state.appInit.isInitialized
       
@@ -73,32 +72,6 @@ export const initializeApp = createAsyncThunk(
           return rejectWithValue('Backend cleared, reloading...')
         }
       }
-
-      // Calculate account balances from transactions
-      const balances = {}
-      accounts.forEach((account) => {
-        const accountTransactions = transactions.filter(
-          (txn) =>
-            txn.account_id === account.account_id &&
-            !txn.deleted_at &&
-            txn.status !== 'Cancelled'
-        )
-        const balance = calculateAccountBalance(
-          account.opening_balance,
-          accountTransactions
-        )
-        balances[account.account_id] = {
-          account_id: account.account_id,
-          name: account.name,
-          opening_balance: account.opening_balance,
-          current_balance: balance,
-          currency: account.currency,
-          last_updated: new Date().toISOString(),
-        }
-      })
-
-      // Dispatch balance updates to accounts slice
-      dispatch(setBalances(balances))
       
       // Store exchange rates
       dispatch(setExchangeRates(exchangeRates || []))
@@ -112,7 +85,6 @@ export const initializeApp = createAsyncThunk(
         borrowingsLendings,
         settings,
         exchangeRates,
-        balances,
       }
     } catch (error) {
       return rejectWithValue(error.message)
@@ -157,7 +129,6 @@ const appInitSlice = createSlice({
 })
 
 // Manual refresh is now handled in the component by purging and reloading
-// This action is kept for backwards compatibility but is no longer used
 export const manualRefresh = createAsyncThunk(
   'appInit/manualRefresh',
   async (_, { dispatch, rejectWithValue }) => {
@@ -177,4 +148,3 @@ export const manualRefresh = createAsyncThunk(
 
 export const { resetInitialization, clearError } = appInitSlice.actions
 export default appInitSlice.reducer
-
