@@ -150,15 +150,17 @@ function Home() {
       .slice(0, 10);
   }, [allTransactions]);
 
-  // Get date display (Today, Yesterday, or formatted date)
+  // Get date display with time (Today shows time only, Yesterday shows "Yesterday, time", older dates show "Dec 25, time")
   const getDateDisplay = useCallback((transaction) => {
     const txnDate = parseISO(transaction.date);
+    const txnTime = transaction.created_at ? parseISO(transaction.created_at) : null;
+    
     if (isToday(txnDate)) {
-      return 'Today';
+      return txnTime ? format(txnTime, 'h:mm a') : 'Today';
     } else if (isYesterday(txnDate)) {
-      return 'Yesterday';
+      return txnTime ? `Yesterday, ${format(txnTime, 'h:mm a')}` : 'Yesterday';
     }
-    return format(txnDate, 'MMM dd, yyyy');
+    return txnTime ? format(txnTime, 'MMM d, h:mm a') : format(txnDate, 'MMM d, yyyy');
   }, []);
 
   const handleOpenEditDialog = useCallback((transaction) => {

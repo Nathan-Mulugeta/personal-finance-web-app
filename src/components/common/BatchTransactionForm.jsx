@@ -28,7 +28,6 @@ import {
 } from '../../lib/api/transactions';
 import CategoryAutocomplete from './CategoryAutocomplete';
 import { flattenCategoryTree } from '../../utils/categoryHierarchy';
-import { useKeyboardAwareHeight } from '../../hooks/useKeyboardAwareHeight';
 
 /**
  * Batch Transaction Form Component
@@ -45,8 +44,6 @@ function BatchTransactionForm({
 }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const { keyboardVisible, keyboardHeight } = useKeyboardAwareHeight();
-
   const { accounts } = useSelector((state) => state.accounts);
   const { categories } = useSelector((state) => state.categories);
   const { settings } = useSelector((state) => state.settings);
@@ -55,6 +52,7 @@ function BatchTransactionForm({
   const [actionError, setActionError] = useState(null);
   const [formKey, setFormKey] = useState(0); // Increments to force re-mount for auto-focus
   const amountInputRef = useRef(null); // Ref for Amount field focus chaining
+  const initializedForRef = useRef(null); // Track which state has been initialized to prevent refresh reset
 
   // Get default account from settings
   const getDefaultAccountId = () => {
@@ -94,41 +92,49 @@ function BatchTransactionForm({
   const watchedType = watch('type');
   const watchedStatus = watch('status');
 
-  // Reset form or populate with editing transaction
+  // Reset form or populate with editing transaction (only when the editing state changes, not on background refresh)
   useEffect(() => {
-    if (editingTransaction) {
-      reset({
-        accountId: editingTransaction.accountId,
-        categoryId: editingTransaction.categoryId,
-        amount: editingTransaction.amount,
-        currency: editingTransaction.currency,
-        description: editingTransaction.description || '',
-        type: editingTransaction.type,
-        status: editingTransaction.status,
-        date: editingTransaction.date,
-      });
-    } else {
-      const defaultAccountId = getDefaultAccountId();
-      reset({
-        accountId: defaultAccountId,
-        categoryId: '',
-        amount: '',
-        currency: '',
-        description: '',
-        type: 'Expense',
-        status: 'Cleared',
-        date: format(new Date(), 'yyyy-MM-dd'),
-      });
+    // Create a key to identify the current form state: editing a specific transaction or entering a new one
+    const currentStateKey = editingTransaction ? `edit-${editingTransaction.tempId}` : 'new';
+    
+    // Only initialize if the state has changed
+    if (initializedForRef.current !== currentStateKey) {
+      initializedForRef.current = currentStateKey;
+      
+      if (editingTransaction) {
+        reset({
+          accountId: editingTransaction.accountId,
+          categoryId: editingTransaction.categoryId,
+          amount: editingTransaction.amount,
+          currency: editingTransaction.currency,
+          description: editingTransaction.description || '',
+          type: editingTransaction.type,
+          status: editingTransaction.status,
+          date: editingTransaction.date,
+        });
+      } else {
+        const defaultAccountId = getDefaultAccountId();
+        reset({
+          accountId: defaultAccountId,
+          categoryId: '',
+          amount: '',
+          currency: '',
+          description: '',
+          type: 'Expense',
+          status: 'Cleared',
+          date: format(new Date(), 'yyyy-MM-dd'),
+        });
 
-      // Set currency if default account is available
-      if (defaultAccountId) {
-        const account = accounts.find((acc) => acc.account_id === defaultAccountId);
-        if (account) {
-          setValue('currency', account.currency);
+        // Set currency if default account is available
+        if (defaultAccountId) {
+          const account = accounts.find((acc) => acc.account_id === defaultAccountId);
+          if (account) {
+            setValue('currency', account.currency);
+          }
         }
       }
+      setActionError(null);
     }
-    setActionError(null);
   }, [editingTransaction, accounts, settings, reset, setValue]);
 
   // Auto-set currency when account is selected
@@ -205,9 +211,6 @@ function BatchTransactionForm({
     }
   );
 
-  // Compute bottom padding for content to prevent buttons from covering inputs
-  const actionButtonHeight = 72; // Approximate height of action buttons area
-
   return (
     <Box
       sx={{
@@ -233,7 +236,7 @@ function BatchTransactionForm({
           flexGrow: 1,
           overflow: 'auto',
           pt: { xs: 1, sm: 2 },
-          pb: isMobile && keyboardVisible ? `${actionButtonHeight + 16}px` : 2,
+          pb: 2,
         }}
       >
         {actionError && (
@@ -379,7 +382,7 @@ function BatchTransactionForm({
         </Grid>
       </DialogContent>
 
-      {/* Action Buttons - Keyboard Aware */}
+      {/* Action Buttons */}
       <Box
         sx={{
           flexShrink: 0,
@@ -390,15 +393,6 @@ function BatchTransactionForm({
           display: 'flex',
           justifyContent: 'space-between',
           gap: 1,
-          ...(isMobile && keyboardVisible
-            ? {
-                position: 'fixed',
-                bottom: keyboardHeight,
-                left: 0,
-                right: 0,
-                zIndex: 1300,
-              }
-            : {}),
         }}
       >
         <Button

@@ -39,7 +39,7 @@ function AddTransactionDialog({ open, onClose }) {
   const dispatch = useDispatch();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const { keyboardVisible, keyboardHeight } = useKeyboardAwareHeight();
+  const { keyboardVisible, viewportHeight } = useKeyboardAwareHeight();
   
   const { accounts } = useSelector((state) => state.accounts);
   const { categories } = useSelector((state) => state.categories);
@@ -48,6 +48,7 @@ function AddTransactionDialog({ open, onClose }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionError, setActionError] = useState(null);
   const amountInputRef = useRef(null); // Ref for Amount field focus chaining
+  const hasInitializedRef = useRef(false); // Guard to prevent form reset during background refresh
 
   // Get default account from settings
   const getDefaultAccountId = () => {
@@ -88,9 +89,10 @@ function AddTransactionDialog({ open, onClose }) {
   const watchedType = watch('type');
   const watchedStatus = watch('status');
 
-  // Reset form when dialog opens
+  // Reset form when dialog opens (only once per dialog session to prevent background refresh from resetting form data)
   useEffect(() => {
-    if (open) {
+    if (open && !hasInitializedRef.current) {
+      hasInitializedRef.current = true;
       const defaultAccountId = getDefaultAccountId();
       reset({
         accountId: defaultAccountId,
@@ -113,6 +115,11 @@ function AddTransactionDialog({ open, onClose }) {
       
       setActionError(null);
       setIsSubmitting(false);
+    }
+    
+    // Reset the initialization flag when dialog closes
+    if (!open) {
+      hasInitializedRef.current = false;
     }
   }, [open, accounts, settings, reset, setValue]);
 
@@ -173,8 +180,9 @@ function AddTransactionDialog({ open, onClose }) {
         sx: isMobile ? {
           display: 'flex',
           flexDirection: 'column',
-          height: '100%',
-          maxHeight: '100%',
+          height: keyboardVisible ? `${viewportHeight}px` : '100%',
+          maxHeight: keyboardVisible ? `${viewportHeight}px` : '100%',
+          transition: 'height 0.1s ease-out, max-height 0.1s ease-out',
         } : {},
       }}
     >
@@ -186,7 +194,7 @@ function AddTransactionDialog({ open, onClose }) {
           flexGrow: 1, 
           overflow: 'auto', 
           pt: { xs: 1, sm: 2 },
-          pb: isMobile && keyboardVisible ? '88px' : 2,
+          pb: 2,
         }}>
           {actionError && (
             <Alert severity="error" sx={{ mb: 2 }}>
@@ -339,15 +347,6 @@ function AddTransactionDialog({ open, onClose }) {
             borderTop: '1px solid',
             borderColor: 'divider',
             backgroundColor: 'background.paper',
-            ...(isMobile && keyboardVisible
-              ? {
-                  position: 'fixed',
-                  bottom: keyboardHeight,
-                  left: 0,
-                  right: 0,
-                  zIndex: 1300,
-                }
-              : {}),
           }}
         >
           <Button

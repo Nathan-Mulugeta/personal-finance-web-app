@@ -50,7 +50,7 @@ function EditTransactionDialog({ open, onClose, transaction }) {
   const dispatch = useDispatch();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const { keyboardVisible, keyboardHeight } = useKeyboardAwareHeight();
+  const { keyboardVisible, viewportHeight } = useKeyboardAwareHeight();
 
   const { accounts } = useSelector((state) => state.accounts);
   const { categories } = useSelector((state) => state.categories);
@@ -61,6 +61,7 @@ function EditTransactionDialog({ open, onClose, transaction }) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
   const amountInputRef = useRef(null);
+  const initializedTransactionIdRef = useRef(null); // Track which transaction has been initialized to prevent refresh reset
 
   const {
     register,
@@ -88,9 +89,12 @@ function EditTransactionDialog({ open, onClose, transaction }) {
   const watchedType = watch('type');
   const watchedStatus = watch('status');
 
-  // Reset form when dialog opens with transaction data
+  // Reset form when dialog opens with transaction data (only once per transaction to prevent background refresh from resetting form data)
   useEffect(() => {
-    if (open && transaction) {
+    const transactionId = transaction?.transaction_id;
+    
+    if (open && transaction && initializedTransactionIdRef.current !== transactionId) {
+      initializedTransactionIdRef.current = transactionId;
       reset({
         accountId: transaction.account_id,
         categoryId: transaction.category_id,
@@ -112,6 +116,11 @@ function EditTransactionDialog({ open, onClose, transaction }) {
       setTimeout(() => {
         amountInputRef.current?.focus();
       }, 100);
+    }
+    
+    // Reset the initialization flag when dialog closes
+    if (!open) {
+      initializedTransactionIdRef.current = null;
     }
   }, [open, transaction, reset]);
 
@@ -217,8 +226,9 @@ function EditTransactionDialog({ open, onClose, transaction }) {
             ? {
                 display: 'flex',
                 flexDirection: 'column',
-                height: '100%',
-                maxHeight: '100%',
+                height: keyboardVisible ? `${viewportHeight}px` : '100%',
+                maxHeight: keyboardVisible ? `${viewportHeight}px` : '100%',
+                transition: 'height 0.1s ease-out, max-height 0.1s ease-out',
               }
             : {},
         }}
@@ -244,7 +254,7 @@ function EditTransactionDialog({ open, onClose, transaction }) {
               flexGrow: 1,
               overflow: 'auto',
               pt: { xs: 1, sm: 2 },
-              pb: isMobile && keyboardVisible ? '88px' : 2,
+              pb: 2,
             }}
           >
             {actionError && (
@@ -402,15 +412,6 @@ function EditTransactionDialog({ open, onClose, transaction }) {
               borderTop: '1px solid',
               borderColor: 'divider',
               backgroundColor: 'background.paper',
-              ...(isMobile && keyboardVisible
-                ? {
-                    position: 'fixed',
-                    bottom: keyboardHeight,
-                    left: 0,
-                    right: 0,
-                    zIndex: 1300,
-                  }
-                : {}),
             }}
           >
             <Button
