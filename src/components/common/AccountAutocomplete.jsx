@@ -6,17 +6,17 @@ import { Autocomplete, TextField, Box, Typography } from '@mui/material';
  * Provides type-ahead search functionality for easy account selection.
  */
 function AccountAutocomplete({
-  accounts,            // List of accounts
-  value,               // Selected account_id
-  onChange,            // (account_id) => void
-  onSelect,            // Optional callback after an account is selected (for focus chaining)
-  label = "Account *",
+  accounts, // List of accounts
+  value, // Selected account_id
+  onChange, // (account_id) => void
+  onSelect, // Optional callback after an account is selected (for focus chaining)
+  label = 'Account *',
   error,
   helperText,
   disabled,
   required = false,
-  autoFocus = false,   // Auto-focus the input on mount
-  excludeAccountId,    // Optional: exclude an account from the list (e.g., when selecting "To Account", exclude "From Account")
+  autoFocus = false, // Auto-focus the input on mount
+  excludeAccountId, // Optional: exclude an account from the list (e.g., when selecting "To Account", exclude "From Account")
   ...props
 }) {
   const inputRef = useRef(null);
@@ -33,13 +33,14 @@ function AccountAutocomplete({
   }, [autoFocus, disabled]);
 
   // Filter active accounts and optionally exclude one account
-  const filteredAccounts = accounts.filter(acc => {
+  const filteredAccounts = accounts.filter((acc) => {
     if (acc.status !== 'Active') return false;
     if (excludeAccountId && acc.account_id === excludeAccountId) return false;
     return true;
   });
 
-  const selectedAccount = filteredAccounts.find(acc => acc.account_id === value) || null;
+  const selectedAccount =
+    filteredAccounts.find((acc) => acc.account_id === value) || null;
 
   return (
     <Autocomplete
@@ -54,8 +55,12 @@ function AccountAutocomplete({
           setTimeout(() => onSelect(accountId), 50);
         }
       }}
-      getOptionLabel={(option) => option.name ? `${option.name} (${option.currency})` : ''}
-      isOptionEqualToValue={(option, value) => option?.account_id === value?.account_id}
+      getOptionLabel={(option) =>
+        option.name ? `${option.name} (${option.currency})` : ''
+      }
+      isOptionEqualToValue={(option, value) =>
+        option?.account_id === value?.account_id
+      }
       disabled={disabled}
       fullWidth
       renderInput={(params) => (
@@ -71,12 +76,15 @@ function AccountAutocomplete({
       renderOption={(props, option) => {
         const { key, ...otherProps } = props;
         return (
-          <Box
-            component="li"
-            key={key}
-            {...otherProps}
-          >
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+          <Box component="li" key={key} {...otherProps}>
+            <Box
+              sx={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                width: '100%',
+                alignItems: 'center',
+              }}
+            >
               <Typography>{option.name}</Typography>
               <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
                 {option.currency}
@@ -91,4 +99,3 @@ function AccountAutocomplete({
 }
 
 export default AccountAutocomplete;
-
