@@ -198,9 +198,11 @@ const MobileTransactionRow = memo(function MobileTransactionRow({
             sx={{
               fontSize: '0.8125rem',
               color:
-                transaction.type === 'Income' || transaction.type === 'Transfer In'
+                transaction.type === 'Income' ||
+                transaction.type === 'Transfer In'
                   ? '#1e8e3e'
-                  : transaction.type === 'Expense' || transaction.type === 'Transfer Out'
+                  : transaction.type === 'Expense' ||
+                    transaction.type === 'Transfer Out'
                   ? '#d93025'
                   : 'text.primary',
               whiteSpace: 'nowrap',
@@ -333,8 +335,14 @@ const MobileTransferRow = memo(function MobileTransferRow({
               overflow: 'hidden',
             }}
           >
-            <SwapHorizIcon sx={{ fontSize: 14, color: 'primary.main', flexShrink: 0 }} />
-            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.8125rem', flexShrink: 0 }}>
+            <SwapHorizIcon
+              sx={{ fontSize: 14, color: 'primary.main', flexShrink: 0 }}
+            />
+            <Typography
+              variant="body2"
+              fontWeight={600}
+              sx={{ fontSize: '0.8125rem', flexShrink: 0 }}
+            >
               Transfer
             </Typography>
             <Chip
@@ -387,16 +395,23 @@ const MobileTransferRow = memo(function MobileTransferRow({
               flex: 1,
             }}
           >
-            {getAccountName(transferOut?.account_id)} → {getAccountName(transferIn?.account_id)}
+            {getAccountName(transferOut?.account_id)} →{' '}
+            {getAccountName(transferIn?.account_id)}
             {transfer.exchangeRate &&
-              ` • ${getAccountCurrency(transferIn?.account_id)} ${new Intl.NumberFormat('en-US', {
+              ` • ${getAccountCurrency(
+                transferIn?.account_id
+              )} ${new Intl.NumberFormat('en-US', {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
               }).format(Math.abs(transferIn?.amount || 0))}`}
           </Typography>
           <Typography
             variant="body2"
-            sx={{ fontSize: '0.6875rem', color: 'text.secondary', flexShrink: 0 }}
+            sx={{
+              fontSize: '0.6875rem',
+              color: 'text.secondary',
+              flexShrink: 0,
+            }}
           >
             {transferDate ? format(parseISO(transferDate), 'MMM dd') : '-'}
           </Typography>
@@ -475,10 +490,22 @@ const DesktopTransactionRow = memo(function DesktopTransactionRow({
       )}
       <TableCell>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Typography variant="body2" fontWeight={500} sx={{ fontSize: '0.875rem' }}>
+          <Typography
+            variant="body2"
+            fontWeight={500}
+            sx={{ fontSize: '0.875rem' }}
+          >
             {getCategoryName(transaction.category_id)}
           </Typography>
-          <Chip label={transaction.type} size="small" sx={{ ...getTypeChipSx(transaction.type), height: 20, fontSize: '0.6875rem' }} />
+          <Chip
+            label={transaction.type}
+            size="small"
+            sx={{
+              ...getTypeChipSx(transaction.type),
+              height: 20,
+              fontSize: '0.6875rem',
+            }}
+          />
         </Box>
       </TableCell>
       <TableCell>
@@ -503,18 +530,35 @@ const DesktopTransactionRow = memo(function DesktopTransactionRow({
         </Typography>
       </TableCell>
       <TableCell sx={{ whiteSpace: 'nowrap' }}>
-        <Typography variant="body2" sx={{ fontSize: '0.875rem', color: 'text.secondary' }}>
+        <Typography
+          variant="body2"
+          sx={{ fontSize: '0.875rem', color: 'text.secondary' }}
+        >
           {dateDisplay}
         </Typography>
       </TableCell>
       <TableCell align="right">
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.5 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            gap: 0.5,
+          }}
+        >
           <Chip
             label={transaction.status}
             size="small"
-            sx={{ ...getStatusChipSx(transaction.status), height: 20, fontSize: '0.6875rem' }}
+            sx={{
+              ...getStatusChipSx(transaction.status),
+              height: 20,
+              fontSize: '0.6875rem',
+            }}
           />
-          <Typography variant="body2" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+          <Typography
+            variant="body2"
+            sx={{ fontSize: '0.75rem', color: 'text.secondary' }}
+          >
             {transaction.currency}
           </Typography>
           <Typography
@@ -523,9 +567,11 @@ const DesktopTransactionRow = memo(function DesktopTransactionRow({
             sx={{
               fontSize: '0.875rem',
               color:
-                transaction.type === 'Income' || transaction.type === 'Transfer In'
+                transaction.type === 'Income' ||
+                transaction.type === 'Transfer In'
                   ? '#1e8e3e'
-                  : transaction.type === 'Expense' || transaction.type === 'Transfer Out'
+                  : transaction.type === 'Expense' ||
+                    transaction.type === 'Transfer Out'
                   ? '#d93025'
                   : 'text.primary',
             }}
@@ -600,21 +646,40 @@ const DesktopTransferRow = memo(function DesktopTransferRow({
         </TableCell>
       )}
       <TableCell>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 0.75,
+            flexWrap: 'wrap',
+          }}
+        >
           <SwapHorizIcon sx={{ fontSize: 18, color: 'primary.main' }} />
-          <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>
+          <Typography
+            variant="body2"
+            fontWeight={600}
+            sx={{ fontSize: '0.875rem' }}
+          >
             Transfer
           </Typography>
           <Chip
             label={transfer.exchangeRate ? 'Multi-Currency' : 'Same Currency'}
             size="small"
-            sx={{ height: 20, fontSize: '0.6875rem', '& .MuiChip-label': { px: 0.75 } }}
+            sx={{
+              height: 20,
+              fontSize: '0.6875rem',
+              '& .MuiChip-label': { px: 0.75 },
+            }}
           />
         </Box>
       </TableCell>
       <TableCell>
-        <Typography variant="body2" sx={{ fontSize: '0.875rem', color: 'text.secondary' }}>
-          {getAccountName(transferOut?.account_id)} → {getAccountName(transferIn?.account_id)}
+        <Typography
+          variant="body2"
+          sx={{ fontSize: '0.875rem', color: 'text.secondary' }}
+        >
+          {getAccountName(transferOut?.account_id)} →{' '}
+          {getAccountName(transferIn?.account_id)}
         </Typography>
       </TableCell>
       <TableCell>
@@ -634,16 +699,34 @@ const DesktopTransferRow = memo(function DesktopTransferRow({
         </Typography>
       </TableCell>
       <TableCell sx={{ whiteSpace: 'nowrap' }}>
-        <Typography variant="body2" sx={{ fontSize: '0.875rem', color: 'text.secondary' }}>
+        <Typography
+          variant="body2"
+          sx={{ fontSize: '0.875rem', color: 'text.secondary' }}
+        >
           {transferDate ? format(parseISO(transferDate), 'MMM dd, yyyy') : '-'}
         </Typography>
       </TableCell>
       <TableCell align="right">
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.5, flexWrap: 'wrap' }}>
-          <Typography variant="body2" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            gap: 0.5,
+            flexWrap: 'wrap',
+          }}
+        >
+          <Typography
+            variant="body2"
+            sx={{ fontSize: '0.75rem', color: 'text.secondary' }}
+          >
             {getAccountCurrency(transferOut?.account_id)}
           </Typography>
-          <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem', color: '#d93025' }}>
+          <Typography
+            variant="body2"
+            fontWeight={600}
+            sx={{ fontSize: '0.875rem', color: '#d93025' }}
+          >
             {new Intl.NumberFormat('en-US', {
               minimumFractionDigits: 2,
               maximumFractionDigits: 2,
@@ -651,13 +734,23 @@ const DesktopTransferRow = memo(function DesktopTransferRow({
           </Typography>
           {transfer.exchangeRate && (
             <>
-              <Typography variant="body2" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+              <Typography
+                variant="body2"
+                sx={{ fontSize: '0.75rem', color: 'text.secondary' }}
+              >
                 →
               </Typography>
-              <Typography variant="body2" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+              <Typography
+                variant="body2"
+                sx={{ fontSize: '0.75rem', color: 'text.secondary' }}
+              >
                 {getAccountCurrency(transferIn?.account_id)}
               </Typography>
-              <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem', color: '#1e8e3e' }}>
+              <Typography
+                variant="body2"
+                fontWeight={600}
+                sx={{ fontSize: '0.875rem', color: '#1e8e3e' }}
+              >
                 {new Intl.NumberFormat('en-US', {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
@@ -686,7 +779,7 @@ function Transactions() {
   const { accounts } = useSelector((state) => state.accounts);
   const { categories } = useSelector((state) => state.categories);
   const { transfers = [] } = useSelector((state) => state.transfers);
-  
+
   // Memoized O(1) lookup functions from selectors
   const getAccountName = useSelector(selectAccountNameGetter);
   const getAccountCurrency = useSelector(selectAccountCurrencyGetter);
@@ -1341,14 +1434,17 @@ function Transactions() {
     setSelectedItems(new Set());
   }, []);
 
-  const handleSelectAll = useCallback((checked) => {
-    if (checked) {
-      const allIds = combinedItems.map((item) => getItemId(item));
-      setSelectedItems(new Set(allIds));
-    } else {
-      setSelectedItems(new Set());
-    }
-  }, [combinedItems, getItemId]);
+  const handleSelectAll = useCallback(
+    (checked) => {
+      if (checked) {
+        const allIds = combinedItems.map((item) => getItemId(item));
+        setSelectedItems(new Set(allIds));
+      } else {
+        setSelectedItems(new Set());
+      }
+    },
+    [combinedItems, getItemId]
+  );
 
   const isAllSelected =
     combinedItems.length > 0 &&
@@ -1396,7 +1492,9 @@ function Transactions() {
         >
           <Button
             variant="outlined"
-            startIcon={isMobile ? null : <FilterListIcon sx={{ fontSize: 16 }} />}
+            startIcon={
+              isMobile ? null : <FilterListIcon sx={{ fontSize: 16 }} />
+            }
             onClick={() => setFiltersOpen(!filtersOpen)}
             color={activeFilterCount > 0 ? 'primary' : 'inherit'}
             size="small"
@@ -1408,12 +1506,24 @@ function Transactions() {
               px: { xs: 1, sm: 1.5 },
             }}
           >
-            {isMobile ? <FilterListIcon sx={{ fontSize: 16, mr: activeFilterCount > 0 ? 0.5 : 0 }} /> : null}
-            {isMobile ? (activeFilterCount > 0 ? activeFilterCount : '') : `Filters ${activeFilterCount > 0 ? `(${activeFilterCount})` : ''}`}
+            {isMobile ? (
+              <FilterListIcon
+                sx={{ fontSize: 16, mr: activeFilterCount > 0 ? 0.5 : 0 }}
+              />
+            ) : null}
+            {isMobile
+              ? activeFilterCount > 0
+                ? activeFilterCount
+                : ''
+              : `Filters ${
+                  activeFilterCount > 0 ? `(${activeFilterCount})` : ''
+                }`}
           </Button>
           <Button
             variant="outlined"
-            startIcon={isMobile ? null : <SwapHorizIcon sx={{ fontSize: 16 }} />}
+            startIcon={
+              isMobile ? null : <SwapHorizIcon sx={{ fontSize: 16 }} />
+            }
             onClick={handleOpenTransferDialog}
             size="small"
             sx={{
@@ -1602,7 +1712,6 @@ function Transactions() {
             height: 44,
             borderBottom: '1px solid',
             borderColor: 'divider',
-            backgroundColor: 'action.selected',
           }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -1937,7 +2046,9 @@ function Transactions() {
                 );
               } else {
                 const transaction = item.data;
-                const isSelected = selectedItems.has(transaction.transaction_id);
+                const isSelected = selectedItems.has(
+                  transaction.transaction_id
+                );
 
                 return (
                   <MobileTransactionRow
@@ -2660,38 +2771,53 @@ function Transactions() {
             setBulkDeleteError(null);
           }
         }}
-        fullScreen={isMobile}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            p: 1,
+          },
+        }}
       >
-        <DialogTitle>Delete Selected Items</DialogTitle>
-        <DialogContent>
+        <DialogTitle sx={{ textAlign: 'center', pb: 1 }}>
+          Delete {selectedItems.size} Item{selectedItems.size !== 1 ? 's' : ''}?
+        </DialogTitle>
+        <DialogContent sx={{ textAlign: 'center', pb: 2 }}>
           {bulkDeleteError && (
             <Alert severity="error" sx={{ mb: 2 }}>
               {bulkDeleteError}
             </Alert>
           )}
-          <Alert severity="warning" sx={{ mb: 2 }}>
-            Are you sure you want to delete {selectedItems.size} item
-            {selectedItems.size !== 1 ? 's' : ''}? This action cannot be undone.
+          <Typography variant="body2" color="text.secondary">
+            This action cannot be undone.
             {(() => {
               const transferCount = Array.from(selectedItems).filter((id) =>
                 id.startsWith('transfer-')
               ).length;
               if (transferCount > 0) {
-                return ` Note: Deleting ${transferCount} transfer${
+                return ` Deleting ${transferCount} transfer${
                   transferCount !== 1 ? 's' : ''
-                } will delete both associated transactions.`;
+                } will also delete both associated transactions.`;
               }
               return '';
             })()}
-          </Alert>
+          </Typography>
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ justifyContent: 'center', gap: 2, px: 3, pb: 3 }}>
           <Button
             onClick={() => {
               setBulkDeleteConfirm(false);
               setBulkDeleteError(null);
             }}
             disabled={isBulkDeleting}
+            variant="outlined"
+            size="large"
+            sx={{
+              textTransform: 'none',
+              minWidth: 120,
+              py: 1.5,
+            }}
           >
             Cancel
           </Button>
@@ -2700,15 +2826,19 @@ function Transactions() {
             color="error"
             variant="contained"
             disabled={isBulkDeleting}
+            size="large"
             startIcon={
               isBulkDeleting ? (
                 <CircularProgress size={20} color="inherit" />
-              ) : (
-                <DeleteIcon />
-              )
+              ) : null
             }
+            sx={{
+              textTransform: 'none',
+              minWidth: 120,
+              py: 1.5,
+            }}
           >
-            {isBulkDeleting ? 'Deleting...' : 'Confirm Delete'}
+            {isBulkDeleting ? 'Deleting...' : 'Delete'}
           </Button>
         </DialogActions>
       </Dialog>

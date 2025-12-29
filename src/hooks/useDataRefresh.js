@@ -9,17 +9,22 @@ import { fetchBorrowingLendingRecords } from '../store/slices/borrowingsLendings
 import { fetchSettings } from '../store/slices/settingsSlice'
 import { fetchExchangeRates } from '../store/slices/exchangeRatesSlice'
 
-// Only refresh if the user was inactive for more than 1 minute
-const INACTIVITY_THRESHOLD = 60000 // 1 minute in ms
+// Tiered refresh thresholds
+// Core data (transactions, accounts) is always refreshed on return from background
+// since WebSocket events are lost when the app is backgrounded on mobile
+const FULL_REFRESH_THRESHOLD = 30000 // 30 seconds for all other data types
 
 /**
  * Hook to handle data refresh on returning from inactivity.
  * 
- * Tracks when the tab becomes inactive (via blur or visibility change)
- * and only refreshes data if the user was away for more than 1 minute.
+ * Uses a tiered refresh strategy:
+ * - Core data (transactions, accounts): Always refreshed on any background return,
+ *   since these are most likely to have external changes and WebSocket events
+ *   are lost when the mobile PWA is backgrounded.
+ * - Other data (categories, budgets, etc.): Refreshed after 30+ seconds of inactivity.
  * 
- * This serves as a safety net for cases where realtime subscriptions
- * might have missed updates (e.g., WebSocket disconnection while backgrounded).
+ * Uses incremental sync (default behavior) to minimize API load - only fetches
+ * records modified since the last sync via the 'since' parameter.
  */
 export function useDataRefresh() {
   const dispatch = useDispatch()
@@ -43,10 +48,13 @@ export function useDataRefresh() {
       isInactive.current = false
       const inactiveDuration = Date.now() - lastActiveTime.current
 
-      if (inactiveDuration >= INACTIVITY_THRESHOLD) {
-        // Refresh all data after extended inactivity
-        dispatch(fetchAccounts({ status: 'Active' }))
-        dispatch(fetchTransactions({}))
+      // Always refresh core data (transactions, accounts) on any return from background
+      // Uses incremental sync by default to minimize data transfer
+      dispatch(fetchTransactions({}))
+      dispatch(fetchAccounts({ status: 'Active' }))
+
+      // Refresh all other data after extended inactivity
+      if (inactiveDuration >= FULL_REFRESH_THRESHOLD) {
         dispatch(fetchCategories({}))
         dispatch(fetchBudgets({}))
         dispatch(fetchTransfers({}))
