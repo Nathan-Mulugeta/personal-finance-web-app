@@ -75,14 +75,26 @@ function Home() {
     },
   });
 
-  // Debounce search query with 300ms delay
+  // Debounce search query with 500ms delay
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearchQuery(searchQuery.trim().toLowerCase());
-    }, 300);
+    }, 500);
 
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  // Auto-focus search input when page becomes visible
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && searchInputRef.current) {
+        searchInputRef.current.focus();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
 
   // Search transactions by category name and description
   const searchResults = useMemo(() => {
@@ -209,7 +221,7 @@ function Home() {
           userSelect: 'none',
         }}
       >
-        <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+        <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden', width: 0 }}>
           <Box
             sx={{
               display: 'flex',
