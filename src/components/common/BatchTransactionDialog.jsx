@@ -25,7 +25,7 @@ function BatchTransactionDialog({ open, onClose }) {
   const dispatch = useDispatch();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const { keyboardVisible, viewportHeight } = useKeyboardAwareHeight();
+  const { keyboardVisible, keyboardHeight } = useKeyboardAwareHeight();
   
   // State for managing batch entry flow
   const [mode, setMode] = useState('entry'); // 'entry' | 'summary' | 'edit'
@@ -166,6 +166,8 @@ function BatchTransactionDialog({ open, onClose }) {
             editingTransaction={editingTransaction}
             onUpdate={handleUpdateTransaction}
             queuedCount={queuedTransactions.length}
+            keyboardVisible={keyboardVisible}
+            keyboardHeight={keyboardHeight}
           />
         );
       case 'summary':
@@ -211,9 +213,8 @@ function BatchTransactionDialog({ open, onClose }) {
           ? {
               display: 'flex',
               flexDirection: 'column',
-              height: keyboardVisible ? `${viewportHeight}px` : '100%',
-              maxHeight: keyboardVisible ? `${viewportHeight}px` : '100%',
-              transition: 'height 0.1s ease-out, max-height 0.1s ease-out',
+              height: '100%',
+              maxHeight: '100%',
             }
           : {},
       }}

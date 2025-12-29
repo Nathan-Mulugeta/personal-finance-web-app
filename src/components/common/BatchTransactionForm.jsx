@@ -41,6 +41,8 @@ function BatchTransactionForm({
   editingTransaction,
   onUpdate,
   queuedCount = 0,
+  keyboardVisible = false,
+  keyboardHeight = 0,
 }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -218,6 +220,7 @@ function BatchTransactionForm({
         flexDirection: 'column',
         height: '100%',
         overflow: 'hidden',
+        paddingBottom: keyboardVisible ? `${keyboardHeight}px` : 0,
       }}
     >
       <DialogTitle sx={{ flexShrink: 0, pb: { xs: 1, sm: 2 } }}>

@@ -39,7 +39,7 @@ function AddTransactionDialog({ open, onClose }) {
   const dispatch = useDispatch();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const { keyboardVisible, viewportHeight } = useKeyboardAwareHeight();
+  const { keyboardVisible, keyboardHeight } = useKeyboardAwareHeight();
   
   const { accounts } = useSelector((state) => state.accounts);
   const { categories } = useSelector((state) => state.categories);
@@ -180,13 +180,12 @@ function AddTransactionDialog({ open, onClose }) {
         sx: isMobile ? {
           display: 'flex',
           flexDirection: 'column',
-          height: keyboardVisible ? `${viewportHeight}px` : '100%',
-          maxHeight: keyboardVisible ? `${viewportHeight}px` : '100%',
-          transition: 'height 0.1s ease-out, max-height 0.1s ease-out',
+          height: '100%',
+          maxHeight: '100%',
         } : {},
       }}
     >
-      <form onSubmit={handleSubmit(onSubmit)} style={isMobile ? { display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' } : {}}>
+      <form onSubmit={handleSubmit(onSubmit)} style={isMobile ? { display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', paddingBottom: keyboardVisible ? `${keyboardHeight}px` : 0 } : {}}>
         <DialogTitle sx={{ flexShrink: 0, pb: { xs: 1, sm: 2 } }}>
           Add Transaction
         </DialogTitle>

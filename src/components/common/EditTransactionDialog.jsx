@@ -50,7 +50,7 @@ function EditTransactionDialog({ open, onClose, transaction }) {
   const dispatch = useDispatch();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const { keyboardVisible, viewportHeight } = useKeyboardAwareHeight();
+  const { keyboardVisible, keyboardHeight } = useKeyboardAwareHeight();
 
   const { accounts } = useSelector((state) => state.accounts);
   const { categories } = useSelector((state) => state.categories);
@@ -226,9 +226,8 @@ function EditTransactionDialog({ open, onClose, transaction }) {
             ? {
                 display: 'flex',
                 flexDirection: 'column',
-                height: keyboardVisible ? `${viewportHeight}px` : '100%',
-                maxHeight: keyboardVisible ? `${viewportHeight}px` : '100%',
-                transition: 'height 0.1s ease-out, max-height 0.1s ease-out',
+                height: '100%',
+                maxHeight: '100%',
               }
             : {},
         }}
@@ -242,6 +241,7 @@ function EditTransactionDialog({ open, onClose, transaction }) {
                   flexDirection: 'column',
                   height: '100%',
                   overflow: 'hidden',
+                  paddingBottom: keyboardVisible ? `${keyboardHeight}px` : 0,
                 }
               : {}
           }
