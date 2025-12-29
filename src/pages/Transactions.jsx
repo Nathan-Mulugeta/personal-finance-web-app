@@ -71,8 +71,10 @@ import {
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
 import CategoryAutocomplete from '../components/common/CategoryAutocomplete';
+import AccountAutocomplete from '../components/common/AccountAutocomplete';
 import AddTransactionDialog from '../components/common/AddTransactionDialog';
 import EditTransactionDialog from '../components/common/EditTransactionDialog';
+import { useKeyboardAwareHeight } from '../hooks/useKeyboardAwareHeight';
 import { formatCurrency } from '../utils/currencyConversion';
 import {
   format,
@@ -768,6 +770,7 @@ function Transactions() {
   const dispatch = useDispatch();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const { keyboardVisible, keyboardHeight } = useKeyboardAwareHeight();
   const {
     transactions,
     allTransactions,
@@ -2530,6 +2533,7 @@ function Transactions() {
                   flexDirection: 'column',
                   height: '100%',
                   overflow: 'hidden',
+                  paddingBottom: keyboardVisible ? `${keyboardHeight}px` : 0,
                 }
               : {}
           }
@@ -2551,62 +2555,27 @@ function Transactions() {
               sx={{ mt: { xs: 0.5, sm: 1 } }}
             >
               <Grid item xs={12} sm={6}>
-                <FormControl fullWidth error={!!transferErrors.fromAccountId}>
-                  <InputLabel>From Account *</InputLabel>
-                  <Select
-                    {...registerTransfer('fromAccountId')}
-                    label="From Account *"
-                    value={watchedFromAccountId || ''}
-                    onChange={(e) =>
-                      setValueTransfer('fromAccountId', e.target.value)
-                    }
-                  >
-                    {accounts
-                      .filter((acc) => acc.status === 'Active')
-                      .map((account) => (
-                        <MenuItem
-                          key={account.account_id}
-                          value={account.account_id}
-                        >
-                          {account.name} ({account.currency})
-                        </MenuItem>
-                      ))}
-                  </Select>
-                  {transferErrors.fromAccountId && (
-                    <FormHelperText>
-                      {transferErrors.fromAccountId.message}
-                    </FormHelperText>
-                  )}
-                </FormControl>
+                <AccountAutocomplete
+                  accounts={accounts}
+                  value={watchedFromAccountId || ''}
+                  onChange={(id) => setValueTransfer('fromAccountId', id)}
+                  label="From Account *"
+                  error={!!transferErrors.fromAccountId}
+                  helperText={transferErrors.fromAccountId?.message}
+                  autoFocus={openTransferDialog}
+                  excludeAccountId={watchedToAccountId}
+                />
               </Grid>
               <Grid item xs={12} sm={6}>
-                <FormControl fullWidth error={!!transferErrors.toAccountId}>
-                  <InputLabel>To Account *</InputLabel>
-                  <Select
-                    {...registerTransfer('toAccountId')}
-                    label="To Account *"
-                    value={watchedToAccountId || ''}
-                    onChange={(e) =>
-                      setValueTransfer('toAccountId', e.target.value)
-                    }
-                  >
-                    {accounts
-                      .filter((acc) => acc.status === 'Active')
-                      .map((account) => (
-                        <MenuItem
-                          key={account.account_id}
-                          value={account.account_id}
-                        >
-                          {account.name} ({account.currency})
-                        </MenuItem>
-                      ))}
-                  </Select>
-                  {transferErrors.toAccountId && (
-                    <FormHelperText>
-                      {transferErrors.toAccountId.message}
-                    </FormHelperText>
-                  )}
-                </FormControl>
+                <AccountAutocomplete
+                  accounts={accounts}
+                  value={watchedToAccountId || ''}
+                  onChange={(id) => setValueTransfer('toAccountId', id)}
+                  label="To Account *"
+                  error={!!transferErrors.toAccountId}
+                  helperText={transferErrors.toAccountId?.message}
+                  excludeAccountId={watchedFromAccountId}
+                />
               </Grid>
               {watchedFromAccountId && watchedToAccountId && (
                 <Grid item xs={12}>
@@ -2725,7 +2694,18 @@ function Transactions() {
               </Grid>
             </Grid>
           </DialogContent>
-          <DialogActions sx={{ flexShrink: 0, p: { xs: 1.5, sm: 2 }, gap: 1 }}>
+          <Box
+            sx={{
+              flexShrink: 0,
+              p: { xs: 1.5, sm: 2 },
+              gap: 1,
+              display: 'flex',
+              justifyContent: 'flex-end',
+              borderTop: '1px solid',
+              borderColor: 'divider',
+              backgroundColor: 'background.paper',
+            }}
+          >
             <Button
               onClick={handleCloseTransferDialog}
               disabled={isSubmittingTransfer}
@@ -2734,7 +2714,6 @@ function Transactions() {
                 textTransform: 'none',
                 flex: { xs: 1, sm: 'none' },
                 minWidth: { xs: 'auto', sm: 100 },
-                minHeight: 42,
               }}
             >
               Cancel
@@ -2753,12 +2732,11 @@ function Transactions() {
                 textTransform: 'none',
                 flex: { xs: 1, sm: 'none' },
                 minWidth: { xs: 'auto', sm: 100 },
-                minHeight: 42,
               }}
             >
               {isSubmittingTransfer ? 'Creating...' : 'Create Transfer'}
             </Button>
-          </DialogActions>
+          </Box>
         </form>
       </Dialog>
 
