@@ -128,9 +128,23 @@ function Categories() {
       });
     } else {
       setEditingCategory(null);
+
+      // Determine the type for the new category
+      // If adding under a parent category, inherit its type
+      // Otherwise, use the active filter type or default to 'Expense'
+      let inheritedType = filters.type || 'Expense';
+      if (parentCategoryId) {
+        const parentCategory = categories.find(
+          (cat) => cat.category_id === parentCategoryId
+        );
+        if (parentCategory) {
+          inheritedType = parentCategory.type;
+        }
+      }
+
       reset({
         name: '',
-        type: filters.type || 'Expense',
+        type: inheritedType,
         parentCategoryId: parentCategoryId,
         status: 'Active',
       });
@@ -233,26 +247,31 @@ function Categories() {
     }
   };
 
-  // Google-style chip styling for type badges
+  // Type chip styling - text color only, no background or border
   const getTypeChipSx = (type) => {
     if (type === 'Income') {
       return {
-        backgroundColor: '#e6f4ea',
+        backgroundColor: 'transparent',
+        borderColor: '#1e8e3e',
         color: '#1e8e3e',
         fontWeight: 500,
+        border: '1px solid',
       };
     }
     if (type === 'Expense') {
       return {
-        backgroundColor: '#fce8e6',
-        color: '#d93025',
+        backgroundColor: 'transparent',
+        borderColor: '#b71c1c',
+        color: '#b71c1c',
         fontWeight: 500,
+        border: '1px solid',
       };
     }
     return {
-      backgroundColor: '#f1f3f4',
+      backgroundColor: 'transparent',
       color: '#5f6368',
       fontWeight: 500,
+      border: 'none',
     };
   };
 

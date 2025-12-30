@@ -83,6 +83,22 @@ export const deleteAccount = createAsyncThunk(
   }
 )
 
+export const swapAccountOrder = createAsyncThunk(
+  'accounts/swapAccountOrder',
+  async ({ accountId1, accountId2 }, { rejectWithValue, getState }) => {
+    try {
+      await accountsApi.swapAccountOrder(accountId1, accountId2)
+      // Return the swapped account IDs so we can update local state
+      const accounts = getState().accounts.accounts
+      const account1 = accounts.find(acc => acc.account_id === accountId1)
+      const account2 = accounts.find(acc => acc.account_id === accountId2)
+      return { accountId1, accountId2, order1: account1?.sort_order, order2: account2?.sort_order }
+    } catch (error) {
+      return rejectWithValue(error.message)
+    }
+  }
+)
+
 // Note: Balance is now stored in account.current_balance and updated by database triggers
 // No client-side balance recalculation needed
 
@@ -121,6 +137,19 @@ const accountsSlice = createSlice({
       state.accounts = state.accounts.filter(acc => acc.account_id !== accountId)
       if (state.currentAccount?.account_id === accountId) {
         state.currentAccount = null
+      }
+    },
+    // Swap sort order between two accounts locally (for optimistic UI updates)
+    swapAccountOrderLocally: (state, action) => {
+      const { accountId1, accountId2 } = action.payload
+      const account1 = state.accounts.find(acc => acc.account_id === accountId1)
+      const account2 = state.accounts.find(acc => acc.account_id === accountId2)
+      if (account1 && account2) {
+        const tempOrder = account1.sort_order
+        account1.sort_order = account2.sort_order
+        account2.sort_order = tempOrder
+        // Re-sort the accounts array
+        state.accounts.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
       }
     },
   },
@@ -222,8 +251,28 @@ const accountsSlice = createSlice({
         state.loading = false
         state.error = action.payload
       })
+      // Swap account order
+      .addCase(swapAccountOrder.pending, (state) => {
+        // Don't set loading to avoid UI flicker during reorder
+        state.error = null
+      })
+      .addCase(swapAccountOrder.fulfilled, (state, action) => {
+        const { accountId1, accountId2, order1, order2 } = action.payload
+        const account1 = state.accounts.find(acc => acc.account_id === accountId1)
+        const account2 = state.accounts.find(acc => acc.account_id === accountId2)
+        if (account1 && account2) {
+          // Swap the sort_order values
+          account1.sort_order = order2
+          account2.sort_order = order1
+          // Re-sort the accounts array
+          state.accounts.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+        }
+      })
+      .addCase(swapAccountOrder.rejected, (state, action) => {
+        state.error = action.payload
+      })
   },
 })
 
-export const { clearError, clearCurrentAccount, updateAccountInStore, removeAccountFromStore } = accountsSlice.actions
+export const { clearError, clearCurrentAccount, updateAccountInStore, removeAccountFromStore, swapAccountOrderLocally } = accountsSlice.actions
 export default accountsSlice.reducer

@@ -38,12 +38,15 @@ import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import {
   fetchAccounts,
   createAccount,
   updateAccount,
   deleteAccount,
   clearError,
+  swapAccountOrder,
 } from '../store/slices/accountsSlice';
 import { fetchSettings } from '../store/slices/settingsSlice';
 import { accountSchema } from '../schemas/accountSchema';
@@ -70,6 +73,12 @@ function Accounts() {
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
+  const [isReordering, setIsReordering] = useState(false);
+
+  // Sort accounts by sort_order
+  const sortedAccounts = useMemo(() => {
+    return [...accounts].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+  }, [accounts]);
 
   const {
     register,
@@ -270,6 +279,50 @@ function Accounts() {
       setDeleteError(errorMessage);
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  // Handle moving account up in the list
+  const handleMoveUp = async (accountIndex) => {
+    if (accountIndex <= 0 || isReordering) return;
+    
+    const currentAccount = sortedAccounts[accountIndex];
+    const previousAccount = sortedAccounts[accountIndex - 1];
+    
+    setIsReordering(true);
+    try {
+      await dispatch(
+        swapAccountOrder({
+          accountId1: currentAccount.account_id,
+          accountId2: previousAccount.account_id,
+        })
+      ).unwrap();
+    } catch (err) {
+      console.error('Error reordering accounts:', err);
+    } finally {
+      setIsReordering(false);
+    }
+  };
+
+  // Handle moving account down in the list
+  const handleMoveDown = async (accountIndex) => {
+    if (accountIndex >= sortedAccounts.length - 1 || isReordering) return;
+    
+    const currentAccount = sortedAccounts[accountIndex];
+    const nextAccount = sortedAccounts[accountIndex + 1];
+    
+    setIsReordering(true);
+    try {
+      await dispatch(
+        swapAccountOrder({
+          accountId1: currentAccount.account_id,
+          accountId2: nextAccount.account_id,
+        })
+      ).unwrap();
+    } catch (err) {
+      console.error('Error reordering accounts:', err);
+    } finally {
+      setIsReordering(false);
     }
   };
 
@@ -535,7 +588,7 @@ function Accounts() {
         <>
           {/* Mobile Card View - Compact layout */}
           <Box sx={{ display: { xs: 'block', md: 'none' } }}>
-            {accounts.map((account) => {
+            {sortedAccounts.map((account, index) => {
               const currentBalance =
                 account.current_balance ?? account.opening_balance ?? 0;
               return (
@@ -570,6 +623,30 @@ function Accounts() {
                         {account.name}
                       </Typography>
                       <Box sx={{ display: 'flex', gap: 0.25 }}>
+                        <IconButton
+                          size="small"
+                          onClick={() => handleMoveUp(index)}
+                          disabled={index === 0 || isReordering}
+                          sx={{
+                            color: '#5f6368',
+                            '&:hover': { color: '#1a73e8' },
+                            p: 0.5,
+                          }}
+                        >
+                          <KeyboardArrowUpIcon sx={{ fontSize: '1rem' }} />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          onClick={() => handleMoveDown(index)}
+                          disabled={index === sortedAccounts.length - 1 || isReordering}
+                          sx={{
+                            color: '#5f6368',
+                            '&:hover': { color: '#1a73e8' },
+                            p: 0.5,
+                          }}
+                        >
+                          <KeyboardArrowDownIcon sx={{ fontSize: '1rem' }} />
+                        </IconButton>
                         <IconButton
                           size="small"
                           onClick={() => handleOpenDialog(account)}
@@ -709,6 +786,7 @@ function Accounts() {
             <Table>
               <TableHead>
                 <TableRow>
+                  <TableCell align="center" sx={{ width: 80 }}>Order</TableCell>
                   <TableCell>Name</TableCell>
                   <TableCell>Type</TableCell>
                   <TableCell>Currency</TableCell>
@@ -719,11 +797,47 @@ function Accounts() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {accounts.map((account) => {
+                {sortedAccounts.map((account, index) => {
                   const currentBalance =
                     account.current_balance ?? account.opening_balance ?? 0;
                   return (
                     <TableRow key={account.account_id} hover>
+                      <TableCell align="center">
+                        <Box sx={{ display: 'flex', justifyContent: 'center', gap: 0 }}>
+                          <Tooltip title="Move up">
+                            <span>
+                              <IconButton
+                                size="small"
+                                onClick={() => handleMoveUp(index)}
+                                disabled={index === 0 || isReordering}
+                                sx={{
+                                  color: '#5f6368',
+                                  '&:hover': { color: '#1a73e8' },
+                                  p: 0.25,
+                                }}
+                              >
+                                <KeyboardArrowUpIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                          <Tooltip title="Move down">
+                            <span>
+                              <IconButton
+                                size="small"
+                                onClick={() => handleMoveDown(index)}
+                                disabled={index === sortedAccounts.length - 1 || isReordering}
+                                sx={{
+                                  color: '#5f6368',
+                                  '&:hover': { color: '#1a73e8' },
+                                  p: 0.25,
+                                }}
+                              >
+                                <KeyboardArrowDownIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        </Box>
+                      </TableCell>
                       <TableCell>
                         <Typography variant="body1" fontWeight="medium">
                           {account.name}

@@ -25,6 +25,17 @@ export async function createAccount(accountData) {
     throw new Error('Currency must be a 3-letter ISO code')
   }
 
+  // Get the max sort_order for this user to place new account at the end
+  const { data: maxOrderData } = await supabase
+    .from('accounts')
+    .select('sort_order')
+    .eq('user_id', user.id)
+    .order('sort_order', { ascending: false, nullsFirst: false })
+    .limit(1)
+    .single()
+
+  const nextSortOrder = (maxOrderData?.sort_order || 0) + 1
+
   const accountId = generateId('ACC')
   const { data, error } = await supabase
     .from('accounts')
@@ -36,6 +47,7 @@ export async function createAccount(accountData) {
       currency: currency.toUpperCase(),
       opening_balance: openingBalance,
       status,
+      sort_order: nextSortOrder,
     })
     .select()
     .single()
@@ -69,7 +81,9 @@ export async function getAccounts(filters = {}) {
     query = query.or(`updated_at.gte.${filters.since},created_at.gte.${filters.since}`)
   }
 
-  const { data, error } = await query.order('created_at', { ascending: false })
+  const { data, error } = await query
+    .order('sort_order', { ascending: true, nullsFirst: false })
+    .order('created_at', { ascending: false })
 
   if (error) throw error
   return data || []
@@ -149,6 +163,7 @@ export async function updateAccount(accountId, updates) {
   if (updates.currency !== undefined) updateData.currency = updates.currency.toUpperCase()
   if (updates.openingBalance !== undefined) updateData.opening_balance = updates.openingBalance
   if (updates.status !== undefined) updateData.status = updates.status
+  if (updates.sortOrder !== undefined) updateData.sort_order = updates.sortOrder
 
   const { data, error } = await supabase
     .from('accounts')
@@ -216,5 +231,66 @@ export async function getAccountBalance(accountId) {
     currency: account.currency,
     last_updated: new Date().toISOString(),
   }
+}
+
+// Reorder accounts - updates sort_order for all accounts in the provided order
+export async function reorderAccounts(accountIds) {
+  const user = await getCurrentUser()
+  if (!user) throw new Error('User not authenticated')
+
+  if (!Array.isArray(accountIds) || accountIds.length === 0) {
+    throw new Error('Account IDs array is required')
+  }
+
+  // Update each account's sort_order based on its position in the array
+  const updates = accountIds.map((accountId, index) => ({
+    account_id: accountId,
+    user_id: user.id,
+    sort_order: index + 1,
+  }))
+
+  // Use upsert to update all accounts in one request
+  const { error } = await supabase
+    .from('accounts')
+    .upsert(updates, { onConflict: 'account_id', ignoreDuplicates: false })
+
+  if (error) throw error
+
+  // Return updated accounts
+  return await getAccounts()
+}
+
+// Swap sort order between two accounts
+export async function swapAccountOrder(accountId1, accountId2) {
+  const user = await getCurrentUser()
+  if (!user) throw new Error('User not authenticated')
+
+  // Get both accounts
+  const account1 = await getAccountById(accountId1)
+  const account2 = await getAccountById(accountId2)
+
+  if (!account1 || !account2) {
+    throw new Error('One or both accounts not found')
+  }
+
+  // Swap their sort_order values
+  const order1 = account1.sort_order
+  const order2 = account2.sort_order
+
+  // Update account1 with account2's order
+  await supabase
+    .from('accounts')
+    .update({ sort_order: order2 })
+    .eq('account_id', accountId1)
+    .eq('user_id', user.id)
+
+  // Update account2 with account1's order
+  const { error } = await supabase
+    .from('accounts')
+    .update({ sort_order: order1 })
+    .eq('account_id', accountId2)
+    .eq('user_id', user.id)
+
+  if (error) throw error
 }
 
