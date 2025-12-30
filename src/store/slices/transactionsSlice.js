@@ -117,6 +117,7 @@ const initialState = {
   error: null,
   lastFetched: null,
   isInitialized: false,
+  lastLocalMutation: null, // Timestamp of last local create/update/delete to prevent realtime overwrites
 };
 
 const transactionsSlice = createSlice({
@@ -228,9 +229,13 @@ const transactionsSlice = createSlice({
         
         // If no filters, store all transactions but don't update filtered list
         const hasFilters = action.meta.arg && Object.keys(action.meta.arg).length > 0 && !action.meta.arg.forceFull;
+        
+        // Always merge data to preserve locally-added transactions that may not be in the fetch response yet
+        // This prevents race conditions where realtime sync overwrites recently created transactions
+        const shouldMerge = state.allTransactions.length > 0;
+        
         if (!hasFilters) {
-          // Merge incremental data or replace all
-          if (isIncremental && state.allTransactions.length > 0) {
+          if (shouldMerge) {
             state.allTransactions = mergeIncrementalData(
               state.allTransactions,
               transactions,
@@ -247,7 +252,7 @@ const transactionsSlice = createSlice({
           // This prevents showing all transactions before filter is applied
         } else {
           // Filtered fetch - update allTransactions and transactions
-          if (isIncremental && state.allTransactions.length > 0) {
+          if (shouldMerge) {
             state.allTransactions = mergeIncrementalData(
               state.allTransactions,
               transactions,
@@ -287,6 +292,8 @@ const transactionsSlice = createSlice({
       })
       .addCase(createTransaction.fulfilled, (state, action) => {
         state.loading = false;
+        // Track local mutation to prevent realtime sync from overwriting
+        state.lastLocalMutation = Date.now();
         // Add to both filtered and all transactions
         state.transactions.push(action.payload);
         state.allTransactions.push(action.payload);
@@ -299,7 +306,6 @@ const transactionsSlice = createSlice({
           }
           return 0;
         });
-        // Re-apply filters to update transactions
       })
       .addCase(createTransaction.rejected, (state, action) => {
         state.loading = false;
@@ -312,7 +318,20 @@ const transactionsSlice = createSlice({
       })
       .addCase(batchCreateTransactions.fulfilled, (state, action) => {
         state.loading = false;
+        // Track local mutation to prevent realtime sync from overwriting
+        state.lastLocalMutation = Date.now();
+        // Add to both filtered and all transactions
         state.transactions = [...action.payload, ...state.transactions];
+        state.allTransactions = [...action.payload, ...state.allTransactions];
+        // Sort allTransactions by date and created_at (newest first)
+        state.allTransactions.sort((a, b) => {
+          const dateDiff = new Date(b.date) - new Date(a.date);
+          if (dateDiff !== 0) return dateDiff;
+          if (a.created_at && b.created_at) {
+            return new Date(b.created_at) - new Date(a.created_at);
+          }
+          return 0;
+        });
       })
       .addCase(batchCreateTransactions.rejected, (state, action) => {
         state.loading = false;
@@ -325,6 +344,8 @@ const transactionsSlice = createSlice({
       })
       .addCase(updateTransaction.fulfilled, (state, action) => {
         state.loading = false;
+        // Track local mutation to prevent realtime sync from overwriting
+        state.lastLocalMutation = Date.now();
         // Update in filtered transactions
         const index = state.transactions.findIndex(
           (txn) => txn.transaction_id === action.payload.transaction_id
@@ -357,6 +378,8 @@ const transactionsSlice = createSlice({
       })
       .addCase(deleteTransaction.fulfilled, (state, action) => {
         state.loading = false;
+        // Track local mutation to prevent realtime sync from overwriting
+        state.lastLocalMutation = Date.now();
         // Handle new return format: { transactionId, linkedTransactionId?, deletedTransactionIds }
         // Also handle old format for backward compatibility: just transactionId string
         const payload = action.payload;
@@ -401,6 +424,8 @@ const transactionsSlice = createSlice({
       })
       .addCase(bulkDeleteTransactions.fulfilled, (state, action) => {
         state.loading = false;
+        // Track local mutation to prevent realtime sync from overwriting
+        state.lastLocalMutation = Date.now();
         const { deletedTransactionIds } = action.payload;
         
         // Remove all deleted transaction IDs from both filtered and all transactions
@@ -425,4 +450,8 @@ const transactionsSlice = createSlice({
 
 export const { clearError, clearCurrentTransaction, optimisticUpdateTransaction, optimisticDeleteTransaction, removeDeletedTransactions, filterTransactions } =
   transactionsSlice.actions;
+
+// Selector to get last local mutation timestamp
+export const selectLastLocalMutation = (state) => state.transactions.lastLocalMutation;
+
 export default transactionsSlice.reducer;

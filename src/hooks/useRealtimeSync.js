@@ -2,13 +2,17 @@ import { useEffect, useRef } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { supabase } from '../lib/supabase'
 import { updateAccountInStore, removeAccountFromStore, fetchAccounts } from '../store/slices/accountsSlice'
-import { fetchTransactions } from '../store/slices/transactionsSlice'
+import { fetchTransactions, selectLastLocalMutation } from '../store/slices/transactionsSlice'
 import { fetchCategories } from '../store/slices/categoriesSlice'
 import { fetchBudgets } from '../store/slices/budgetsSlice'
 import { fetchTransfers } from '../store/slices/transfersSlice'
 import { fetchBorrowingLendingRecords } from '../store/slices/borrowingsLendingsSlice'
 import { fetchSettings } from '../store/slices/settingsSlice'
 import { fetchExchangeRates } from '../store/slices/exchangeRatesSlice'
+
+// Time window (ms) after a local mutation during which realtime fetches are skipped
+// This prevents race conditions where the realtime sync overwrites locally-added transactions
+const LOCAL_MUTATION_WINDOW_MS = 2000
 
 /**
  * Hook to manage Supabase Realtime subscriptions for all tables.
@@ -21,13 +25,28 @@ export function useRealtimeSync() {
   const dispatch = useDispatch()
   const user = useSelector((state) => state.auth.user)
   const appInitialized = useSelector((state) => state.appInit.isInitialized)
+  const lastLocalMutation = useSelector(selectLastLocalMutation)
   const channelRef = useRef(null)
   const debounceTimers = useRef({})
+  // Keep a ref to lastLocalMutation so the debounce callback can access the latest value
+  const lastLocalMutationRef = useRef(lastLocalMutation)
+
+  // Keep the ref updated with the latest lastLocalMutation value
+  useEffect(() => {
+    lastLocalMutationRef.current = lastLocalMutation
+  }, [lastLocalMutation])
 
   useEffect(() => {
     // Only subscribe if user is authenticated and app is initialized
     if (!user?.id || !appInitialized) {
       return
+    }
+
+    // Check if we're within the local mutation window for transactions
+    const isWithinMutationWindow = () => {
+      const lastMutation = lastLocalMutationRef.current
+      if (!lastMutation) return false
+      return Date.now() - lastMutation < LOCAL_MUTATION_WINDOW_MS
     }
 
     // Debounced refresh to avoid excessive updates
@@ -41,6 +60,13 @@ export function useRealtimeSync() {
             dispatch(fetchAccounts({ status: 'Active', forceFull: true }))
             break
           case 'transactions':
+            // Skip fetch if a local mutation happened recently
+            // This prevents overwriting locally-added transactions
+            if (isWithinMutationWindow()) {
+              // Schedule another check after the window expires
+              debouncedRefresh('transactions', LOCAL_MUTATION_WINDOW_MS)
+              return
+            }
             dispatch(fetchTransactions({ forceFull: true }))
             break
           case 'categories':
