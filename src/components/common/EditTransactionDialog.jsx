@@ -97,6 +97,10 @@ function EditTransactionDialog({ open, onClose, transaction }) {
     
     if (open && transaction && initializedTransactionIdRef.current !== transactionId) {
       initializedTransactionIdRef.current = transactionId;
+      // Format date for HTML date input (YYYY-MM-DD) - the date field now stores full datetime
+      const dateForInput = transaction.date 
+        ? format(new Date(transaction.date), 'yyyy-MM-dd')
+        : format(new Date(), 'yyyy-MM-dd');
       reset({
         accountId: transaction.account_id,
         categoryId: transaction.category_id,
@@ -105,7 +109,7 @@ function EditTransactionDialog({ open, onClose, transaction }) {
         description: transaction.description || '',
         type: transaction.type,
         status: transaction.status,
-        date: transaction.date,
+        date: dateForInput,
       });
 
       setActionError(null);

@@ -109,14 +109,10 @@ const MobileTransactionRow = memo(function MobileTransactionRow({
   onEdit,
 }) {
   const description = transaction.description || '';
+  // Now uses the date field which contains full datetime (TIMESTAMPTZ)
   const dateDisplay = (() => {
     try {
-      let dateTime;
-      if (transaction.created_at) {
-        dateTime = parseISO(transaction.created_at);
-      } else {
-        dateTime = parseISO(transaction.date);
-      }
+      const dateTime = parseISO(transaction.date);
       if (isToday(dateTime)) {
         return format(dateTime, 'h:mm a');
       } else {
@@ -2199,14 +2195,10 @@ function Transactions() {
                     const isSelected = selectedItems.has(
                       transaction.transaction_id
                     );
+                    // Now uses the date field which contains full datetime (TIMESTAMPTZ)
                     const dateDisplay = (() => {
                       try {
-                        let dateTime;
-                        if (transaction.created_at) {
-                          dateTime = parseISO(transaction.created_at);
-                        } else {
-                          dateTime = parseISO(transaction.date);
-                        }
+                        const dateTime = parseISO(transaction.date);
                         if (isToday(dateTime)) {
                           return format(dateTime, 'MMM dd, yyyy h:mm a');
                         } else {

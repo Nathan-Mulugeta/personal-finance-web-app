@@ -154,16 +154,16 @@ function Home() {
   }, [allTransactions]);
 
   // Get date display with time (Today shows time only, Yesterday shows "Yesterday, time", older dates show "Dec 25, time")
+  // Now uses the date field which contains full datetime (TIMESTAMPTZ)
   const getDateDisplay = useCallback((transaction) => {
-    const txnDate = parseISO(transaction.date);
-    const txnTime = transaction.created_at ? parseISO(transaction.created_at) : null;
+    const txnDateTime = parseISO(transaction.date);
     
-    if (isToday(txnDate)) {
-      return txnTime ? format(txnTime, 'h:mm a') : 'Today';
-    } else if (isYesterday(txnDate)) {
-      return txnTime ? `Yesterday, ${format(txnTime, 'h:mm a')}` : 'Yesterday';
+    if (isToday(txnDateTime)) {
+      return format(txnDateTime, 'h:mm a');
+    } else if (isYesterday(txnDateTime)) {
+      return `Yesterday, ${format(txnDateTime, 'h:mm a')}`;
     }
-    return txnTime ? format(txnTime, 'MMM d, h:mm a') : format(txnDate, 'MMM d, yyyy');
+    return format(txnDateTime, 'MMM d, h:mm a');
   }, []);
 
   const handleOpenEditDialog = useCallback((transaction) => {

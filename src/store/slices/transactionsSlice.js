@@ -190,11 +190,20 @@ const transactionsSlice = createSlice({
       if (filters.status) {
         filtered = filtered.filter(t => t.status === filters.status);
       }
+      // Date filtering: extract date portion from TIMESTAMPTZ for comparison
+      // t.date may be a full ISO timestamp like "2025-12-30T12:00:00+00:00"
+      // filters use date-only strings like "2025-12-30"
       if (filters.startDate) {
-        filtered = filtered.filter(t => t.date >= filters.startDate);
+        filtered = filtered.filter(t => {
+          const txnDate = t.date ? t.date.split('T')[0] : '';
+          return txnDate >= filters.startDate;
+        });
       }
       if (filters.endDate) {
-        filtered = filtered.filter(t => t.date <= filters.endDate);
+        filtered = filtered.filter(t => {
+          const txnDate = t.date ? t.date.split('T')[0] : '';
+          return txnDate <= filters.endDate;
+        });
       }
       
       // Sort by date descending, then by created_at if available (newest first)

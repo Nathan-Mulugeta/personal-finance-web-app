@@ -65,11 +65,25 @@ export async function createTransfer(transferData) {
 
   // Generate transfer ID
   const transferId = generateId('TRF')
-  const transferDate = date ? new Date(date) : new Date()
+  // Use full datetime - if date is provided as date-only string, add current time
+  let transferDate
+  if (date) {
+    const parsedDate = new Date(date)
+    // Check if it's a date-only string (YYYY-MM-DD format without time)
+    if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      // Date-only string: add current time
+      const now = new Date()
+      parsedDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds())
+    }
+    transferDate = parsedDate
+  } else {
+    transferDate = new Date()
+  }
 
   // Create transfer out transaction
   // Use null category if not provided (transfers don't require categories)
   // Amount is positive - type determines direction
+  // Pass full ISO datetime so both transactions have the same timestamp
   const transferOut = await transactionsApi.createTransaction({
     accountId: fromAccountId,
     categoryId: categoryId || null,
@@ -78,7 +92,7 @@ export async function createTransfer(transferData) {
     description: description || `Transfer to ${toAccount.name}`,
     type: 'Transfer Out',
     status,
-    date: transferDate.toISOString().split('T')[0],
+    date: transferDate.toISOString(),
     transferId,
   })
 
@@ -93,7 +107,7 @@ export async function createTransfer(transferData) {
     description: description || `Transfer from ${fromAccount.name}`,
     type: 'Transfer In',
     status,
-    date: transferDate.toISOString().split('T')[0],
+    date: transferDate.toISOString(),
     transferId,
     linkedTransactionId: transferOut.transaction_id,
   })
@@ -113,7 +127,7 @@ export async function createTransfer(transferData) {
       rate,
       fromAmount: finalFromAmount,
       toAmount: finalToAmount,
-      date: transferDate.toISOString().split('T')[0],
+      date: transferDate.toISOString(),
     })
   }
 
@@ -126,7 +140,7 @@ export async function createTransfer(transferData) {
       toCurrency: toAccount.currency,
       rate: finalToAmount / finalFromAmount,
     } : null,
-    date: transferDate.toISOString().split('T')[0],
+    date: transferDate.toISOString(),
   }
 }
 

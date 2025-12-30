@@ -27,6 +27,7 @@ export async function createExchangeRate(exchangeRateData) {
   }
 
   const exchangeRateId = generateId('EXR')
+  // Use full datetime - exchange_rates.date is now TIMESTAMPTZ
   const rateDate = date ? new Date(date) : new Date()
 
   const { data, error } = await supabase
@@ -40,7 +41,7 @@ export async function createExchangeRate(exchangeRateData) {
       rate,
       from_amount: fromAmount,
       to_amount: toAmount,
-      date: rateDate.toISOString().split('T')[0],
+      date: rateDate.toISOString(),
     })
     .select()
     .single()

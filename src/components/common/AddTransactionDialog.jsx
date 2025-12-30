@@ -82,6 +82,7 @@ function AddTransactionDialog({ open, onClose }) {
       description: '',
       type: 'Expense',
       status: 'Cleared',
+      // Date-only format for HTML date input; API will add current time when saving
       date: format(new Date(), 'yyyy-MM-dd'),
     },
   });
@@ -104,6 +105,7 @@ function AddTransactionDialog({ open, onClose }) {
         description: '',
         type: 'Expense',
         status: 'Cleared',
+        // Date-only format for HTML date input; API will add current time when saving
         date: format(new Date(), 'yyyy-MM-dd'),
       });
       

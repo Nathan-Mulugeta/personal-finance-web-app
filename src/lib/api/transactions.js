@@ -53,7 +53,21 @@ export async function createTransaction(transactionData) {
   }
 
   const transactionId = generateId('TXN');
-  const transactionDate = date ? new Date(date) : new Date();
+  // Use full datetime - if date is provided as date-only string, add current time
+  // Otherwise use the provided datetime or current datetime
+  let transactionDate;
+  if (date) {
+    const parsedDate = new Date(date);
+    // Check if it's a date-only string (YYYY-MM-DD format without time)
+    if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      // Date-only string: add current time
+      const now = new Date();
+      parsedDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
+    }
+    transactionDate = parsedDate;
+  } else {
+    transactionDate = new Date();
+  }
 
   // Use RPC function for validated creation (single database call)
   const { data, error } = await supabase.rpc('create_transaction_validated', {
@@ -61,7 +75,7 @@ export async function createTransaction(transactionData) {
     p_user_id: user.id,
     p_account_id: accountId,
     p_category_id: categoryId,
-    p_date: transactionDate.toISOString().split('T')[0],
+    p_date: transactionDate.toISOString(),
     p_amount: amount,
     p_currency: currency.toUpperCase(),
     p_description: description,
@@ -240,16 +254,26 @@ export async function batchCreateTransactions(transactionsArray) {
   }
 
   // Prepare transactions for insert
-  const transactionDate = new Date();
   const now = new Date();
   const transactionsToInsert = transactionsArray.map((txn) => {
-    const txnDate = txn.date ? new Date(txn.date) : transactionDate;
+    let txnDate;
+    if (txn.date) {
+      const parsedDate = new Date(txn.date);
+      // Check if it's a date-only string (YYYY-MM-DD format without time)
+      if (typeof txn.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(txn.date)) {
+        // Date-only string: add current time
+        parsedDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
+      }
+      txnDate = parsedDate;
+    } else {
+      txnDate = now;
+    }
     return {
       transaction_id: generateId('TXN'),
       user_id: user.id,
       account_id: txn.accountId,
       category_id: txn.categoryId,
-      date: txnDate.toISOString().split('T')[0],
+      date: txnDate.toISOString(),
       amount: txn.amount,
       currency: txn.currency.toUpperCase(),
       description: txn.description || '',
@@ -470,7 +494,19 @@ export async function updateTransaction(transactionId, updates) {
   if (updates.categoryId !== undefined)
     updateData.category_id = updates.categoryId;
   if (updates.date !== undefined) {
-    updateData.date = new Date(updates.date).toISOString().split('T')[0];
+    const parsedDate = new Date(updates.date);
+    // Check if it's a date-only string (YYYY-MM-DD format without time)
+    if (typeof updates.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(updates.date)) {
+      // Date-only string: preserve the time from the original transaction
+      const originalDate = new Date(transaction.date);
+      parsedDate.setHours(
+        originalDate.getHours(),
+        originalDate.getMinutes(),
+        originalDate.getSeconds(),
+        originalDate.getMilliseconds()
+      );
+    }
+    updateData.date = parsedDate.toISOString();
   }
   if (updates.amount !== undefined) updateData.amount = updates.amount;
   if (updates.currency !== undefined)
