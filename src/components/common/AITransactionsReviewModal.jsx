@@ -10,7 +10,6 @@ import {
   DialogContent,
   DialogActions,
   FormControl,
-  FormControlLabel,
   IconButton,
   InputLabel,
   MenuItem,
@@ -69,6 +68,7 @@ function AITransactionsReviewModal({
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
 
   // Get active accounts
   const activeAccounts = useMemo(() => {
@@ -114,23 +114,17 @@ function AITransactionsReviewModal({
     }
   }, [open, parsedData, isReceipt, defaultAccountId]);
 
-  // Calculate totals
+  // Calculate totals (tax is already included in the amounts)
   const totals = useMemo(() => {
-    let subtotal = 0;
-    let taxTotal = 0;
+    let grandTotal = 0;
 
     transactions.forEach((txn) => {
       const amount = parseFloat(txn.amount) || 0;
-      subtotal += amount;
-      if (txn.applyTax) {
-        taxTotal += amount * 0.15;
-      }
+      grandTotal += amount;
     });
 
     return {
-      subtotal,
-      taxTotal,
-      grandTotal: subtotal + taxTotal,
+      grandTotal,
     };
   }, [transactions]);
 
@@ -141,9 +135,38 @@ function AITransactionsReviewModal({
     );
   };
 
-  // Handle removing a transaction
+  // Handle tax toggle - updates both applyTax and amount
+  const handleTaxToggle = (id, currentApplyTax, currentAmount) => {
+    const amount = parseFloat(currentAmount) || 0;
+    const newApplyTax = !currentApplyTax;
+
+    // Calculate new amount: add 15% if toggling on, remove 15% if toggling off
+    const newAmount = newApplyTax
+      ? Math.round(amount * 1.15 * 100) / 100 // Add 15% tax
+      : Math.round((amount / 1.15) * 100) / 100; // Remove 15% tax
+
+    setTransactions((prev) =>
+      prev.map((txn) =>
+        txn.id === id
+          ? { ...txn, applyTax: newApplyTax, amount: newAmount }
+          : txn
+      )
+    );
+  };
+
+  // Handle removing a transaction (with confirmation)
   const handleRemoveTransaction = (id) => {
-    setTransactions((prev) => prev.filter((txn) => txn.id !== id));
+    setDeleteConfirmId(id);
+  };
+
+  // Confirm delete transaction
+  const handleConfirmDelete = () => {
+    if (deleteConfirmId) {
+      setTransactions((prev) =>
+        prev.filter((txn) => txn.id !== deleteConfirmId)
+      );
+      setDeleteConfirmId(null);
+    }
   };
 
   // Handle adding a new empty transaction
@@ -160,10 +183,9 @@ function AITransactionsReviewModal({
     setTransactions((prev) => [...prev, newTransaction]);
   };
 
-  // Calculate final amount for a transaction
-  const getFinalAmount = (txn) => {
-    const amount = parseFloat(txn.amount) || 0;
-    return txn.applyTax ? amount * 1.15 : amount;
+  // Get the amount for a transaction (tax is already applied in the amount field)
+  const getAmount = (txn) => {
+    return parseFloat(txn.amount) || 0;
   };
 
   // Handle save all transactions
@@ -194,7 +216,7 @@ function AITransactionsReviewModal({
       const transactionsToCreate = validTransactions.map((txn) => ({
         accountId: selectedAccountId,
         categoryId: txn.categoryId,
-        amount: getFinalAmount(txn),
+        amount: getAmount(txn),
         currency: selectedCurrency,
         description: txn.description,
         type: txn.type,
@@ -257,11 +279,6 @@ function AITransactionsReviewModal({
         <Typography variant="h6" component="span">
           Review Transactions
         </Typography>
-        {parsedData?.merchant && (
-          <Typography variant="body2" color="text.secondary">
-            From: {parsedData.merchant}
-          </Typography>
-        )}
       </DialogTitle>
 
       <DialogContent sx={{ pt: 2, overflow: 'auto' }}>
@@ -358,29 +375,28 @@ function AITransactionsReviewModal({
                   </IconButton>
                 </Box>
 
-                {/* Description and Amount row */}
+                {/* Category row */}
+                <Box sx={{ mb: 1.5 }}>
+                  <CategoryAutocomplete
+                    categories={getCategoriesForType(txn.type)}
+                    value={txn.categoryId}
+                    onChange={(id) =>
+                      handleTransactionChange(txn.id, 'categoryId', id)
+                    }
+                    label="Category"
+                    size="small"
+                  />
+                </Box>
+
+                {/* Amount and Description row */}
                 <Box
                   sx={{
                     display: 'flex',
                     gap: 2,
-                    mb: 1.5,
+                    mb: isReceipt ? 1.5 : 0,
                     flexDirection: { xs: 'column', sm: 'row' },
                   }}
                 >
-                  <TextField
-                    label="Description"
-                    value={txn.description}
-                    onChange={(e) =>
-                      handleTransactionChange(
-                        txn.id,
-                        'description',
-                        e.target.value
-                      )
-                    }
-                    size="small"
-                    fullWidth
-                    sx={{ flex: 2 }}
-                  />
                   <TextField
                     label="Amount"
                     type="number"
@@ -396,69 +412,51 @@ function AITransactionsReviewModal({
                     inputProps={{ step: '0.01', min: '0' }}
                     sx={{ flex: 1, minWidth: 100 }}
                   />
-                </Box>
-
-                {/* Category row */}
-                <Box sx={{ mb: isReceipt ? 1.5 : 0 }}>
-                  <CategoryAutocomplete
-                    categories={getCategoriesForType(txn.type)}
-                    value={txn.categoryId}
-                    onChange={(id) =>
-                      handleTransactionChange(txn.id, 'categoryId', id)
+                  <TextField
+                    label="Description"
+                    value={txn.description}
+                    onChange={(e) =>
+                      handleTransactionChange(
+                        txn.id,
+                        'description',
+                        e.target.value
+                      )
                     }
-                    label="Category"
                     size="small"
+                    fullWidth
+                    sx={{ flex: 2 }}
                   />
                 </Box>
 
                 {/* Tax toggle (only for receipts) */}
                 {isReceipt && (
                   <Box
+                    onClick={() =>
+                      handleTaxToggle(txn.id, txn.applyTax, txn.amount)
+                    }
                     sx={{
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'space-between',
                       backgroundColor: 'action.hover',
                       borderRadius: 1,
                       px: 1.5,
-                      py: 0.5,
+                      py: 1,
+                      cursor: 'pointer',
+                      '&:hover': {
+                        backgroundColor: 'action.selected',
+                      },
                     }}
                   >
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={txn.applyTax}
-                          onChange={(e) =>
-                            handleTransactionChange(
-                              txn.id,
-                              'applyTax',
-                              e.target.checked
-                            )
-                          }
-                          size="small"
-                        />
-                      }
-                      label={
-                        <Typography variant="body2">Add 15% tax</Typography>
+                    <Checkbox
+                      checked={txn.applyTax}
+                      size="small"
+                      sx={{ p: 0, mr: 1 }}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={() =>
+                        handleTaxToggle(txn.id, txn.applyTax, txn.amount)
                       }
                     />
-                    <Typography variant="body2" fontWeight={500}>
-                      {txn.applyTax ? (
-                        <>
-                          {formatCurrency(txn.amount, selectedCurrency)} +{' '}
-                          {formatCurrency(txn.amount * 0.15, selectedCurrency)}{' '}
-                          ={' '}
-                          <strong>
-                            {formatCurrency(
-                              getFinalAmount(txn),
-                              selectedCurrency
-                            )}
-                          </strong>
-                        </>
-                      ) : (
-                        formatCurrency(txn.amount, selectedCurrency)
-                      )}
-                    </Typography>
+                    <Typography variant="body2">Add 15% tax</Typography>
                   </Box>
                 )}
               </Box>
@@ -476,54 +474,36 @@ function AITransactionsReviewModal({
             </Button>
           </Box>
         )}
-
-        {/* Summary Section */}
-        {transactions.length > 0 && (
-          <>
-            <Divider sx={{ my: 2 }} />
-            <Box
-              sx={{
-                p: 2,
-                backgroundColor: 'action.hover',
-                borderRadius: 1,
-              }}
-            >
-              <Typography variant="subtitle2" gutterBottom>
-                Summary
-              </Typography>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Subtotal ({transactions.length} items)
-                  </Typography>
-                  <Typography variant="body2">
-                    {formatCurrency(totals.subtotal, selectedCurrency)}
-                  </Typography>
-                </Box>
-                {isReceipt && totals.taxTotal > 0 && (
-                  <Box
-                    sx={{ display: 'flex', justifyContent: 'space-between' }}
-                  >
-                    <Typography variant="body2" color="text.secondary">
-                      Tax (15%)
-                    </Typography>
-                    <Typography variant="body2">
-                      +{formatCurrency(totals.taxTotal, selectedCurrency)}
-                    </Typography>
-                  </Box>
-                )}
-                <Divider sx={{ my: 0.5 }} />
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="subtitle2">Total</Typography>
-                  <Typography variant="subtitle2" color="primary.main">
-                    {formatCurrency(totals.grandTotal, selectedCurrency)}
-                  </Typography>
-                </Box>
-              </Box>
-            </Box>
-          </>
-        )}
       </DialogContent>
+
+      {/* Sticky Summary Section */}
+      {transactions.length > 0 && (
+        <Box
+          sx={{
+            flexShrink: 0,
+            px: 2,
+            py: 1.5,
+            borderTop: '1px solid',
+            borderColor: 'divider',
+            backgroundColor: 'action.hover',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
+          <Typography variant="subtitle2">
+            Total ({transactions.length} item
+            {transactions.length !== 1 ? 's' : ''})
+          </Typography>
+          <Typography
+            variant="subtitle1"
+            fontWeight="bold"
+            color="primary.main"
+          >
+            {formatCurrency(totals.grandTotal, selectedCurrency)}
+          </Typography>
+        </Box>
+      )}
 
       <DialogActions
         sx={{ p: 2, borderTop: '1px solid', borderColor: 'divider' }}
@@ -546,6 +526,56 @@ function AITransactionsReviewModal({
               }`}
         </Button>
       </DialogActions>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={!!deleteConfirmId}
+        onClose={() => setDeleteConfirmId(null)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            p: 1,
+          },
+        }}
+      >
+        <DialogTitle sx={{ textAlign: 'center', pb: 1 }}>
+          Delete Item?
+        </DialogTitle>
+        <DialogContent sx={{ textAlign: 'center', pb: 2 }}>
+          <Typography variant="body2" color="text.secondary">
+            This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: 'center', gap: 2, px: 3, pb: 3 }}>
+          <Button
+            onClick={() => setDeleteConfirmId(null)}
+            variant="outlined"
+            size="large"
+            sx={{
+              textTransform: 'none',
+              minWidth: 120,
+              py: 1.5,
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirmDelete}
+            color="error"
+            variant="contained"
+            size="large"
+            sx={{
+              textTransform: 'none',
+              minWidth: 120,
+              py: 1.5,
+            }}
+          >
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Dialog>
   );
 }
