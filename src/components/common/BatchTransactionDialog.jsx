@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useDispatch } from 'react-redux';
 import {
   Dialog,
@@ -33,6 +33,7 @@ function BatchTransactionDialog({ open, onClose }) {
   const [editingTransaction, setEditingTransaction] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
+  const isSubmittingRef = useRef(false); // Synchronous guard to prevent double submissions
 
   // Reset state when dialog opens
   const handleOpen = useCallback(() => {
@@ -41,6 +42,7 @@ function BatchTransactionDialog({ open, onClose }) {
     setEditingTransaction(null);
     setIsSubmitting(false);
     setSubmitError(null);
+    isSubmittingRef.current = false; // Reset the synchronous guard
   }, []);
 
   // Handle close and reset
@@ -118,6 +120,12 @@ function BatchTransactionDialog({ open, onClose }) {
   // Submit all queued transactions
   const handleSubmit = useCallback(async () => {
     if (queuedTransactions.length === 0) return;
+    
+    // Synchronous guard to prevent double submissions
+    if (isSubmittingRef.current) {
+      return;
+    }
+    isSubmittingRef.current = true;
 
     setIsSubmitting(true);
     setSubmitError(null);
@@ -136,6 +144,7 @@ function BatchTransactionDialog({ open, onClose }) {
       setSubmitError(err?.message || 'Failed to submit transactions. Please try again.');
     } finally {
       setIsSubmitting(false);
+      isSubmittingRef.current = false;
     }
   }, [queuedTransactions, dispatch, handleClose]);
 

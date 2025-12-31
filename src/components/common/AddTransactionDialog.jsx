@@ -51,6 +51,7 @@ function AddTransactionDialog({ open, onClose }) {
   const amountInputRef = useRef(null); // Ref for Amount field focus chaining
   const categoryInputRef = useRef(null); // Ref for Category field focus chaining
   const hasInitializedRef = useRef(false); // Guard to prevent form reset during background refresh
+  const isSubmittingRef = useRef(false); // Synchronous guard to prevent double submissions
 
   // Get default account from settings
   const getDefaultAccountId = () => {
@@ -154,11 +155,18 @@ function AddTransactionDialog({ open, onClose }) {
   const handleClose = () => {
     setActionError(null);
     setIsSubmitting(false);
+    isSubmittingRef.current = false; // Reset the synchronous guard
     reset();
     onClose();
   };
 
   const onSubmit = async (data) => {
+    // Synchronous guard to prevent double submissions
+    if (isSubmittingRef.current) {
+      return;
+    }
+    isSubmittingRef.current = true;
+    
     setIsSubmitting(true);
     setActionError(null);
     try {
@@ -170,6 +178,7 @@ function AddTransactionDialog({ open, onClose }) {
       setActionError(errorMessage);
     } finally {
       setIsSubmitting(false);
+      isSubmittingRef.current = false;
     }
   };
 

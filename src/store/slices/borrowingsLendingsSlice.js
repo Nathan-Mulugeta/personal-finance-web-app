@@ -186,7 +186,14 @@ const borrowingsLendingsSlice = createSlice({
       })
       .addCase(createBorrowingLendingRecord.fulfilled, (state, action) => {
         state.loading = false
-        state.records.unshift(action.payload)
+        const newRecord = action.payload
+        // Check if record already exists to prevent duplicates
+        const exists = state.records.some(
+          (r) => r.record_id === newRecord.record_id
+        )
+        if (!exists) {
+          state.records.unshift(newRecord)
+        }
       })
       .addCase(createBorrowingLendingRecord.rejected, (state, action) => {
         state.loading = false

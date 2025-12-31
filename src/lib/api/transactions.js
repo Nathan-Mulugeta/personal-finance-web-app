@@ -149,6 +149,19 @@ async function autoCreateBorrowingLending(transaction, userId) {
     return; // Category doesn't match
   }
 
+  // Check if a borrowing/lending record already exists for this transaction
+  // This prevents duplicate records if this function is called multiple times
+  const { getBorrowingLendingRecords } = await import('./borrowingsLendings');
+  const existingRecords = await getBorrowingLendingRecords({});
+  const existingRecord = existingRecords.find(
+    (r) => r.original_transaction_id === transaction.transaction_id
+  );
+  
+  if (existingRecord) {
+    // Record already exists, don't create a duplicate
+    return;
+  }
+
   // Parse entity name from description
   const { entityName, notes } = parseEntityName(transaction.description);
 

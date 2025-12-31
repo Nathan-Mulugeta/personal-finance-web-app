@@ -303,18 +303,36 @@ const transactionsSlice = createSlice({
         state.loading = false;
         // Track local mutation to prevent realtime sync from overwriting
         state.lastLocalMutation = Date.now();
-        // Add to both filtered and all transactions
-        state.transactions.push(action.payload);
-        state.allTransactions.push(action.payload);
-        // Sort allTransactions by date and created_at (newest first)
-        state.allTransactions.sort((a, b) => {
-          const dateDiff = new Date(b.date) - new Date(a.date);
-          if (dateDiff !== 0) return dateDiff;
-          if (a.created_at && b.created_at) {
-            return new Date(b.created_at) - new Date(a.created_at);
-          }
-          return 0;
-        });
+        
+        const newTransaction = action.payload;
+        const transactionId = newTransaction.transaction_id;
+        
+        // Check if transaction already exists to prevent duplicates
+        const existsInTransactions = state.transactions.some(
+          (t) => t.transaction_id === transactionId
+        );
+        const existsInAllTransactions = state.allTransactions.some(
+          (t) => t.transaction_id === transactionId
+        );
+        
+        // Add to filtered transactions if not already present
+        if (!existsInTransactions) {
+          state.transactions.push(newTransaction);
+        }
+        
+        // Add to all transactions if not already present
+        if (!existsInAllTransactions) {
+          state.allTransactions.push(newTransaction);
+          // Sort allTransactions by date and created_at (newest first)
+          state.allTransactions.sort((a, b) => {
+            const dateDiff = new Date(b.date) - new Date(a.date);
+            if (dateDiff !== 0) return dateDiff;
+            if (a.created_at && b.created_at) {
+              return new Date(b.created_at) - new Date(a.created_at);
+            }
+            return 0;
+          });
+        }
       })
       .addCase(createTransaction.rejected, (state, action) => {
         state.loading = false;
@@ -329,9 +347,28 @@ const transactionsSlice = createSlice({
         state.loading = false;
         // Track local mutation to prevent realtime sync from overwriting
         state.lastLocalMutation = Date.now();
-        // Add to both filtered and all transactions
-        state.transactions = [...action.payload, ...state.transactions];
-        state.allTransactions = [...action.payload, ...state.allTransactions];
+        
+        const newTransactions = action.payload || [];
+        
+        // Filter out any transactions that already exist to prevent duplicates
+        const existingTransactionIds = new Set(
+          state.transactions.map((t) => t.transaction_id)
+        );
+        const existingAllTransactionIds = new Set(
+          state.allTransactions.map((t) => t.transaction_id)
+        );
+        
+        const uniqueForTransactions = newTransactions.filter(
+          (t) => !existingTransactionIds.has(t.transaction_id)
+        );
+        const uniqueForAllTransactions = newTransactions.filter(
+          (t) => !existingAllTransactionIds.has(t.transaction_id)
+        );
+        
+        // Add unique transactions
+        state.transactions = [...uniqueForTransactions, ...state.transactions];
+        state.allTransactions = [...uniqueForAllTransactions, ...state.allTransactions];
+        
         // Sort allTransactions by date and created_at (newest first)
         state.allTransactions.sort((a, b) => {
           const dateDiff = new Date(b.date) - new Date(a.date);
