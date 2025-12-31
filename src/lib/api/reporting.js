@@ -143,13 +143,8 @@ export async function getBudgetReport(month, filters = {}) {
     const childrenBudget = children.reduce((sum, child) => sum + (child.budget || 0), 0)
     const childrenSpending = children.reduce((sum, child) => sum + (child.spending || 0), 0)
 
-    // Final budget: max of own or sum of children, or own if both exist
-    let finalBudget = effectiveBudget
-    if (effectiveBudget > 0 && childrenBudget > 0) {
-      finalBudget = Math.max(effectiveBudget, childrenBudget)
-    } else if (effectiveBudget === 0 && childrenBudget > 0) {
-      finalBudget = childrenBudget
-    }
+    // Final budget: sum of own budget + children budgets
+    const finalBudget = effectiveBudget + childrenBudget
 
     // Final spending: own + children
     const finalSpending = spending + childrenSpending

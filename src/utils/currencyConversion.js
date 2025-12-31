@@ -19,6 +19,24 @@ export function convertAmount(amount, exchangeRate) {
 }
 
 /**
+ * Find the latest exchange rate for a currency pair
+ * @param {Array} rates - Array of matching exchange rate objects
+ * @returns {Object|null} - The latest rate or null if none found
+ */
+function findLatestRate(rates) {
+  if (!rates || rates.length === 0) return null
+  if (rates.length === 1) return rates[0]
+  
+  // Sort by date descending and return the latest
+  return rates.reduce((latest, current) => {
+    if (!latest) return current
+    const latestDate = new Date(latest.date || latest.created_at || 0)
+    const currentDate = new Date(current.date || current.created_at || 0)
+    return currentDate > latestDate ? current : latest
+  }, null)
+}
+
+/**
  * Convert amount between currencies using exchange rates array
  * @param {number} amount - Amount to convert
  * @param {string} fromCurrency - Source currency code
@@ -40,23 +58,25 @@ export function convertAmountWithExchangeRates(amount, fromCurrency, toCurrency,
     return null
   }
 
-  // Look for direct rate (fromCurrency -> toCurrency)
-  const directRate = exchangeRates.find(
+  // Find all direct rates (fromCurrency -> toCurrency) and get the latest
+  const directRates = exchangeRates.filter(
     (er) =>
       er.from_currency === fromCurrency.toUpperCase() &&
       er.to_currency === toCurrency.toUpperCase()
   )
+  const directRate = findLatestRate(directRates)
 
   if (directRate) {
     return amount * directRate.rate
   }
 
-  // Look for reverse rate (toCurrency -> fromCurrency) and invert
-  const reverseRate = exchangeRates.find(
+  // Find all reverse rates (toCurrency -> fromCurrency) and get the latest
+  const reverseRates = exchangeRates.filter(
     (er) =>
       er.from_currency === toCurrency.toUpperCase() &&
       er.to_currency === fromCurrency.toUpperCase()
   )
+  const reverseRate = findLatestRate(reverseRates)
 
   if (reverseRate) {
     return amount / reverseRate.rate

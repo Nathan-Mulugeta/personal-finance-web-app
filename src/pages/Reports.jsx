@@ -419,14 +419,8 @@ function Reports() {
         allCurrencies.add(budgetCurrency);
       });
 
-      // Parent category budget: use max of own budget or sum of children budgets
-      if (parentOwnBudget > 0 && childrenBudget > 0) {
-        budgetAmount = Math.max(parentOwnBudget, childrenBudget);
-      } else if (childrenBudget > 0) {
-        budgetAmount = childrenBudget;
-      } else {
-        budgetAmount = parentOwnBudget;
-      }
+      // Parent category budget: sum of parent's own budget + children's budgets
+      budgetAmount = parentOwnBudget + childrenBudget;
 
       // Actual: direct + sum of children
       actualAmount += childrenActual;
