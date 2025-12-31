@@ -1,6 +1,9 @@
 import { useEffect, useState, useMemo, Fragment, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { selectCategoryMap, selectCategoryNameGetter } from '../store/selectors';
+import {
+  selectCategoryMap,
+  selectCategoryNameGetter,
+} from '../store/selectors';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -76,7 +79,7 @@ function Budgets() {
   const { settings } = useSelector((state) => state.settings);
   const { exchangeRates } = useSelector((state) => state.exchangeRates);
   const appInitialized = useSelector((state) => state.appInit.isInitialized);
-  
+
   // Memoized O(1) lookup functions from selectors
   const categoryMap = useSelector(selectCategoryMap);
   const getCategoryName = useSelector(selectCategoryNameGetter);
@@ -98,8 +101,12 @@ function Budgets() {
   });
   const [expandedParents, setExpandedParents] = useState(new Set());
   const [expandedTypes, setExpandedTypes] = useState({
-    oneTime: false,
-    recurring: false,
+    income: false,
+    expense: false,
+    incomeOneTime: false,
+    incomeRecurring: false,
+    expenseOneTime: false,
+    expenseRecurring: false,
   });
 
   const {
@@ -157,10 +164,14 @@ function Budgets() {
     }
   }, [watchedCategoryId, categoryMap, settings, setValue]);
 
-  // Calculate actual spending for a budget
-  // Optional forMonth parameter to calculate spending for a specific month (used for stats)
-  const calculateActualSpending = (budget, forMonth = null) => {
+  // Calculate actual amount for a budget (works for both income and expense)
+  // Optional forMonth parameter to calculate for a specific month (used for stats)
+  const calculateActualAmount = (budget, forMonth = null) => {
     if (!allTransactions || allTransactions.length === 0) return 0;
+
+    // Get category to determine if it's income or expense
+    const category = categoryMap.get(budget.category_id);
+    const isIncome = category?.type === 'Income';
 
     // For recurring budgets with forMonth, use that month for filtering
     // For non-recurring or when forMonth is not specified, use budget's own month
@@ -193,9 +204,17 @@ function Budgets() {
         return false;
       }
 
-      // Must be expense or transfer out
-      if (txn.type !== 'Expense' && txn.type !== 'Transfer Out') {
-        return false;
+      // Filter by transaction type based on category type
+      if (isIncome) {
+        // For income budgets, only count Income transactions
+        if (txn.type !== 'Income') {
+          return false;
+        }
+      } else {
+        // For expense budgets, count Expense and Transfer Out
+        if (txn.type !== 'Expense' && txn.type !== 'Transfer Out') {
+          return false;
+        }
       }
 
       // Must not be cancelled
@@ -306,59 +325,62 @@ function Budgets() {
     return filtered;
   }, [budgets, selectedMonth, filters]);
 
-  // Calculate budget statistics - only for expense budgets
+  // Calculate budget statistics for both income and expense budgets
   const budgetStats = useMemo(() => {
     const baseCurrency =
       settings.find((s) => s.setting_key === 'BaseCurrency')?.setting_value ||
       'USD';
 
     const stats = {
-      totalBudget: 0,
-      totalSpent: 0,
-      totalRemaining: 0,
+      expense: {
+        totalBudget: 0,
+        totalActual: 0,
+        totalRemaining: 0,
+      },
+      income: {
+        totalBudget: 0,
+        totalActual: 0,
+        totalRemaining: 0,
+      },
       baseCurrency,
     };
 
-    // Only include expense budgets in the stats
-    filteredBudgets
-      .filter((budget) => {
-        const category = categoryMap.get(budget.category_id);
-        return category?.type === 'Expense';
-      })
-      .forEach((budget) => {
-        // Pass selectedMonth to get spending for the selected month (important for recurring budgets)
-        const actualSpending = calculateActualSpending(budget, selectedMonth);
-        const budgetAmount = parseFloat(budget.amount || 0);
-        const remaining = budgetAmount - actualSpending;
-        const budgetCurrency = budget.currency || 'USD';
+    filteredBudgets.forEach((budget) => {
+      const category = categoryMap.get(budget.category_id);
+      const isIncome = category?.type === 'Income';
+      const targetStats = isIncome ? stats.income : stats.expense;
 
-        // Convert amounts to base currency
-        const convertedBudgetAmount = convertAmountWithExchangeRates(
-          budgetAmount,
-          budgetCurrency,
-          baseCurrency,
-          exchangeRates
-        );
-        const convertedActualSpending = convertAmountWithExchangeRates(
-          actualSpending,
-          budgetCurrency,
-          baseCurrency,
-          exchangeRates
-        );
-        const convertedRemaining =
-          convertedBudgetAmount !== null && convertedActualSpending !== null
-            ? convertedBudgetAmount - convertedActualSpending
-            : remaining;
+      // Pass selectedMonth to get actual amount for the selected month (important for recurring budgets)
+      const actualAmount = calculateActualAmount(budget, selectedMonth);
+      const budgetAmount = parseFloat(budget.amount || 0);
+      const remaining = budgetAmount - actualAmount;
+      const budgetCurrency = budget.currency || 'USD';
 
-        // Use converted amounts if available, otherwise use original
-        stats.totalBudget +=
-          convertedBudgetAmount !== null ? convertedBudgetAmount : budgetAmount;
-        stats.totalSpent +=
-          convertedActualSpending !== null
-            ? convertedActualSpending
-            : actualSpending;
-        stats.totalRemaining += convertedRemaining;
-      });
+      // Convert amounts to base currency
+      const convertedBudgetAmount = convertAmountWithExchangeRates(
+        budgetAmount,
+        budgetCurrency,
+        baseCurrency,
+        exchangeRates
+      );
+      const convertedActualAmount = convertAmountWithExchangeRates(
+        actualAmount,
+        budgetCurrency,
+        baseCurrency,
+        exchangeRates
+      );
+      const convertedRemaining =
+        convertedBudgetAmount !== null && convertedActualAmount !== null
+          ? convertedBudgetAmount - convertedActualAmount
+          : remaining;
+
+      // Use converted amounts if available, otherwise use original
+      targetStats.totalBudget +=
+        convertedBudgetAmount !== null ? convertedBudgetAmount : budgetAmount;
+      targetStats.totalActual +=
+        convertedActualAmount !== null ? convertedActualAmount : actualAmount;
+      targetStats.totalRemaining += convertedRemaining;
+    });
 
     return stats;
   }, [
@@ -522,9 +544,12 @@ function Budgets() {
   };
 
   // Get category by ID (using memoized Map for O(1) lookup)
-  const getCategory = useCallback((categoryId) => {
-    return categoryMap.get(categoryId);
-  }, [categoryMap]);
+  const getCategory = useCallback(
+    (categoryId) => {
+      return categoryMap.get(categoryId);
+    },
+    [categoryMap]
+  );
 
   // Organize budgets by category hierarchy
   const organizeBudgetsByCategory = useMemo(() => {
@@ -578,16 +603,38 @@ function Budgets() {
     };
   }, [categoryMap]);
 
-  // Separate budgets by type and organize by category
+  // Separate budgets by category type (Income/Expense), then by recurring type
   const organizedBudgets = useMemo(() => {
-    const oneTimeBudgets = filteredBudgets.filter((b) => !b.recurring);
-    const recurringBudgets = filteredBudgets.filter((b) => b.recurring);
+    // First separate by category type
+    const incomeBudgets = filteredBudgets.filter((b) => {
+      const category = categoryMap.get(b.category_id);
+      return category?.type === 'Income';
+    });
+    const expenseBudgets = filteredBudgets.filter((b) => {
+      const category = categoryMap.get(b.category_id);
+      return category?.type === 'Expense';
+    });
 
+    // Then separate each by one-time vs recurring
     return {
-      oneTime: organizeBudgetsByCategory(oneTimeBudgets),
-      recurring: organizeBudgetsByCategory(recurringBudgets),
+      income: {
+        oneTime: organizeBudgetsByCategory(
+          incomeBudgets.filter((b) => !b.recurring)
+        ),
+        recurring: organizeBudgetsByCategory(
+          incomeBudgets.filter((b) => b.recurring)
+        ),
+      },
+      expense: {
+        oneTime: organizeBudgetsByCategory(
+          expenseBudgets.filter((b) => !b.recurring)
+        ),
+        recurring: organizeBudgetsByCategory(
+          expenseBudgets.filter((b) => b.recurring)
+        ),
+      },
     };
-  }, [filteredBudgets, organizeBudgetsByCategory]);
+  }, [filteredBudgets, organizeBudgetsByCategory, categoryMap]);
 
   // Toggle parent category expansion
   const toggleParentExpansion = (parentId) => {
@@ -740,13 +787,14 @@ function Budgets() {
         </Grid>
       </Box>
 
-      {/* Summary Cards - 3 cards: Expense Budget, Spent, Remaining/Over - Stack vertically on mobile */}
+      {/* Summary Cards - Expense and Income stats */}
       {filteredBudgets.length > 0 && (
         <Grid
           container
           spacing={{ xs: 1, sm: 2 }}
           sx={{ mb: { xs: 2, sm: 3, md: 4 } }}
         >
+          {/* Expense Stats */}
           <Grid item xs={12} sm={4} md={4}>
             <Box
               sx={{
@@ -778,7 +826,7 @@ function Budgets() {
                 }}
               >
                 {formatCurrency(
-                  budgetStats.totalBudget,
+                  budgetStats.expense.totalBudget,
                   budgetStats.baseCurrency
                 )}
               </Typography>
@@ -815,7 +863,7 @@ function Budgets() {
                 }}
               >
                 {formatCurrency(
-                  budgetStats.totalSpent,
+                  budgetStats.expense.totalActual,
                   budgetStats.baseCurrency
                 )}
               </Typography>
@@ -827,7 +875,9 @@ function Budgets() {
                 p: { xs: 1.25, sm: 2 },
                 border: '1px solid',
                 borderColor:
-                  budgetStats.totalRemaining >= 0 ? 'divider' : 'error.light',
+                  budgetStats.expense.totalRemaining >= 0
+                    ? 'divider'
+                    : 'error.light',
                 borderRadius: 1,
                 backgroundColor: 'background.paper',
                 display: 'flex',
@@ -842,7 +892,9 @@ function Budgets() {
                   fontSize: { xs: '0.8rem', sm: '0.85rem' },
                 }}
               >
-                {budgetStats.totalRemaining >= 0 ? 'Remaining' : 'Over Budget'}
+                {budgetStats.expense.totalRemaining >= 0
+                  ? 'Remaining'
+                  : 'Over Budget'}
               </Typography>
               <Typography
                 variant="h5"
@@ -850,18 +902,142 @@ function Budgets() {
                 sx={{
                   fontSize: { xs: '1rem', sm: '1.25rem' },
                   color:
-                    budgetStats.totalRemaining >= 0
+                    budgetStats.expense.totalRemaining >= 0
                       ? 'text.primary'
                       : 'error.main',
                 }}
               >
                 {formatCurrency(
-                  Math.abs(budgetStats.totalRemaining),
+                  Math.abs(budgetStats.expense.totalRemaining),
                   budgetStats.baseCurrency
                 )}
               </Typography>
             </Box>
           </Grid>
+          {/* Income Stats - only show if there are income budgets */}
+          {budgetStats.income.totalBudget > 0 && (
+            <>
+              <Grid item xs={12} sm={4} md={4}>
+                <Box
+                  sx={{
+                    p: { xs: 1.25, sm: 2 },
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    borderRadius: 1,
+                    backgroundColor: 'background.paper',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{
+                      fontSize: { xs: '0.8rem', sm: '0.85rem' },
+                    }}
+                  >
+                    Income Goal
+                  </Typography>
+                  <Typography
+                    variant="h5"
+                    fontWeight="bold"
+                    color="text.primary"
+                    sx={{
+                      fontSize: { xs: '1rem', sm: '1.25rem' },
+                    }}
+                  >
+                    {formatCurrency(
+                      budgetStats.income.totalBudget,
+                      budgetStats.baseCurrency
+                    )}
+                  </Typography>
+                </Box>
+              </Grid>
+              <Grid item xs={12} sm={4} md={4}>
+                <Box
+                  sx={{
+                    p: { xs: 1.25, sm: 2 },
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    borderRadius: 1,
+                    backgroundColor: 'background.paper',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{
+                      fontSize: { xs: '0.8rem', sm: '0.85rem' },
+                    }}
+                  >
+                    Total Earned
+                  </Typography>
+                  <Typography
+                    variant="h5"
+                    fontWeight="bold"
+                    color="text.primary"
+                    sx={{
+                      fontSize: { xs: '1rem', sm: '1.25rem' },
+                    }}
+                  >
+                    {formatCurrency(
+                      budgetStats.income.totalActual,
+                      budgetStats.baseCurrency
+                    )}
+                  </Typography>
+                </Box>
+              </Grid>
+              <Grid item xs={12} sm={4} md={4}>
+                <Box
+                  sx={{
+                    p: { xs: 1.25, sm: 2 },
+                    border: '1px solid',
+                    borderColor:
+                      budgetStats.income.totalRemaining <= 0
+                        ? 'success.light'
+                        : 'divider',
+                    borderRadius: 1,
+                    backgroundColor: 'background.paper',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{
+                      fontSize: { xs: '0.8rem', sm: '0.85rem' },
+                    }}
+                  >
+                    {budgetStats.income.totalRemaining <= 0
+                      ? 'Exceeded Goal'
+                      : 'Remaining'}
+                  </Typography>
+                  <Typography
+                    variant="h5"
+                    fontWeight="bold"
+                    sx={{
+                      fontSize: { xs: '1rem', sm: '1.25rem' },
+                      color:
+                        budgetStats.income.totalRemaining <= 0
+                          ? 'success.main'
+                          : 'text.primary',
+                    }}
+                  >
+                    {formatCurrency(
+                      Math.abs(budgetStats.income.totalRemaining),
+                      budgetStats.baseCurrency
+                    )}
+                  </Typography>
+                </Box>
+              </Grid>
+            </>
+          )}
         </Grid>
       )}
 
@@ -999,15 +1175,49 @@ function Budgets() {
           <Box sx={{ display: { xs: 'block', md: 'none' } }}>
             {/* Helper function to render a budget card */}
             {(() => {
-              const renderBudgetCard = (budget) => {
-                const actualSpending = calculateActualSpending(
+              const renderBudgetCard = (budget, indentLevel = 0) => {
+                const category = categoryMap.get(budget.category_id);
+                const isIncome = category?.type === 'Income';
+                const actualAmount = calculateActualAmount(
                   budget,
                   selectedMonth
                 );
                 const budgetAmount = parseFloat(budget.amount || 0);
                 const percentage =
-                  budgetAmount > 0 ? (actualSpending / budgetAmount) * 100 : 0;
-                const remaining = budgetAmount - actualSpending;
+                  budgetAmount > 0 ? (actualAmount / budgetAmount) * 100 : 0;
+                const remaining = budgetAmount - actualAmount;
+
+                // For income: green when met/exceeded goal, for expense: green when under budget
+                const getProgressColor = () => {
+                  if (isIncome) {
+                    return percentage >= 100
+                      ? 'success'
+                      : percentage >= 80
+                      ? 'info'
+                      : 'warning';
+                  }
+                  return percentage > 100
+                    ? 'error'
+                    : percentage > 80
+                    ? 'warning'
+                    : 'success';
+                };
+
+                const getRemainingColor = () => {
+                  if (isIncome) {
+                    // For income: exceeded = green, remaining = needs more = neutral
+                    return remaining <= 0 ? 'success.main' : 'text.secondary';
+                  }
+                  // For expense: remaining = green, over = red
+                  return remaining >= 0 ? 'softGreen.main' : 'softRed.main';
+                };
+
+                const getRemainingLabel = () => {
+                  if (isIncome) {
+                    return remaining <= 0 ? 'Exceeded' : 'To Goal';
+                  }
+                  return remaining >= 0 ? 'Remaining' : 'Over';
+                };
 
                 return (
                   <Box
@@ -1015,6 +1225,7 @@ function Budgets() {
                     sx={{
                       mb: 1.5,
                       p: 1.5,
+                      ml: indentLevel * 2,
                       cursor: 'pointer',
                       border: '1px solid',
                       borderColor: 'divider',
@@ -1065,28 +1276,22 @@ function Budgets() {
                           color="text.secondary"
                           sx={{ fontSize: '0.75rem' }}
                         >
-                          Spent:{' '}
-                          {formatCurrency(actualSpending, budget.currency)}
+                          {isIncome ? 'Earned' : 'Spent'}:{' '}
+                          {formatCurrency(actualAmount, budget.currency)}
                         </Typography>
                         <Typography
                           variant="body2"
                           color="text.secondary"
                           sx={{ fontSize: '0.75rem' }}
                         >
-                          Budget:{' '}
+                          {isIncome ? 'Goal' : 'Budget'}:{' '}
                           {formatCurrency(budgetAmount, budget.currency)}
                         </Typography>
                       </Box>
                       <LinearProgress
                         variant="determinate"
                         value={Math.min(percentage, 100)}
-                        color={
-                          percentage > 100
-                            ? 'error'
-                            : percentage > 80
-                            ? 'warning'
-                            : 'success'
-                        }
+                        color={getProgressColor()}
                         sx={{ height: 6, borderRadius: 1 }}
                       />
                       <Box
@@ -1099,15 +1304,12 @@ function Budgets() {
                         <Typography
                           variant="caption"
                           sx={{
-                            color:
-                              remaining >= 0
-                                ? 'softGreen.main'
-                                : 'softRed.main',
+                            color: getRemainingColor(),
                             fontSize: '0.6875rem',
                           }}
                           fontWeight="medium"
                         >
-                          {remaining >= 0 ? 'Remaining' : 'Over'}:{' '}
+                          {getRemainingLabel()}:{' '}
                           {formatCurrency(Math.abs(remaining), budget.currency)}
                         </Typography>
                         <Typography
@@ -1136,15 +1338,19 @@ function Budgets() {
               const renderParentCategoryGroupMobile = (
                 parentId,
                 group,
-                typeLabel
+                typeLabel,
+                indentLevel = 0
               ) => {
-                const isExpanded = expandedParents.has(parentId);
-                // For root categories, parent is the category itself
-                // For categories with parents, parent is the parent category
+                const isExpanded = expandedParents.has(
+                  `${typeLabel}-${parentId}`
+                );
                 const parentName = group.parent ? group.parent.name : 'Other';
 
                 return (
-                  <Box key={`${typeLabel}-${parentId}-mobile`} sx={{ mb: 1.5 }}>
+                  <Box
+                    key={`${typeLabel}-${parentId}-mobile`}
+                    sx={{ mb: 1.5, ml: indentLevel * 2 }}
+                  >
                     {/* Parent Category Header */}
                     <Box
                       sx={{
@@ -1157,7 +1363,9 @@ function Budgets() {
                         backgroundColor: 'background.paper',
                         '&:hover': { bgcolor: 'action.hover' },
                       }}
-                      onClick={() => toggleParentExpansion(parentId)}
+                      onClick={() =>
+                        toggleParentExpansion(`${typeLabel}-${parentId}`)
+                      }
                     >
                       <Box
                         sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
@@ -1166,7 +1374,7 @@ function Budgets() {
                           size="small"
                           onClick={(e) => {
                             e.stopPropagation();
-                            toggleParentExpansion(parentId);
+                            toggleParentExpansion(`${typeLabel}-${parentId}`);
                           }}
                           sx={{ p: 0.5 }}
                         >
@@ -1199,11 +1407,11 @@ function Budgets() {
                     </Box>
                     {/* Subcategory Budgets */}
                     <Collapse in={isExpanded}>
-                      <Box sx={{ pl: 1 }}>
+                      <Box sx={{ pl: 2 }}>
                         {Object.entries(group.subcategories).map(
                           ([subcategoryId, subcategory]) => {
                             return subcategory.budgets.map((budget) =>
-                              renderBudgetCard(budget)
+                              renderBudgetCard(budget, 1)
                             );
                           }
                         )}
@@ -1213,132 +1421,167 @@ function Budgets() {
                 );
               };
 
+              const renderRecurringTypeSectionMobile = (
+                budgetGroups,
+                typeKey,
+                label,
+                indentLevel = 0
+              ) => {
+                const entries = Object.entries(budgetGroups);
+                if (entries.length === 0) return null;
+
+                return (
+                  <>
+                    <Box
+                      sx={{
+                        mb: 1.5,
+                        p: 1.5,
+                        pl: 1.5 + indentLevel * 2,
+                        cursor: 'pointer',
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
+                        backgroundColor: 'transparent',
+                        '&:hover': { backgroundColor: '#f8f9fa' },
+                      }}
+                      onClick={() => toggleTypeExpansion(typeKey)}
+                    >
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 0.5,
+                        }}
+                      >
+                        <IconButton
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleTypeExpansion(typeKey);
+                          }}
+                          sx={{ p: 0.5, color: '#5f6368' }}
+                        >
+                          {expandedTypes[typeKey] ? (
+                            <ExpandMoreIcon sx={{ fontSize: 20 }} />
+                          ) : (
+                            <ChevronRightIcon sx={{ fontSize: 20 }} />
+                          )}
+                        </IconButton>
+                        <Typography
+                          variant="body1"
+                          sx={{
+                            fontSize: '0.875rem',
+                            fontWeight: 500,
+                            color: '#202124',
+                          }}
+                        >
+                          {label}
+                        </Typography>
+                      </Box>
+                    </Box>
+                    <Collapse in={expandedTypes[typeKey]}>
+                      <Box sx={{ pl: 2 }}>
+                        {entries.map(([parentId, group]) =>
+                          renderParentCategoryGroupMobile(
+                            parentId,
+                            group,
+                            typeKey,
+                            1
+                          )
+                        )}
+                      </Box>
+                    </Collapse>
+                  </>
+                );
+              };
+
+              const renderCategoryTypeSectionMobile = (
+                categoryType,
+                typeKey,
+                label
+              ) => {
+                const data = organizedBudgets[categoryType];
+                const hasOneTime = Object.entries(data.oneTime).length > 0;
+                const hasRecurring = Object.entries(data.recurring).length > 0;
+                if (!hasOneTime && !hasRecurring) return null;
+
+                return (
+                  <>
+                    <Box
+                      sx={{
+                        mb: 1.5,
+                        p: 1.5,
+                        cursor: 'pointer',
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
+                        backgroundColor: 'transparent',
+                        '&:hover': { backgroundColor: '#f8f9fa' },
+                      }}
+                      onClick={() => toggleTypeExpansion(categoryType)}
+                    >
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 0.5,
+                        }}
+                      >
+                        <IconButton
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleTypeExpansion(categoryType);
+                          }}
+                          sx={{ p: 0.5, color: '#5f6368' }}
+                        >
+                          {expandedTypes[categoryType] ? (
+                            <ExpandMoreIcon sx={{ fontSize: 20 }} />
+                          ) : (
+                            <ChevronRightIcon sx={{ fontSize: 20 }} />
+                          )}
+                        </IconButton>
+                        <Typography
+                          variant="body1"
+                          sx={{
+                            fontSize: '1rem',
+                            fontWeight: 600,
+                            color: '#202124',
+                          }}
+                        >
+                          {label}
+                        </Typography>
+                      </Box>
+                    </Box>
+                    <Collapse in={expandedTypes[categoryType]}>
+                      <Box sx={{ pl: 2 }}>
+                        {renderRecurringTypeSectionMobile(
+                          data.oneTime,
+                          `${categoryType}OneTime`,
+                          'One-time Budgets',
+                          1
+                        )}
+                        {renderRecurringTypeSectionMobile(
+                          data.recurring,
+                          `${categoryType}Recurring`,
+                          'Recurring Budgets',
+                          1
+                        )}
+                      </Box>
+                    </Collapse>
+                  </>
+                );
+              };
+
               return (
                 <>
-                  {/* One-time Budgets Section */}
-                  {Object.entries(organizedBudgets.oneTime).length > 0 && (
-                    <>
-                      <Box
-                        sx={{
-                          mb: 1.5,
-                          p: 1.5,
-                          cursor: 'pointer',
-                          borderBottom: '1px solid',
-                          borderColor: 'divider',
-                          backgroundColor: 'transparent',
-                          '&:hover': { backgroundColor: '#f8f9fa' },
-                        }}
-                        onClick={() => toggleTypeExpansion('oneTime')}
-                      >
-                        <Box
-                          sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 0.5,
-                          }}
-                        >
-                          <IconButton
-                            size="small"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleTypeExpansion('oneTime');
-                            }}
-                            sx={{ p: 0.5, color: '#5f6368' }}
-                          >
-                            {expandedTypes.oneTime ? (
-                              <ExpandMoreIcon sx={{ fontSize: 20 }} />
-                            ) : (
-                              <ChevronRightIcon sx={{ fontSize: 20 }} />
-                            )}
-                          </IconButton>
-                          <Typography
-                            variant="body1"
-                            sx={{
-                              fontSize: '0.9375rem',
-                              fontWeight: 500,
-                              color: '#202124',
-                            }}
-                          >
-                            One-time Budgets
-                          </Typography>
-                        </Box>
-                      </Box>
-                      <Collapse in={expandedTypes.oneTime}>
-                        <Box>
-                          {Object.entries(organizedBudgets.oneTime).map(
-                            ([parentId, group]) =>
-                              renderParentCategoryGroupMobile(
-                                parentId,
-                                group,
-                                'oneTime'
-                              )
-                          )}
-                        </Box>
-                      </Collapse>
-                    </>
+                  {renderCategoryTypeSectionMobile(
+                    'income',
+                    'income',
+                    'Income'
                   )}
-
-                  {/* Recurring Budgets Section */}
-                  {Object.entries(organizedBudgets.recurring).length > 0 && (
-                    <>
-                      <Box
-                        sx={{
-                          mb: 1.5,
-                          p: 1.5,
-                          cursor: 'pointer',
-                          borderBottom: '1px solid',
-                          borderColor: 'divider',
-                          backgroundColor: 'transparent',
-                          '&:hover': { backgroundColor: '#f8f9fa' },
-                        }}
-                        onClick={() => toggleTypeExpansion('recurring')}
-                      >
-                        <Box
-                          sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 0.5,
-                          }}
-                        >
-                          <IconButton
-                            size="small"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleTypeExpansion('recurring');
-                            }}
-                            sx={{ p: 0.5, color: '#5f6368' }}
-                          >
-                            {expandedTypes.recurring ? (
-                              <ExpandMoreIcon sx={{ fontSize: 20 }} />
-                            ) : (
-                              <ChevronRightIcon sx={{ fontSize: 20 }} />
-                            )}
-                          </IconButton>
-                          <Typography
-                            variant="body1"
-                            sx={{
-                              fontSize: '0.9375rem',
-                              fontWeight: 500,
-                              color: '#202124',
-                            }}
-                          >
-                            Recurring Budgets
-                          </Typography>
-                        </Box>
-                      </Box>
-                      <Collapse in={expandedTypes.recurring}>
-                        <Box>
-                          {Object.entries(organizedBudgets.recurring).map(
-                            ([parentId, group]) =>
-                              renderParentCategoryGroupMobile(
-                                parentId,
-                                group,
-                                'recurring'
-                              )
-                          )}
-                        </Box>
-                      </Collapse>
-                    </>
+                  {renderCategoryTypeSectionMobile(
+                    'expense',
+                    'expense',
+                    'Expense'
                   )}
                 </>
               );
@@ -1355,27 +1598,75 @@ function Budgets() {
                 <TableRow>
                   <TableCell sx={{ width: '20%' }}>Category</TableCell>
                   <TableCell sx={{ width: '8%' }}>Currency</TableCell>
-                  <TableCell align="right" sx={{ width: '12%' }}>Budget</TableCell>
-                  <TableCell align="right" sx={{ width: '12%' }}>Spent</TableCell>
+                  <TableCell align="right" sx={{ width: '12%' }}>
+                    Budget
+                  </TableCell>
+                  <TableCell align="right" sx={{ width: '12%' }}>
+                    Actual
+                  </TableCell>
                   <TableCell sx={{ width: '20%' }}>Progress</TableCell>
-                  <TableCell align="right" sx={{ width: '12%' }}>Remaining</TableCell>
+                  <TableCell align="right" sx={{ width: '12%' }}>
+                    Remaining
+                  </TableCell>
                   <TableCell sx={{ width: '16%' }}>Status</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {/* Helper function to render a budget row */}
                 {(() => {
-                  const renderBudgetRow = (budget) => {
-                    const actualSpending = calculateActualSpending(
+                  const renderBudgetRow = (budget, indentLevel = 0) => {
+                    const category = categoryMap.get(budget.category_id);
+                    const isIncome = category?.type === 'Income';
+                    const actualAmount = calculateActualAmount(
                       budget,
                       selectedMonth
                     );
                     const budgetAmount = parseFloat(budget.amount || 0);
                     const percentage =
                       budgetAmount > 0
-                        ? (actualSpending / budgetAmount) * 100
+                        ? (actualAmount / budgetAmount) * 100
                         : 0;
-                    const remaining = budgetAmount - actualSpending;
+                    const remaining = budgetAmount - actualAmount;
+
+                    // For income: green when met/exceeded goal, for expense: green when under budget
+                    const getProgressColor = () => {
+                      if (isIncome) {
+                        return percentage >= 100
+                          ? 'success'
+                          : percentage >= 80
+                          ? 'info'
+                          : 'warning';
+                      }
+                      return percentage > 100
+                        ? 'error'
+                        : percentage > 80
+                        ? 'warning'
+                        : 'success';
+                    };
+
+                    const getActualColor = () => {
+                      if (isIncome) {
+                        // For income: green when met/exceeded, neutral otherwise
+                        return actualAmount >= budgetAmount
+                          ? 'success.main'
+                          : 'text.primary';
+                      }
+                      // For expense: red when over budget
+                      return actualAmount > budgetAmount
+                        ? 'error.main'
+                        : 'text.primary';
+                    };
+
+                    const getRemainingColor = () => {
+                      if (isIncome) {
+                        // For income: exceeded = green, remaining = needs more = neutral
+                        return remaining <= 0
+                          ? 'success.main'
+                          : 'text.secondary';
+                      }
+                      // For expense: remaining = green, over = red
+                      return remaining >= 0 ? 'softGreen.main' : 'softRed.main';
+                    };
 
                     return (
                       <TableRow
@@ -1384,12 +1675,16 @@ function Budgets() {
                         onClick={() => handleRowClick(budget)}
                         sx={{ cursor: 'pointer' }}
                       >
-                        <TableCell sx={{ width: '20%' }}>
+                        <TableCell
+                          sx={{ width: '20%', pl: 2 + indentLevel * 3 }}
+                        >
                           <Typography variant="body1" fontWeight="medium">
                             {getCategoryName(budget.category_id)}
                           </Typography>
                         </TableCell>
-                        <TableCell sx={{ width: '8%' }}>{budget.currency}</TableCell>
+                        <TableCell sx={{ width: '8%' }}>
+                          {budget.currency}
+                        </TableCell>
                         <TableCell align="right" sx={{ width: '12%' }}>
                           {formatCurrency(budgetAmount, budget.currency)}
                         </TableCell>
@@ -1397,13 +1692,9 @@ function Budgets() {
                           <Typography
                             variant="body1"
                             fontWeight="medium"
-                            color={
-                              actualSpending > budgetAmount
-                                ? 'error.main'
-                                : 'text.primary'
-                            }
+                            color={getActualColor()}
                           >
-                            {formatCurrency(actualSpending, budget.currency)}
+                            {formatCurrency(actualAmount, budget.currency)}
                           </Typography>
                         </TableCell>
                         <TableCell sx={{ width: '20%' }}>
@@ -1417,13 +1708,7 @@ function Budgets() {
                             <LinearProgress
                               variant="determinate"
                               value={Math.min(percentage, 100)}
-                              color={
-                                percentage > 100
-                                  ? 'error'
-                                  : percentage > 80
-                                  ? 'warning'
-                                  : 'success'
-                              }
+                              color={getProgressColor()}
                               sx={{ flex: 1, height: 8, borderRadius: 1 }}
                             />
                             <Typography
@@ -1439,12 +1724,7 @@ function Budgets() {
                           <Typography
                             variant="body1"
                             fontWeight="medium"
-                            sx={{
-                              color:
-                                remaining >= 0
-                                  ? 'softGreen.main'
-                                  : 'softRed.main',
-                            }}
+                            sx={{ color: getRemainingColor() }}
                           >
                             {formatCurrency(
                               Math.abs(remaining),
@@ -1466,11 +1746,12 @@ function Budgets() {
                   const renderParentCategoryGroup = (
                     parentId,
                     group,
-                    typeLabel
+                    typeLabel,
+                    indentLevel = 0
                   ) => {
-                    const isExpanded = expandedParents.has(parentId);
-                    // For root categories, parent is the category itself
-                    // For categories with parents, parent is the parent category
+                    const isExpanded = expandedParents.has(
+                      `${typeLabel}-${parentId}`
+                    );
                     const parentName = group.parent
                       ? group.parent.name
                       : 'Other';
@@ -1479,26 +1760,33 @@ function Budgets() {
                       <Fragment key={`${typeLabel}-${parentId}`}>
                         {/* Parent Category Header Row */}
                         <TableRow
-                          onClick={() => toggleParentExpansion(parentId)}
+                          onClick={() =>
+                            toggleParentExpansion(`${typeLabel}-${parentId}`)
+                          }
                           sx={{
                             cursor: 'pointer',
                             '&:hover': { bgcolor: 'action.hover' },
                           }}
                         >
-                          <TableCell colSpan={7}>
+                          <TableCell
+                            colSpan={7}
+                            sx={{ pl: 2 + indentLevel * 3 }}
+                          >
                             <Box
                               sx={{
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: 1,
-                                py: 1,
+                                py: 0.5,
                               }}
                             >
                               <IconButton
                                 size="small"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  toggleParentExpansion(parentId);
+                                  toggleParentExpansion(
+                                    `${typeLabel}-${parentId}`
+                                  );
                                 }}
                               >
                                 {isExpanded ? (
@@ -1537,7 +1825,7 @@ function Budgets() {
                                   {Object.entries(group.subcategories).map(
                                     ([subcategoryId, subcategory]) => {
                                       return subcategory.budgets.map((budget) =>
-                                        renderBudgetRow(budget)
+                                        renderBudgetRow(budget, indentLevel + 1)
                                       );
                                     }
                                   )}
@@ -1550,157 +1838,187 @@ function Budgets() {
                     );
                   };
 
-                  const oneTimeEntries = Object.entries(
-                    organizedBudgets.oneTime
-                  );
-                  const recurringEntries = Object.entries(
-                    organizedBudgets.recurring
-                  );
+                  const renderRecurringTypeSection = (
+                    budgetGroups,
+                    typeKey,
+                    label,
+                    indentLevel = 0
+                  ) => {
+                    const entries = Object.entries(budgetGroups);
+                    if (entries.length === 0) return null;
+
+                    return (
+                      <>
+                        <TableRow
+                          onClick={() => toggleTypeExpansion(typeKey)}
+                          sx={{
+                            cursor: 'pointer',
+                            '&:hover': { backgroundColor: '#f8f9fa' },
+                          }}
+                        >
+                          <TableCell
+                            colSpan={7}
+                            sx={{
+                              backgroundColor: 'transparent',
+                              borderBottom: '1px solid',
+                              borderColor: 'divider',
+                              pl: 2 + indentLevel * 3,
+                            }}
+                          >
+                            <Box
+                              sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 1,
+                                py: 0.5,
+                              }}
+                            >
+                              <IconButton
+                                size="small"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleTypeExpansion(typeKey);
+                                }}
+                                sx={{ color: '#5f6368' }}
+                              >
+                                {expandedTypes[typeKey] ? (
+                                  <ExpandMoreIcon />
+                                ) : (
+                                  <ChevronRightIcon />
+                                )}
+                              </IconButton>
+                              <Typography
+                                variant="body1"
+                                sx={{ fontWeight: 500, color: '#202124' }}
+                              >
+                                {label}
+                              </Typography>
+                            </Box>
+                          </TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell
+                            colSpan={7}
+                            sx={{ py: 0, border: 0, px: 0 }}
+                          >
+                            <Collapse in={expandedTypes[typeKey]}>
+                              <Table size="small">
+                                <TableBody>
+                                  {entries.map(([parentId, group]) =>
+                                    renderParentCategoryGroup(
+                                      parentId,
+                                      group,
+                                      typeKey,
+                                      indentLevel + 1
+                                    )
+                                  )}
+                                </TableBody>
+                              </Table>
+                            </Collapse>
+                          </TableCell>
+                        </TableRow>
+                      </>
+                    );
+                  };
+
+                  const renderCategoryTypeSection = (
+                    categoryType,
+                    typeKey,
+                    label
+                  ) => {
+                    const data = organizedBudgets[categoryType];
+                    const hasOneTime = Object.entries(data.oneTime).length > 0;
+                    const hasRecurring =
+                      Object.entries(data.recurring).length > 0;
+                    if (!hasOneTime && !hasRecurring) return null;
+
+                    return (
+                      <>
+                        <TableRow
+                          onClick={() => toggleTypeExpansion(categoryType)}
+                          sx={{
+                            cursor: 'pointer',
+                            '&:hover': { backgroundColor: '#f8f9fa' },
+                          }}
+                        >
+                          <TableCell
+                            colSpan={7}
+                            sx={{
+                              backgroundColor: 'transparent',
+                              borderBottom: '1px solid',
+                              borderColor: 'divider',
+                            }}
+                          >
+                            <Box
+                              sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 1,
+                                py: 1,
+                              }}
+                            >
+                              <IconButton
+                                size="small"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleTypeExpansion(categoryType);
+                                }}
+                                sx={{ color: '#5f6368' }}
+                              >
+                                {expandedTypes[categoryType] ? (
+                                  <ExpandMoreIcon />
+                                ) : (
+                                  <ChevronRightIcon />
+                                )}
+                              </IconButton>
+                              <Typography
+                                variant="h6"
+                                sx={{
+                                  fontWeight: 600,
+                                  color: '#202124',
+                                }}
+                              >
+                                {label}
+                              </Typography>
+                            </Box>
+                          </TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell
+                            colSpan={7}
+                            sx={{ py: 0, border: 0, px: 0 }}
+                          >
+                            <Collapse in={expandedTypes[categoryType]}>
+                              <Table size="small">
+                                <TableBody>
+                                  {renderRecurringTypeSection(
+                                    data.oneTime,
+                                    `${categoryType}OneTime`,
+                                    'One-time Budgets',
+                                    1
+                                  )}
+                                  {renderRecurringTypeSection(
+                                    data.recurring,
+                                    `${categoryType}Recurring`,
+                                    'Recurring Budgets',
+                                    1
+                                  )}
+                                </TableBody>
+                              </Table>
+                            </Collapse>
+                          </TableCell>
+                        </TableRow>
+                      </>
+                    );
+                  };
 
                   return (
                     <>
-                      {/* One-time Budgets Section */}
-                      {oneTimeEntries.length > 0 && (
-                        <>
-                          <TableRow
-                            onClick={() => toggleTypeExpansion('oneTime')}
-                            sx={{
-                              cursor: 'pointer',
-                              '&:hover': { backgroundColor: '#f8f9fa' },
-                            }}
-                          >
-                            <TableCell
-                              colSpan={7}
-                              sx={{
-                                backgroundColor: 'transparent',
-                                borderBottom: '1px solid',
-                                borderColor: 'divider',
-                              }}
-                            >
-                              <Box
-                                sx={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 1,
-                                  py: 1,
-                                }}
-                              >
-                                <IconButton
-                                  size="small"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleTypeExpansion('oneTime');
-                                  }}
-                                  sx={{ color: '#5f6368' }}
-                                >
-                                  {expandedTypes.oneTime ? (
-                                    <ExpandMoreIcon />
-                                  ) : (
-                                    <ChevronRightIcon />
-                                  )}
-                                </IconButton>
-                                <Typography
-                                  variant="h6"
-                                  sx={{ fontWeight: 500, color: '#202124' }}
-                                >
-                                  One-time Budgets
-                                </Typography>
-                              </Box>
-                            </TableCell>
-                          </TableRow>
-                          <TableRow>
-                            <TableCell
-                              colSpan={7}
-                              sx={{ py: 0, border: 0, px: 0 }}
-                            >
-                              <Collapse in={expandedTypes.oneTime}>
-                                <Table size="small">
-                                  <TableBody>
-                                    {oneTimeEntries.map(([parentId, group]) =>
-                                      renderParentCategoryGroup(
-                                        parentId,
-                                        group,
-                                        'oneTime'
-                                      )
-                                    )}
-                                  </TableBody>
-                                </Table>
-                              </Collapse>
-                            </TableCell>
-                          </TableRow>
-                        </>
-                      )}
-
-                      {/* Recurring Budgets Section */}
-                      {recurringEntries.length > 0 && (
-                        <>
-                          <TableRow
-                            onClick={() => toggleTypeExpansion('recurring')}
-                            sx={{
-                              cursor: 'pointer',
-                              '&:hover': { backgroundColor: '#f8f9fa' },
-                            }}
-                          >
-                            <TableCell
-                              colSpan={7}
-                              sx={{
-                                backgroundColor: 'transparent',
-                                borderBottom: '1px solid',
-                                borderColor: 'divider',
-                              }}
-                            >
-                              <Box
-                                sx={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 1,
-                                  py: 1,
-                                }}
-                              >
-                                <IconButton
-                                  size="small"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleTypeExpansion('recurring');
-                                  }}
-                                  sx={{ color: '#5f6368' }}
-                                >
-                                  {expandedTypes.recurring ? (
-                                    <ExpandMoreIcon />
-                                  ) : (
-                                    <ChevronRightIcon />
-                                  )}
-                                </IconButton>
-                                <Typography
-                                  variant="h6"
-                                  sx={{ fontWeight: 500, color: '#202124' }}
-                                >
-                                  Recurring Budgets
-                                </Typography>
-                              </Box>
-                            </TableCell>
-                          </TableRow>
-                          <TableRow>
-                            <TableCell
-                              colSpan={7}
-                              sx={{ py: 0, border: 0, px: 0 }}
-                            >
-                              <Collapse in={expandedTypes.recurring}>
-                                <Table size="small">
-                                  <TableBody>
-                                    {recurringEntries.map(([parentId, group]) =>
-                                      renderParentCategoryGroup(
-                                        parentId,
-                                        group,
-                                        'recurring'
-                                      )
-                                    )}
-                                  </TableBody>
-                                </Table>
-                              </Collapse>
-                            </TableCell>
-                          </TableRow>
-                        </>
+                      {renderCategoryTypeSection('income', 'income', 'Income')}
+                      {renderCategoryTypeSection(
+                        'expense',
+                        'expense',
+                        'Expense'
                       )}
                     </>
                   );
