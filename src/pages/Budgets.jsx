@@ -150,9 +150,10 @@ function Budgets() {
     },
   });
 
-  // Auto-set currency from category when category is selected
+  // Auto-set currency from category when category is selected (only for new budgets)
   useEffect(() => {
-    if (watchedCategoryId) {
+    // Only auto-set currency when creating a new budget, not when editing
+    if (watchedCategoryId && !editingBudget) {
       const category = categoryMap.get(watchedCategoryId);
       if (category) {
         // Try to get currency from settings or default to USD
@@ -162,7 +163,7 @@ function Budgets() {
         setValue('currency', baseCurrency);
       }
     }
-  }, [watchedCategoryId, categoryMap, settings, setValue]);
+  }, [watchedCategoryId, categoryMap, settings, setValue, editingBudget]);
 
   // Calculate actual amount for a budget (works for both income and expense)
   // Optional forMonth parameter to calculate for a specific month (used for stats)
