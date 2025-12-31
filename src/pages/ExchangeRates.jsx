@@ -1,7 +1,8 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   Box,
+  Button,
   Paper,
   Table,
   TableBody,
@@ -27,6 +28,7 @@ function ExchangeRates() {
   const { exchangeRates, loading, isInitialized, error } = useSelector(
     (state) => state.exchangeRates
   );
+  const [showAll, setShowAll] = useState(false);
 
   // Refresh data on navigation
   usePageRefresh({
@@ -44,6 +46,14 @@ function ExchangeRates() {
       return dateB - dateA; // Descending order
     });
   }, [exchangeRates]);
+
+  // Limit to 10 most recent by default, or show all if showAll is true
+  const displayedRates = useMemo(() => {
+    if (showAll) {
+      return sortedExchangeRates;
+    }
+    return sortedExchangeRates.slice(0, 10);
+  }, [sortedExchangeRates, showAll]);
 
   if (loading && !isInitialized) {
     return <LoadingSpinner />;
@@ -82,9 +92,26 @@ function ExchangeRates() {
         </Box>
       ) : (
         <>
+          {/* Show All / Show Less Button */}
+          {sortedExchangeRates.length > 10 && (
+            <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => setShowAll(!showAll)}
+                sx={{
+                  textTransform: 'none',
+                  minHeight: 36,
+                }}
+              >
+                {showAll ? 'Show Less (10 Most Recent)' : `Show All (${sortedExchangeRates.length} total)`}
+              </Button>
+            </Box>
+          )}
+
           {/* Mobile Card View */}
           <Box sx={{ display: { xs: 'block', md: 'none' } }}>
-            {sortedExchangeRates.map((rate) => (
+            {displayedRates.map((rate) => (
               <Box
                 key={rate.exchange_rate_id}
                 sx={{
@@ -166,7 +193,7 @@ function ExchangeRates() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {sortedExchangeRates.map((rate) => (
+                {displayedRates.map((rate) => (
                   <TableRow
                     key={rate.exchange_rate_id}
                     hover

@@ -1134,11 +1134,21 @@ function Transactions() {
   // Calculate expense aggregation by currency for selected date
   const calculateExpensesByCurrency = () => {
     const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
-    const dateTransactions = transactions.filter(
-      (t) =>
-        t.date === selectedDateStr &&
+    const dateTransactions = transactions.filter((t) => {
+      // Parse transaction date (now a timestamp) and extract date portion
+      let transactionDateStr;
+      try {
+        const transactionDate = parseISO(t.date);
+        transactionDateStr = format(transactionDate, 'yyyy-MM-dd');
+      } catch {
+        // Fallback for date-only strings (backward compatibility)
+        transactionDateStr = t.date.split('T')[0];
+      }
+      return (
+        transactionDateStr === selectedDateStr &&
         (t.type === 'Expense' || t.type === 'Transfer Out')
-    );
+      );
+    });
 
     const expensesByCurrency = {};
     dateTransactions.forEach((t) => {

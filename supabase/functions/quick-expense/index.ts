@@ -228,7 +228,29 @@ Deno.serve(async (req: Request) => {
 
       // Prepare transaction data
       const transactionId = generateId('TXN');
-      const transactionDate = dateField ? new Date(dateField) : new Date();
+      // If date is provided as date-only string (YYYY-MM-DD), add current time
+      // Otherwise use the provided datetime or current datetime
+      let transactionDate;
+      if (dateField) {
+        const parsedDate = new Date(dateField);
+        // Check if it's a date-only string (YYYY-MM-DD format without time)
+        if (
+          typeof dateField === 'string' &&
+          /^\d{4}-\d{2}-\d{2}$/.test(dateField)
+        ) {
+          // Date-only string: add current time
+          const now = new Date();
+          parsedDate.setHours(
+            now.getHours(),
+            now.getMinutes(),
+            now.getSeconds(),
+            now.getMilliseconds()
+          );
+        }
+        transactionDate = parsedDate;
+      } else {
+        transactionDate = new Date();
+      }
       const now = new Date();
 
       const transactionData = {
@@ -236,7 +258,7 @@ Deno.serve(async (req: Request) => {
         user_id: userId,
         account_id: AccountID,
         category_id: CategoryID,
-        date: transactionDate.toISOString().split('T')[0],
+        date: transactionDate.toISOString(),
         amount: Number(Amount),
         currency: Currency.toUpperCase(),
         description: Description,
@@ -334,14 +356,35 @@ Deno.serve(async (req: Request) => {
         }
 
         const transactionId = generateId('TXN');
-        const transactionDate = dateField ? new Date(dateField) : new Date();
+        // If date is provided as date-only string (YYYY-MM-DD), add current time
+        // Otherwise use the provided datetime or current datetime
+        let transactionDate;
+        if (dateField) {
+          const parsedDate = new Date(dateField);
+          // Check if it's a date-only string (YYYY-MM-DD format without time)
+          if (
+            typeof dateField === 'string' &&
+            /^\d{4}-\d{2}-\d{2}$/.test(dateField)
+          ) {
+            // Date-only string: add current time
+            parsedDate.setHours(
+              now.getHours(),
+              now.getMinutes(),
+              now.getSeconds(),
+              now.getMilliseconds()
+            );
+          }
+          transactionDate = parsedDate;
+        } else {
+          transactionDate = now;
+        }
 
         transactionsToInsert.push({
           transaction_id: transactionId,
           user_id: userId,
           account_id: AccountID,
           category_id: CategoryID,
-          date: transactionDate.toISOString().split('T')[0],
+          date: transactionDate.toISOString(),
           amount: Number(Amount),
           currency: Currency.toUpperCase(),
           description: Description,

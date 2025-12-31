@@ -48,6 +48,7 @@ import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import {
   fetchBudgets,
   createBudget,
@@ -66,7 +67,14 @@ import {
   formatCurrency,
   convertAmountWithExchangeRates,
 } from '../utils/currencyConversion';
-import { format, startOfMonth, endOfMonth, parseISO } from 'date-fns';
+import {
+  format,
+  startOfMonth,
+  endOfMonth,
+  parseISO,
+  subMonths,
+  addMonths,
+} from 'date-fns';
 
 function Budgets() {
   const dispatch = useDispatch();
@@ -438,6 +446,23 @@ function Budgets() {
     setOpenDialog(true);
   };
 
+  // Month navigation handlers
+  const handlePreviousMonth = useCallback(() => {
+    setSelectedMonth((prev) => {
+      const currentDate = parseISO(`${prev}-01`);
+      const previousMonth = subMonths(currentDate, 1);
+      return format(previousMonth, 'yyyy-MM');
+    });
+  }, []);
+
+  const handleNextMonth = useCallback(() => {
+    setSelectedMonth((prev) => {
+      const currentDate = parseISO(`${prev}-01`);
+      const nextMonth = addMonths(currentDate, 1);
+      return format(nextMonth, 'yyyy-MM');
+    });
+  }, []);
+
   const handleCloseDialog = () => {
     setOpenDialog(false);
     setEditingBudget(null);
@@ -766,15 +791,43 @@ function Budgets() {
       >
         <Grid container spacing={{ xs: 1.5, sm: 2 }} alignItems="center">
           <Grid item xs={12} sm={6} md={4}>
-            <TextField
-              fullWidth
-              size="small"
-              type="month"
-              label="View Budgets For Month"
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              InputLabelProps={{ shrink: true }}
-            />
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <IconButton
+                onClick={handlePreviousMonth}
+                size="small"
+                sx={{
+                  color: 'text.secondary',
+                  width: { xs: 32, sm: 36 },
+                  height: { xs: 32, sm: 36 },
+                  p: 0.5,
+                  '&:hover': { backgroundColor: 'action.hover' },
+                }}
+              >
+                <ChevronLeftIcon sx={{ fontSize: { xs: 18, sm: 20 } }} />
+              </IconButton>
+              <TextField
+                fullWidth
+                size="small"
+                type="month"
+                label="View Budgets For Month"
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+              />
+              <IconButton
+                onClick={handleNextMonth}
+                size="small"
+                sx={{
+                  color: 'text.secondary',
+                  width: { xs: 32, sm: 36 },
+                  height: { xs: 32, sm: 36 },
+                  p: 0.5,
+                  '&:hover': { backgroundColor: 'action.hover' },
+                }}
+              >
+                <ChevronRightIcon sx={{ fontSize: { xs: 18, sm: 20 } }} />
+              </IconButton>
+            </Box>
           </Grid>
           <Grid item xs={12} sm={6} md={8}>
             <Typography
