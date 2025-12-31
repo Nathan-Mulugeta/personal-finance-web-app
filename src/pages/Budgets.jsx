@@ -1353,13 +1353,13 @@ function Budgets() {
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>Category</TableCell>
-                  <TableCell>Currency</TableCell>
-                  <TableCell align="right">Budget</TableCell>
-                  <TableCell align="right">Spent</TableCell>
-                  <TableCell>Progress</TableCell>
-                  <TableCell align="right">Remaining</TableCell>
-                  <TableCell>Status</TableCell>
+                  <TableCell sx={{ width: '20%' }}>Category</TableCell>
+                  <TableCell sx={{ width: '8%' }}>Currency</TableCell>
+                  <TableCell align="right" sx={{ width: '12%' }}>Budget</TableCell>
+                  <TableCell align="right" sx={{ width: '12%' }}>Spent</TableCell>
+                  <TableCell sx={{ width: '20%' }}>Progress</TableCell>
+                  <TableCell align="right" sx={{ width: '12%' }}>Remaining</TableCell>
+                  <TableCell sx={{ width: '16%' }}>Status</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1384,16 +1384,16 @@ function Budgets() {
                         onClick={() => handleRowClick(budget)}
                         sx={{ cursor: 'pointer' }}
                       >
-                        <TableCell>
+                        <TableCell sx={{ width: '20%' }}>
                           <Typography variant="body1" fontWeight="medium">
                             {getCategoryName(budget.category_id)}
                           </Typography>
                         </TableCell>
-                        <TableCell>{budget.currency}</TableCell>
-                        <TableCell align="right">
+                        <TableCell sx={{ width: '8%' }}>{budget.currency}</TableCell>
+                        <TableCell align="right" sx={{ width: '12%' }}>
                           {formatCurrency(budgetAmount, budget.currency)}
                         </TableCell>
-                        <TableCell align="right">
+                        <TableCell align="right" sx={{ width: '12%' }}>
                           <Typography
                             variant="body1"
                             fontWeight="medium"
@@ -1406,7 +1406,7 @@ function Budgets() {
                             {formatCurrency(actualSpending, budget.currency)}
                           </Typography>
                         </TableCell>
-                        <TableCell>
+                        <TableCell sx={{ width: '20%' }}>
                           <Box
                             sx={{
                               display: 'flex',
@@ -1435,7 +1435,7 @@ function Budgets() {
                             </Typography>
                           </Box>
                         </TableCell>
-                        <TableCell align="right">
+                        <TableCell align="right" sx={{ width: '12%' }}>
                           <Typography
                             variant="body1"
                             fontWeight="medium"
@@ -1452,7 +1452,7 @@ function Budgets() {
                             )}
                           </Typography>
                         </TableCell>
-                        <TableCell>
+                        <TableCell sx={{ width: '16%' }}>
                           <Chip
                             label={budget.status}
                             size="small"
