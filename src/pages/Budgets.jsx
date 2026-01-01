@@ -926,134 +926,14 @@ function Budgets() {
         </Grid>
       </Box>
 
-      {/* Summary Cards - Expense and Income stats */}
+      {/* Summary Cards - Income and Expense stats */}
       {filteredBudgets.length > 0 && (
         <Grid
           container
           spacing={{ xs: 1, sm: 2 }}
           sx={{ mb: { xs: 2, sm: 3, md: 4 } }}
         >
-          {/* Expense Stats */}
-          <Grid item xs={12} sm={4} md={4}>
-            <Box
-              sx={{
-                p: { xs: 1.25, sm: 2 },
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 1,
-                backgroundColor: 'background.paper',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              }}
-            >
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{
-                  fontSize: { xs: '0.8rem', sm: '0.85rem' },
-                }}
-              >
-                Expense Budget
-              </Typography>
-              <Typography
-                variant="h5"
-                fontWeight="bold"
-                color="text.primary"
-                sx={{
-                  fontSize: { xs: '1rem', sm: '1.25rem' },
-                }}
-              >
-                {formatCurrency(
-                  budgetStats.expense.totalBudget,
-                  budgetStats.baseCurrency
-                )}
-              </Typography>
-            </Box>
-          </Grid>
-          <Grid item xs={12} sm={4} md={4}>
-            <Box
-              sx={{
-                p: { xs: 1.25, sm: 2 },
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 1,
-                backgroundColor: 'background.paper',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              }}
-            >
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{
-                  fontSize: { xs: '0.8rem', sm: '0.85rem' },
-                }}
-              >
-                Total Spent
-              </Typography>
-              <Typography
-                variant="h5"
-                fontWeight="bold"
-                color="text.primary"
-                sx={{
-                  fontSize: { xs: '1rem', sm: '1.25rem' },
-                }}
-              >
-                {formatCurrency(
-                  budgetStats.expense.totalActual,
-                  budgetStats.baseCurrency
-                )}
-              </Typography>
-            </Box>
-          </Grid>
-          <Grid item xs={12} sm={4} md={4}>
-            <Box
-              sx={{
-                p: { xs: 1.25, sm: 2 },
-                border: '1px solid',
-                borderColor:
-                  budgetStats.expense.totalRemaining >= 0
-                    ? 'divider'
-                    : 'error.light',
-                borderRadius: 1,
-                backgroundColor: 'background.paper',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              }}
-            >
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{
-                  fontSize: { xs: '0.8rem', sm: '0.85rem' },
-                }}
-              >
-                {budgetStats.expense.totalRemaining >= 0
-                  ? 'Remaining'
-                  : 'Over Budget'}
-              </Typography>
-              <Typography
-                variant="h5"
-                fontWeight="bold"
-                sx={{
-                  fontSize: { xs: '1rem', sm: '1.25rem' },
-                  color:
-                    budgetStats.expense.totalRemaining >= 0
-                      ? 'text.primary'
-                      : 'error.main',
-                }}
-              >
-                {formatCurrency(
-                  Math.abs(budgetStats.expense.totalRemaining),
-                  budgetStats.baseCurrency
-                )}
-              </Typography>
-            </Box>
-          </Grid>
-          {/* Income Stats - only show if there are income budgets */}
+          {/* Income Stats - show first if there are income budgets */}
           {budgetStats.income.totalBudget > 0 && (
             <>
               <Grid item xs={12} sm={4} md={4}>
@@ -1177,6 +1057,126 @@ function Budgets() {
               </Grid>
             </>
           )}
+          {/* Expense Stats */}
+          <Grid item xs={12} sm={4} md={4}>
+            <Box
+              sx={{
+                p: { xs: 1.25, sm: 2 },
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 1,
+                backgroundColor: 'background.paper',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{
+                  fontSize: { xs: '0.8rem', sm: '0.85rem' },
+                }}
+              >
+                Expense Budget
+              </Typography>
+              <Typography
+                variant="h5"
+                fontWeight="bold"
+                color="text.primary"
+                sx={{
+                  fontSize: { xs: '1rem', sm: '1.25rem' },
+                }}
+              >
+                {formatCurrency(
+                  budgetStats.expense.totalBudget,
+                  budgetStats.baseCurrency
+                )}
+              </Typography>
+            </Box>
+          </Grid>
+          <Grid item xs={12} sm={4} md={4}>
+            <Box
+              sx={{
+                p: { xs: 1.25, sm: 2 },
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 1,
+                backgroundColor: 'background.paper',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{
+                  fontSize: { xs: '0.8rem', sm: '0.85rem' },
+                }}
+              >
+                Total Spent
+              </Typography>
+              <Typography
+                variant="h5"
+                fontWeight="bold"
+                color="text.primary"
+                sx={{
+                  fontSize: { xs: '1rem', sm: '1.25rem' },
+                }}
+              >
+                {formatCurrency(
+                  budgetStats.expense.totalActual,
+                  budgetStats.baseCurrency
+                )}
+              </Typography>
+            </Box>
+          </Grid>
+          <Grid item xs={12} sm={4} md={4}>
+            <Box
+              sx={{
+                p: { xs: 1.25, sm: 2 },
+                border: '1px solid',
+                borderColor:
+                  budgetStats.expense.totalRemaining >= 0
+                    ? 'divider'
+                    : 'error.light',
+                borderRadius: 1,
+                backgroundColor: 'background.paper',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{
+                  fontSize: { xs: '0.8rem', sm: '0.85rem' },
+                }}
+              >
+                {budgetStats.expense.totalRemaining >= 0
+                  ? 'Remaining'
+                  : 'Over Budget'}
+              </Typography>
+              <Typography
+                variant="h5"
+                fontWeight="bold"
+                sx={{
+                  fontSize: { xs: '1rem', sm: '1.25rem' },
+                  color:
+                    budgetStats.expense.totalRemaining >= 0
+                      ? 'text.primary'
+                      : 'error.main',
+                }}
+              >
+                {formatCurrency(
+                  Math.abs(budgetStats.expense.totalRemaining),
+                  budgetStats.baseCurrency
+                )}
+              </Typography>
+            </Box>
+          </Grid>
         </Grid>
       )}
 
@@ -1820,6 +1820,23 @@ function Budgets() {
                           <Typography variant="body1" fontWeight="medium">
                             {getCategoryName(budget.category_id)}
                           </Typography>
+                          {budget.notes && (
+                            <Typography
+                              variant="body2"
+                              color="text.secondary"
+                              sx={{
+                                fontSize: '0.75rem',
+                                mt: 0.5,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                display: '-webkit-box',
+                                WebkitLineClamp: 2,
+                                WebkitBoxOrient: 'vertical',
+                              }}
+                            >
+                              {budget.notes}
+                            </Typography>
+                          )}
                         </TableCell>
                         <TableCell sx={{ width: '8%' }}>
                           {budget.currency}
