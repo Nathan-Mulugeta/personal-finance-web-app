@@ -17,7 +17,7 @@ function buildReceiptPrompt(categories) {
 
   return `You are a financial assistant helping to parse receipt images into transaction data.
 
-Analyze this receipt image and extract ALL line items as separate transactions.
+Analyze this receipt image and extract ONLY product/item line items as separate transactions.
 
 Available categories:
 ${categoryList}
@@ -38,10 +38,15 @@ Return ONLY valid JSON with this structure:
 }
 
 Rules:
-- Create a separate transaction for each line item on the receipt
+- Extract ONLY actual product/item line items (goods or services purchased)
+- Use the item price as shown on the receipt (this is the pre-tax amount)
+- DO NOT extract tax lines (e.g., "TAX", "VAT", "GST", "Tax 15%", etc.)
+- DO NOT extract subtotals, totals, discounts, fees, or payment method lines
+- DO NOT extract summary lines like "Subtotal", "Total", "Amount Due", etc.
+- Create a separate transaction for each distinct product/item purchased
 - Match each item to the most appropriate category from the list
 - Use the exact CategoryID from the list
-- Amount should be a positive number
+- Amount should be a positive number (use the item price as listed, before tax)
 - Return JSON only, no markdown or explanation`;
 }
 
@@ -151,7 +156,8 @@ async function callGemini(apiKey, prompt, imageBase64 = null, mimeType = null) {
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    const errorMessage = errorData.error?.message || `API request failed: ${response.status}`;
+    const errorMessage =
+      errorData.error?.message || `API request failed: ${response.status}`;
     throw new Error(errorMessage);
   }
 
@@ -179,13 +185,24 @@ function formatError(error) {
   if (message.includes('API key') || message.includes('API_KEY_INVALID')) {
     return 'API key not configured or invalid. Please check your settings.';
   }
-  if (message.includes('quota') || message.includes('rate limit') || message.includes('RATE_LIMIT')) {
+  if (
+    message.includes('quota') ||
+    message.includes('rate limit') ||
+    message.includes('RATE_LIMIT')
+  ) {
     return 'API rate limit exceeded. Please try again in a few moments.';
   }
-  if (message.includes('network') || message.includes('fetch') || message.includes('Failed to fetch')) {
+  if (
+    message.includes('network') ||
+    message.includes('fetch') ||
+    message.includes('Failed to fetch')
+  ) {
     return 'Network error. Please check your internet connection.';
   }
-  if (message.includes('Invalid response') || message.includes('Could not extract')) {
+  if (
+    message.includes('Invalid response') ||
+    message.includes('Could not extract')
+  ) {
     return 'Unable to parse AI response. Please try again or rephrase your input.';
   }
   return `Error: ${message}`;
@@ -200,7 +217,9 @@ function formatError(error) {
  */
 export async function parseReceipt(base64Image, categories, apiKey) {
   if (!apiKey) {
-    throw new Error('Gemini API key not configured. Please add your API key in Settings.');
+    throw new Error(
+      'Gemini API key not configured. Please add your API key in Settings.'
+    );
   }
 
   try {
@@ -241,7 +260,9 @@ export async function parseReceipt(base64Image, categories, apiKey) {
  */
 export async function parseNaturalLanguage(text, categories, apiKey) {
   if (!apiKey) {
-    throw new Error('Gemini API key not configured. Please add your API key in Settings.');
+    throw new Error(
+      'Gemini API key not configured. Please add your API key in Settings.'
+    );
   }
 
   try {

@@ -87,16 +87,25 @@ function AITransactionsReviewModal({
   useEffect(() => {
     if (open && parsedData) {
       // Initialize transactions with tax toggle (default ON for receipts)
+      // Store base amount (pre-tax) and calculate display amount based on applyTax
       const initialTransactions = (parsedData.transactions || []).map(
-        (txn, index) => ({
-          id: `ai_${Date.now()}_${index}`,
-          description: txn.description || '',
-          amount: txn.amount || 0,
-          categoryId: txn.suggestedCategoryId || '',
-          categoryName: txn.suggestedCategoryName || '',
-          type: txn.type || 'Expense',
-          applyTax: isReceipt, // Default to true for receipts
-        })
+        (txn, index) => {
+          const baseAmount = txn.amount || 0;
+          const applyTax = isReceipt; // Default to true for receipts
+          // If tax is applied, multiply base amount by 1.15, otherwise use base amount
+          const displayAmount = applyTax ? Math.round(baseAmount * 1.15 * 100) / 100 : baseAmount;
+          
+          return {
+            id: `ai_${Date.now()}_${index}`,
+            description: txn.description || '',
+            baseAmount: baseAmount, // Store original pre-tax amount
+            amount: displayAmount, // Display amount (with or without tax)
+            categoryId: txn.suggestedCategoryId || '',
+            categoryName: txn.suggestedCategoryName || '',
+            type: txn.type || 'Expense',
+            applyTax: applyTax,
+          };
+        }
       );
 
       setTransactions(initialTransactions);
@@ -114,7 +123,7 @@ function AITransactionsReviewModal({
     }
   }, [open, parsedData, isReceipt, defaultAccountId]);
 
-  // Calculate totals (tax is already included in the amounts)
+  // Calculate totals (using display amounts which include tax if applyTax is true)
   const totals = useMemo(() => {
     let grandTotal = 0;
 
@@ -131,26 +140,60 @@ function AITransactionsReviewModal({
   // Handle transaction field changes
   const handleTransactionChange = (id, field, value) => {
     setTransactions((prev) =>
-      prev.map((txn) => (txn.id === id ? { ...txn, [field]: value } : txn))
+      prev.map((txn) => {
+        if (txn.id !== id) return txn;
+        
+        // If amount is being changed, update baseAmount and recalculate display amount
+        if (field === 'amount') {
+          const newAmount = parseFloat(value) || 0;
+          // Calculate base amount based on current applyTax state
+          const newBaseAmount = txn.applyTax 
+            ? Math.round((newAmount / 1.15) * 100) / 100 
+            : newAmount;
+          // Recalculate display amount based on applyTax
+          const displayAmount = txn.applyTax 
+            ? Math.round(newBaseAmount * 1.15 * 100) / 100 
+            : newBaseAmount;
+          
+          return { 
+            ...txn, 
+            baseAmount: newBaseAmount,
+            amount: displayAmount 
+          };
+        }
+        
+        return { ...txn, [field]: value };
+      })
     );
   };
 
-  // Handle tax toggle - updates both applyTax and amount
+  // Handle tax toggle - updates both applyTax and display amount
   const handleTaxToggle = (id, currentApplyTax, currentAmount) => {
-    const amount = parseFloat(currentAmount) || 0;
     const newApplyTax = !currentApplyTax;
 
-    // Calculate new amount: add 15% if toggling on, remove 15% if toggling off
-    const newAmount = newApplyTax
-      ? Math.round(amount * 1.15 * 100) / 100 // Add 15% tax
-      : Math.round((amount / 1.15) * 100) / 100; // Remove 15% tax
-
     setTransactions((prev) =>
-      prev.map((txn) =>
-        txn.id === id
-          ? { ...txn, applyTax: newApplyTax, amount: newAmount }
-          : txn
-      )
+      prev.map((txn) => {
+        if (txn.id !== id) return txn;
+        
+        // Get the base amount (pre-tax)
+        const baseAmount = txn.baseAmount !== undefined 
+          ? txn.baseAmount 
+          : (currentApplyTax 
+              ? Math.round((parseFloat(currentAmount) / 1.15) * 100) / 100 
+              : parseFloat(currentAmount));
+        
+        // Calculate new display amount based on new tax state
+        const newAmount = newApplyTax
+          ? Math.round(baseAmount * 1.15 * 100) / 100 // Add 15% tax
+          : baseAmount; // Use base amount (no tax)
+
+        return { 
+          ...txn, 
+          baseAmount: baseAmount, // Ensure baseAmount is stored
+          applyTax: newApplyTax, 
+          amount: newAmount 
+        };
+      })
     );
   };
 
@@ -171,14 +214,19 @@ function AITransactionsReviewModal({
 
   // Handle adding a new empty transaction
   const handleAddTransaction = () => {
+    const applyTax = isReceipt;
+    const baseAmount = 0;
+    const displayAmount = applyTax ? Math.round(baseAmount * 1.15 * 100) / 100 : baseAmount;
+    
     const newTransaction = {
       id: `ai_${Date.now()}_new`,
       description: '',
-      amount: 0,
+      baseAmount: baseAmount,
+      amount: displayAmount,
       categoryId: '',
       categoryName: '',
       type: 'Expense',
-      applyTax: isReceipt,
+      applyTax: applyTax,
     };
     setTransactions((prev) => [...prev, newTransaction]);
   };
