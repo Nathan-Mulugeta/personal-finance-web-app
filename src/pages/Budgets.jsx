@@ -472,6 +472,13 @@ function Budgets() {
     dispatch(clearError());
   };
 
+  // Helper function to get the month before a given month (YYYY-MM format)
+  const getPreviousMonth = useCallback((monthStr) => {
+    const currentDate = parseISO(`${monthStr}-01`);
+    const previousMonth = subMonths(currentDate, 1);
+    return format(previousMonth, 'yyyy-MM');
+  }, []);
+
   const onSubmit = async (data) => {
     setIsSubmitting(true);
     setActionError(null);
@@ -512,12 +519,90 @@ function Budgets() {
       }
 
       if (editingBudget) {
-        await dispatch(
-          updateBudget({
-            budgetId: editingBudget.budget_id,
-            updates: budgetData,
-          })
-        ).unwrap();
+        // Check if we need to split a recurring budget for a future month
+        if (
+          editingBudget.recurring &&
+          cleanedData.recurring &&
+          editingBudget.start_month &&
+          cleanedData.startMonth
+        ) {
+          // Parse dates for comparison
+          const budgetStartDate = parseISO(`${editingBudget.start_month.split('-')[0]}-${editingBudget.start_month.split('-')[1]}-01`);
+          const selectedDate = parseISO(`${selectedMonth}-01`);
+          const newStartDate = parseISO(`${cleanedData.startMonth}-01`);
+
+          // Check if selectedMonth (the month user is viewing) is after the budget's start_month
+          if (selectedDate > startOfMonth(budgetStartDate)) {
+            // Split the budget: end the old one before selectedMonth and create a new one from selectedMonth
+            const endMonthForOldBudget = getPreviousMonth(selectedMonth);
+
+            // Update the old budget to end at the month before selectedMonth
+            // Keep original amount and other original fields, only update end_month
+            const originalStartMonth = editingBudget.start_month
+              ? `${editingBudget.start_month.split('-')[0]}-${editingBudget.start_month.split('-')[1]}`
+              : null;
+            
+            await dispatch(
+              updateBudget({
+                budgetId: editingBudget.budget_id,
+                updates: {
+                  categoryId: editingBudget.category_id,
+                  currency: editingBudget.currency,
+                  amount: parseFloat(editingBudget.amount), // Keep original amount
+                  recurring: true,
+                  notes: editingBudget.notes || '', // Keep original notes
+                  status: editingBudget.status, // Keep original status
+                  startMonth: originalStartMonth,
+                  endMonth: endMonthForOldBudget,
+                },
+              })
+            ).unwrap();
+
+            // Create a new recurring budget starting from selectedMonth with the new amount and updated fields
+            const originalEndMonth = editingBudget.end_month
+              ? parseISO(`${editingBudget.end_month.split('-')[0]}-${editingBudget.end_month.split('-')[1]}-01`)
+              : null;
+            const newEndMonth =
+              originalEndMonth && originalEndMonth >= selectedDate
+                ? `${editingBudget.end_month.split('-')[0]}-${editingBudget.end_month.split('-')[1]}`
+                : cleanedData.endMonth;
+
+            await dispatch(
+              createBudget({
+                ...budgetData,
+                startMonth: selectedMonth,
+                endMonth: newEndMonth,
+              })
+            ).unwrap();
+          } else if (selectedDate < startOfMonth(budgetStartDate)) {
+            // Selected month is before start_month: update start_month to selectedMonth
+            await dispatch(
+              updateBudget({
+                budgetId: editingBudget.budget_id,
+                updates: {
+                  ...budgetData,
+                  startMonth: selectedMonth,
+                },
+              })
+            ).unwrap();
+          } else {
+            // Selected month equals start_month: just update the amount and other fields
+            await dispatch(
+              updateBudget({
+                budgetId: editingBudget.budget_id,
+                updates: budgetData,
+              })
+            ).unwrap();
+          }
+        } else {
+          // Not a recurring budget or not splitting: use normal update
+          await dispatch(
+            updateBudget({
+              budgetId: editingBudget.budget_id,
+              updates: budgetData,
+            })
+          ).unwrap();
+        }
       } else {
         await dispatch(createBudget(budgetData)).unwrap();
       }
