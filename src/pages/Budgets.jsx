@@ -340,6 +340,13 @@ function Budgets() {
       settings.find((s) => s.setting_key === 'BaseCurrency')?.setting_value ||
       'USD';
 
+    // Find secondary currency (first currency in budgets that's different from base)
+    const currencies = new Set(
+      filteredBudgets.map((b) => b.currency).filter(Boolean)
+    );
+    const secondaryCurrency =
+      Array.from(currencies).find((c) => c !== baseCurrency) || null;
+
     const stats = {
       expense: {
         totalBudget: 0,
@@ -352,6 +359,7 @@ function Budgets() {
         totalRemaining: 0,
       },
       baseCurrency,
+      secondaryCurrency,
     };
 
     filteredBudgets.forEach((budget) => {
@@ -977,19 +985,41 @@ function Budgets() {
                   >
                     Income Goal
                   </Typography>
-                  <Typography
-                    variant="h5"
-                    fontWeight="bold"
-                    color="text.primary"
-                    sx={{
-                      fontSize: { xs: '1rem', sm: '1.25rem' },
-                    }}
-                  >
-                    {formatCurrency(
-                      budgetStats.income.totalBudget,
-                      budgetStats.baseCurrency
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                    <Typography
+                      variant="h5"
+                      fontWeight="bold"
+                      color="text.primary"
+                      sx={{
+                        fontSize: { xs: '1rem', sm: '1.25rem' },
+                      }}
+                    >
+                      {formatCurrency(
+                        budgetStats.income.totalBudget,
+                        budgetStats.baseCurrency
+                      )}
+                    </Typography>
+                    {budgetStats.secondaryCurrency && (
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{
+                          fontSize: { xs: '0.7rem', sm: '0.75rem' },
+                          mt: 0.25,
+                        }}
+                      >
+                        {formatCurrency(
+                          convertAmountWithExchangeRates(
+                            budgetStats.income.totalBudget,
+                            budgetStats.baseCurrency,
+                            budgetStats.secondaryCurrency,
+                            exchangeRates
+                          ) || budgetStats.income.totalBudget,
+                          budgetStats.secondaryCurrency
+                        )}
+                      </Typography>
                     )}
-                  </Typography>
+                  </Box>
                 </Box>
               </Grid>
               <Grid item xs={12} sm={4} md={4}>
@@ -1014,19 +1044,41 @@ function Budgets() {
                   >
                     Total Earned
                   </Typography>
-                  <Typography
-                    variant="h5"
-                    fontWeight="bold"
-                    color="text.primary"
-                    sx={{
-                      fontSize: { xs: '1rem', sm: '1.25rem' },
-                    }}
-                  >
-                    {formatCurrency(
-                      budgetStats.income.totalActual,
-                      budgetStats.baseCurrency
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                    <Typography
+                      variant="h5"
+                      fontWeight="bold"
+                      color="text.primary"
+                      sx={{
+                        fontSize: { xs: '1rem', sm: '1.25rem' },
+                      }}
+                    >
+                      {formatCurrency(
+                        budgetStats.income.totalActual,
+                        budgetStats.baseCurrency
+                      )}
+                    </Typography>
+                    {budgetStats.secondaryCurrency && (
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{
+                          fontSize: { xs: '0.7rem', sm: '0.75rem' },
+                          mt: 0.25,
+                        }}
+                      >
+                        {formatCurrency(
+                          convertAmountWithExchangeRates(
+                            budgetStats.income.totalActual,
+                            budgetStats.baseCurrency,
+                            budgetStats.secondaryCurrency,
+                            exchangeRates
+                          ) || budgetStats.income.totalActual,
+                          budgetStats.secondaryCurrency
+                        )}
+                      </Typography>
                     )}
-                  </Typography>
+                  </Box>
                 </Box>
               </Grid>
               <Grid item xs={12} sm={4} md={4}>
@@ -1056,22 +1108,44 @@ function Budgets() {
                       ? 'Exceeded Goal'
                       : 'Remaining'}
                   </Typography>
-                  <Typography
-                    variant="h5"
-                    fontWeight="bold"
-                    sx={{
-                      fontSize: { xs: '1rem', sm: '1.25rem' },
-                      color:
-                        budgetStats.income.totalRemaining <= 0
-                          ? 'success.main'
-                          : 'text.primary',
-                    }}
-                  >
-                    {formatCurrency(
-                      Math.abs(budgetStats.income.totalRemaining),
-                      budgetStats.baseCurrency
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                    <Typography
+                      variant="h5"
+                      fontWeight="bold"
+                      sx={{
+                        fontSize: { xs: '1rem', sm: '1.25rem' },
+                        color:
+                          budgetStats.income.totalRemaining <= 0
+                            ? 'success.main'
+                            : 'text.primary',
+                      }}
+                    >
+                      {formatCurrency(
+                        Math.abs(budgetStats.income.totalRemaining),
+                        budgetStats.baseCurrency
+                      )}
+                    </Typography>
+                    {budgetStats.secondaryCurrency && (
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{
+                          fontSize: { xs: '0.7rem', sm: '0.75rem' },
+                          mt: 0.25,
+                        }}
+                      >
+                        {formatCurrency(
+                          convertAmountWithExchangeRates(
+                            Math.abs(budgetStats.income.totalRemaining),
+                            budgetStats.baseCurrency,
+                            budgetStats.secondaryCurrency,
+                            exchangeRates
+                          ) || Math.abs(budgetStats.income.totalRemaining),
+                          budgetStats.secondaryCurrency
+                        )}
+                      </Typography>
                     )}
-                  </Typography>
+                  </Box>
                 </Box>
               </Grid>
             </>
@@ -1099,19 +1173,41 @@ function Budgets() {
               >
                 Expense Budget
               </Typography>
-              <Typography
-                variant="h5"
-                fontWeight="bold"
-                color="text.primary"
-                sx={{
-                  fontSize: { xs: '1rem', sm: '1.25rem' },
-                }}
-              >
-                {formatCurrency(
-                  budgetStats.expense.totalBudget,
-                  budgetStats.baseCurrency
+              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                <Typography
+                  variant="h5"
+                  fontWeight="bold"
+                  color="text.primary"
+                  sx={{
+                    fontSize: { xs: '1rem', sm: '1.25rem' },
+                  }}
+                >
+                  {formatCurrency(
+                    budgetStats.expense.totalBudget,
+                    budgetStats.baseCurrency
+                  )}
+                </Typography>
+                {budgetStats.secondaryCurrency && (
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{
+                      fontSize: { xs: '0.7rem', sm: '0.75rem' },
+                      mt: 0.25,
+                    }}
+                  >
+                    {formatCurrency(
+                      convertAmountWithExchangeRates(
+                        budgetStats.expense.totalBudget,
+                        budgetStats.baseCurrency,
+                        budgetStats.secondaryCurrency,
+                        exchangeRates
+                      ) || budgetStats.expense.totalBudget,
+                      budgetStats.secondaryCurrency
+                    )}
+                  </Typography>
                 )}
-              </Typography>
+              </Box>
             </Box>
           </Grid>
           <Grid item xs={12} sm={4} md={4}>
@@ -1136,19 +1232,41 @@ function Budgets() {
               >
                 Total Spent
               </Typography>
-              <Typography
-                variant="h5"
-                fontWeight="bold"
-                color="text.primary"
-                sx={{
-                  fontSize: { xs: '1rem', sm: '1.25rem' },
-                }}
-              >
-                {formatCurrency(
-                  budgetStats.expense.totalActual,
-                  budgetStats.baseCurrency
+              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                <Typography
+                  variant="h5"
+                  fontWeight="bold"
+                  color="text.primary"
+                  sx={{
+                    fontSize: { xs: '1rem', sm: '1.25rem' },
+                  }}
+                >
+                  {formatCurrency(
+                    budgetStats.expense.totalActual,
+                    budgetStats.baseCurrency
+                  )}
+                </Typography>
+                {budgetStats.secondaryCurrency && (
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{
+                      fontSize: { xs: '0.7rem', sm: '0.75rem' },
+                      mt: 0.25,
+                    }}
+                  >
+                    {formatCurrency(
+                      convertAmountWithExchangeRates(
+                        budgetStats.expense.totalActual,
+                        budgetStats.baseCurrency,
+                        budgetStats.secondaryCurrency,
+                        exchangeRates
+                      ) || budgetStats.expense.totalActual,
+                      budgetStats.secondaryCurrency
+                    )}
+                  </Typography>
                 )}
-              </Typography>
+              </Box>
             </Box>
           </Grid>
           <Grid item xs={12} sm={4} md={4}>
@@ -1178,22 +1296,44 @@ function Budgets() {
                   ? 'Remaining'
                   : 'Over Budget'}
               </Typography>
-              <Typography
-                variant="h5"
-                fontWeight="bold"
-                sx={{
-                  fontSize: { xs: '1rem', sm: '1.25rem' },
-                  color:
-                    budgetStats.expense.totalRemaining >= 0
-                      ? 'text.primary'
-                      : 'error.main',
-                }}
-              >
-                {formatCurrency(
-                  Math.abs(budgetStats.expense.totalRemaining),
-                  budgetStats.baseCurrency
+              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                <Typography
+                  variant="h5"
+                  fontWeight="bold"
+                  sx={{
+                    fontSize: { xs: '1rem', sm: '1.25rem' },
+                    color:
+                      budgetStats.expense.totalRemaining >= 0
+                        ? 'text.primary'
+                        : 'error.main',
+                  }}
+                >
+                  {formatCurrency(
+                    Math.abs(budgetStats.expense.totalRemaining),
+                    budgetStats.baseCurrency
+                  )}
+                </Typography>
+                {budgetStats.secondaryCurrency && (
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{
+                      fontSize: { xs: '0.7rem', sm: '0.75rem' },
+                      mt: 0.25,
+                    }}
+                  >
+                    {formatCurrency(
+                      convertAmountWithExchangeRates(
+                        Math.abs(budgetStats.expense.totalRemaining),
+                        budgetStats.baseCurrency,
+                        budgetStats.secondaryCurrency,
+                        exchangeRates
+                      ) || Math.abs(budgetStats.expense.totalRemaining),
+                      budgetStats.secondaryCurrency
+                    )}
+                  </Typography>
                 )}
-              </Typography>
+              </Box>
             </Box>
           </Grid>
           {/* Net Budget: Income Goal - Expense Budget */}
@@ -1225,25 +1365,50 @@ function Budgets() {
                 >
                   Net Budget
                 </Typography>
-                <Typography
-                  variant="h5"
-                  fontWeight="bold"
-                  sx={{
-                    fontSize: { xs: '1rem', sm: '1.25rem' },
-                    color:
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                  <Typography
+                    variant="h5"
+                    fontWeight="bold"
+                    sx={{
+                      fontSize: { xs: '1rem', sm: '1.25rem' },
+                      color:
+                        budgetStats.income.totalBudget -
+                          budgetStats.expense.totalBudget >=
+                        0
+                          ? 'success.main'
+                          : 'warning.main',
+                    }}
+                  >
+                    {formatCurrency(
                       budgetStats.income.totalBudget -
-                        budgetStats.expense.totalBudget >=
-                      0
-                        ? 'success.main'
-                        : 'warning.main',
-                  }}
-                >
-                  {formatCurrency(
-                    budgetStats.income.totalBudget -
-                      budgetStats.expense.totalBudget,
-                    budgetStats.baseCurrency
+                        budgetStats.expense.totalBudget,
+                      budgetStats.baseCurrency
+                    )}
+                  </Typography>
+                  {budgetStats.secondaryCurrency && (
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{
+                        fontSize: { xs: '0.7rem', sm: '0.75rem' },
+                        mt: 0.25,
+                      }}
+                    >
+                      {formatCurrency(
+                        convertAmountWithExchangeRates(
+                          budgetStats.income.totalBudget -
+                            budgetStats.expense.totalBudget,
+                          budgetStats.baseCurrency,
+                          budgetStats.secondaryCurrency,
+                          exchangeRates
+                        ) ||
+                          budgetStats.income.totalBudget -
+                            budgetStats.expense.totalBudget,
+                        budgetStats.secondaryCurrency
+                      )}
+                    </Typography>
                   )}
-                </Typography>
+                </Box>
               </Box>
             </Grid>
           )}
