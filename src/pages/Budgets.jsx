@@ -747,6 +747,25 @@ function Budgets() {
     };
   }, [filteredBudgets, organizeBudgetsByCategory, categoryMap]);
 
+  // Helper function to calculate total for a budget group
+  const calculateGroupTotal = useCallback((budgetGroups) => {
+    let total = 0;
+    Object.values(budgetGroups).forEach((group) => {
+      total += group.totalAmount || 0;
+    });
+    return total;
+  }, []);
+
+  // Helper function to get currency for a budget group (for display)
+  const getGroupCurrency = useCallback((budgetGroups) => {
+    const firstGroup = Object.values(budgetGroups)[0];
+    if (!firstGroup) return 'USD';
+    const firstSubcategory = Object.values(firstGroup.subcategories)[0];
+    if (!firstSubcategory) return 'USD';
+    const firstBudget = firstSubcategory.budgets[0];
+    return firstBudget?.currency || 'USD';
+  }, []);
+
   // Toggle parent category expansion
   const toggleParentExpansion = (parentId) => {
     setExpandedParents((prev) => {
@@ -1177,6 +1196,57 @@ function Budgets() {
               </Typography>
             </Box>
           </Grid>
+          {/* Net Budget: Income Goal - Expense Budget */}
+          {budgetStats.income.totalBudget > 0 && (
+            <Grid item xs={12} sm={4} md={4}>
+              <Box
+                sx={{
+                  p: { xs: 1.25, sm: 2 },
+                  border: '1px solid',
+                  borderColor:
+                    budgetStats.income.totalBudget -
+                      budgetStats.expense.totalBudget >=
+                    0
+                      ? 'success.light'
+                      : 'warning.light',
+                  borderRadius: 1,
+                  backgroundColor: 'background.paper',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{
+                    fontSize: { xs: '0.8rem', sm: '0.85rem' },
+                  }}
+                >
+                  Net Budget
+                </Typography>
+                <Typography
+                  variant="h5"
+                  fontWeight="bold"
+                  sx={{
+                    fontSize: { xs: '1rem', sm: '1.25rem' },
+                    color:
+                      budgetStats.income.totalBudget -
+                        budgetStats.expense.totalBudget >=
+                      0
+                        ? 'success.main'
+                        : 'warning.main',
+                  }}
+                >
+                  {formatCurrency(
+                    budgetStats.income.totalBudget -
+                      budgetStats.expense.totalBudget,
+                    budgetStats.baseCurrency
+                  )}
+                </Typography>
+              </Box>
+            </Grid>
+          )}
         </Grid>
       )}
 
@@ -1569,6 +1639,9 @@ function Budgets() {
                 const entries = Object.entries(budgetGroups);
                 if (entries.length === 0) return null;
 
+                const total = calculateGroupTotal(budgetGroups);
+                const currency = getGroupCurrency(budgetGroups);
+
                 return (
                   <>
                     <Box
@@ -1615,6 +1688,13 @@ function Budgets() {
                         >
                           {label}
                         </Typography>
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{ ml: 'auto', fontSize: '0.75rem' }}
+                        >
+                          {formatCurrency(total, currency)}
+                        </Typography>
                       </Box>
                     </Box>
                     <Collapse in={expandedTypes[typeKey]}>
@@ -1642,6 +1722,15 @@ function Budgets() {
                 const hasOneTime = Object.entries(data.oneTime).length > 0;
                 const hasRecurring = Object.entries(data.recurring).length > 0;
                 if (!hasOneTime && !hasRecurring) return null;
+
+                const oneTimeTotal = calculateGroupTotal(data.oneTime);
+                const recurringTotal = calculateGroupTotal(data.recurring);
+                const total = oneTimeTotal + recurringTotal;
+                const currency = getGroupCurrency(
+                  Object.keys(data.oneTime).length > 0
+                    ? data.oneTime
+                    : data.recurring
+                );
 
                 return (
                   <>
@@ -1687,6 +1776,13 @@ function Budgets() {
                           }}
                         >
                           {label}
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{ ml: 'auto', fontSize: '0.75rem' }}
+                        >
+                          {formatCurrency(total, currency)}
                         </Typography>
                       </Box>
                     </Box>
@@ -2003,6 +2099,9 @@ function Budgets() {
                     const entries = Object.entries(budgetGroups);
                     if (entries.length === 0) return null;
 
+                    const total = calculateGroupTotal(budgetGroups);
+                    const currency = getGroupCurrency(budgetGroups);
+
                     return (
                       <>
                         <TableRow
@@ -2049,6 +2148,13 @@ function Budgets() {
                               >
                                 {label}
                               </Typography>
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                                sx={{ ml: 'auto' }}
+                              >
+                                {formatCurrency(total, currency)}
+                              </Typography>
                             </Box>
                           </TableCell>
                         </TableRow>
@@ -2087,6 +2193,15 @@ function Budgets() {
                     const hasRecurring =
                       Object.entries(data.recurring).length > 0;
                     if (!hasOneTime && !hasRecurring) return null;
+
+                    const oneTimeTotal = calculateGroupTotal(data.oneTime);
+                    const recurringTotal = calculateGroupTotal(data.recurring);
+                    const total = oneTimeTotal + recurringTotal;
+                    const currency = getGroupCurrency(
+                      Object.keys(data.oneTime).length > 0
+                        ? data.oneTime
+                        : data.recurring
+                    );
 
                     return (
                       <>
@@ -2135,6 +2250,13 @@ function Budgets() {
                                 }}
                               >
                                 {label}
+                              </Typography>
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                                sx={{ ml: 'auto' }}
+                              >
+                                {formatCurrency(total, currency)}
                               </Typography>
                             </Box>
                           </TableCell>
