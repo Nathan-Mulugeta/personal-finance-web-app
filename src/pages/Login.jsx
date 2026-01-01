@@ -13,6 +13,7 @@ import {
 } from '@mui/material'
 import { supabase } from '../lib/supabase'
 import { setUser, setSession } from '../store/slices/authSlice'
+import { useAutoDismissError } from '../hooks/useAutoDismissError'
 
 function Login() {
   const navigate = useNavigate()
@@ -22,6 +23,9 @@ function Login() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+
+  // Auto-dismiss error after 8 seconds
+  useAutoDismissError(setError, error)
 
   useEffect(() => {
     if (user) {
@@ -91,7 +95,7 @@ function Login() {
           </Typography>
 
           {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
               {error}
             </Alert>
           )}

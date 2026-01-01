@@ -31,6 +31,7 @@ import CategoryAutocomplete from './CategoryAutocomplete';
 import AccountAutocomplete from './AccountAutocomplete';
 import { flattenCategoryTree } from '../../utils/categoryHierarchy';
 import { useKeyboardAwareHeight } from '../../hooks/useKeyboardAwareHeight';
+import { useAutoDismissError } from '../../hooks/useAutoDismissError';
 
 /**
  * Global Add Transaction Dialog component.
@@ -48,6 +49,10 @@ function AddTransactionDialog({ open, onClose }) {
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionError, setActionError] = useState(null);
+  
+  // Auto-dismiss error after 8 seconds
+  useAutoDismissError(setActionError, actionError);
+  
   const amountInputRef = useRef(null); // Ref for Amount field focus chaining
   const categoryInputRef = useRef(null); // Ref for Category field focus chaining
   const hasInitializedRef = useRef(false); // Guard to prevent form reset during background refresh
@@ -209,7 +214,7 @@ function AddTransactionDialog({ open, onClose }) {
           pb: 2,
         }}>
           {actionError && (
-            <Alert severity="error" sx={{ mb: 2 }}>
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setActionError(null)}>
               {actionError}
             </Alert>
           )}

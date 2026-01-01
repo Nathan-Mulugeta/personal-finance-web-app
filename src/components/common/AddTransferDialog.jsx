@@ -245,7 +245,7 @@ function AddTransferDialog({ open, onClose }) {
           sx={{ flexGrow: 1, overflow: 'auto', pt: { xs: 1, sm: 2 } }}
         >
           {actionError && (
-            <Alert severity="error" sx={{ mb: 2 }}>
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setActionError(null)}>
               {actionError}
             </Alert>
           )}

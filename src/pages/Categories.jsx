@@ -771,7 +771,7 @@ function Categories() {
           </DialogTitle>
           <DialogContent sx={{ overflow: 'visible' }}>
             {actionError && (
-              <Alert severity="error" sx={{ mb: 2 }}>
+              <Alert severity="error" sx={{ mb: 2 }} onClose={() => setActionError(null)}>
                 {actionError}
               </Alert>
             )}
@@ -919,7 +919,7 @@ function Categories() {
             <strong>{deleteConfirm?.name}</strong>?
           </Typography>
           {deleteError && (
-            <Alert severity="error" sx={{ mt: 2 }}>
+            <Alert severity="error" sx={{ mt: 2 }} onClose={() => setDeleteError(null)}>
               {deleteError}
             </Alert>
           )}

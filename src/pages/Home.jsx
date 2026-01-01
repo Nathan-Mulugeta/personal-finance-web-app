@@ -40,6 +40,7 @@ import AITransactionsReviewModal from '../components/common/AITransactionsReview
 import ErrorMessage from '../components/common/ErrorMessage';
 import { format, parseISO, isToday, isYesterday } from 'date-fns';
 import { usePageRefresh } from '../hooks/usePageRefresh';
+import { clearError } from '../store/slices/transactionsSlice';
 
 function Home() {
   const dispatch = useDispatch();
@@ -612,7 +613,7 @@ function Home() {
         </Box>
       </Box>
 
-      {error && <ErrorMessage error={error} />}
+      {error && <ErrorMessage error={error} onClose={() => dispatch(clearError())} />}
 
       {/* Add Transaction Dialog */}
       <AddTransactionDialog

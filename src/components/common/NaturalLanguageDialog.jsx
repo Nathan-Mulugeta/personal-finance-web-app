@@ -16,6 +16,7 @@ import {
 } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
 import { parseNaturalLanguage, isAIConfigured } from '../../lib/api/aiParsing';
+import { useAutoDismissError } from '../../hooks/useAutoDismissError';
 
 /**
  * Natural Language Transaction Dialog
@@ -41,6 +42,9 @@ function NaturalLanguageDialog({ open, onClose, onParsed }) {
   const [text, setText] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
+
+  // Auto-dismiss error after 8 seconds
+  useAutoDismissError(setError, error);
 
   // Focus input on open
   useEffect(() => {

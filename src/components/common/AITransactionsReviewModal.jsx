@@ -27,6 +27,7 @@ import CategoryAutocomplete from './CategoryAutocomplete';
 import { batchCreateTransactions } from '../../store/slices/transactionsSlice';
 import { format } from 'date-fns';
 import { formatCurrency } from '../../utils/currencyConversion';
+import { useAutoDismissError } from '../../hooks/useAutoDismissError';
 
 /**
  * AI Transactions Review Modal
@@ -69,6 +70,9 @@ function AITransactionsReviewModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+
+  // Auto-dismiss error after 8 seconds
+  useAutoDismissError(setError, error);
 
   // Get active accounts
   const activeAccounts = useMemo(() => {

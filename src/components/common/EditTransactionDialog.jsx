@@ -264,7 +264,7 @@ function EditTransactionDialog({ open, onClose, transaction }) {
             }}
           >
             {actionError && (
-              <Alert severity="error" sx={{ mb: 2 }}>
+              <Alert severity="error" sx={{ mb: 2 }} onClose={() => setActionError(null)}>
                 {actionError}
               </Alert>
             )}
@@ -473,7 +473,7 @@ function EditTransactionDialog({ open, onClose, transaction }) {
         </DialogTitle>
         <DialogContent sx={{ textAlign: 'center', pb: 2 }}>
           {deleteError && (
-            <Alert severity="error" sx={{ mb: 2 }}>
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setDeleteError(null)}>
               {deleteError}
             </Alert>
           )}

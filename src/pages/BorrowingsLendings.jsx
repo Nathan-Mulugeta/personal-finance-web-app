@@ -1131,7 +1131,7 @@ function BorrowingsLendings() {
           <DialogTitle>Create Borrowing/Lending Record</DialogTitle>
           <DialogContent>
             {createError && (
-              <Alert severity="error" sx={{ mb: 2 }}>
+              <Alert severity="error" sx={{ mb: 2 }} onClose={() => setCreateError(null)}>
                 {createError}
               </Alert>
             )}
@@ -1256,7 +1256,7 @@ function BorrowingsLendings() {
           <DialogTitle>Edit Borrowing/Lending Record</DialogTitle>
           <DialogContent>
             {editError && (
-              <Alert severity="error" sx={{ mb: 2 }}>
+              <Alert severity="error" sx={{ mb: 2 }} onClose={() => setEditError(null)}>
                 {editError}
               </Alert>
             )}
@@ -1337,7 +1337,7 @@ function BorrowingsLendings() {
           <DialogTitle>Record Payment</DialogTitle>
           <DialogContent>
             {paymentError && (
-              <Alert severity="error" sx={{ mb: 2 }}>
+              <Alert severity="error" sx={{ mb: 2 }} onClose={() => setPaymentError(null)}>
                 {paymentError}
               </Alert>
             )}
@@ -1433,7 +1433,7 @@ function BorrowingsLendings() {
             <strong>{deleteConfirm?.entity_name}</strong>?
           </Typography>
           {deleteError && (
-            <Alert severity="error" sx={{ mt: 2 }}>
+            <Alert severity="error" sx={{ mt: 2 }} onClose={() => setDeleteError(null)}>
               {deleteError}
             </Alert>
           )}

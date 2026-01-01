@@ -2486,7 +2486,7 @@ function Budgets() {
           </DialogTitle>
           <DialogContent>
             {actionError && (
-              <Alert severity="error" sx={{ mb: 2 }}>
+              <Alert severity="error" sx={{ mb: 2 }} onClose={() => setActionError(null)}>
                 {actionError}
               </Alert>
             )}
@@ -2693,7 +2693,7 @@ function Budgets() {
             ?
           </Typography>
           {deleteError && (
-            <Alert severity="error" sx={{ mt: 2 }}>
+            <Alert severity="error" sx={{ mt: 2 }} onClose={() => setDeleteError(null)}>
               {deleteError}
             </Alert>
           )}

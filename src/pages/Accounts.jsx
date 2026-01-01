@@ -55,6 +55,7 @@ import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
 import { formatCurrency } from '../utils/currencyConversion';
 import { usePageRefresh } from '../hooks/usePageRefresh';
+import { useAutoDismissError } from '../hooks/useAutoDismissError';
 
 function Accounts() {
   const dispatch = useDispatch();
@@ -74,6 +75,10 @@ function Accounts() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
   const [isReordering, setIsReordering] = useState(false);
+
+  // Auto-dismiss errors after 8 seconds
+  useAutoDismissError(setActionError, actionError);
+  useAutoDismissError(setDeleteError, deleteError);
 
   // Sort accounts by sort_order
   const sortedAccounts = useMemo(() => {
@@ -922,7 +927,7 @@ function Accounts() {
           </DialogTitle>
           <DialogContent sx={{ overflow: 'visible' }}>
             {actionError && (
-              <Alert severity="error" sx={{ mb: 2 }}>
+              <Alert severity="error" sx={{ mb: 2 }} onClose={() => setActionError(null)}>
                 {actionError}
               </Alert>
             )}
@@ -1056,7 +1061,7 @@ function Accounts() {
             <strong>{deleteConfirm?.name}</strong>?
           </Typography>
           {deleteError && (
-            <Alert severity="error" sx={{ mt: 2 }}>
+            <Alert severity="error" sx={{ mt: 2 }} onClose={() => setDeleteError(null)}>
               {deleteError}
             </Alert>
           )}

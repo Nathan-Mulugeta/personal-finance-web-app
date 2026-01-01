@@ -98,7 +98,7 @@ function AuthCallback() {
         >
           {error ? (
             <>
-              <Alert severity="error" sx={{ mb: 2 }}>
+              <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
                 {error}
               </Alert>
               <Typography variant="body2" color="text.secondary">

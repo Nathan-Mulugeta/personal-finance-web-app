@@ -2407,7 +2407,7 @@ function Transactions() {
         </DialogTitle>
         <DialogContent sx={{ textAlign: 'center', pb: 2 }}>
           {bulkDeleteError && (
-            <Alert severity="error" sx={{ mb: 2 }}>
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setBulkDeleteError(null)}>
               {bulkDeleteError}
             </Alert>
           )}

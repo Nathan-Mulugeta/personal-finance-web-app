@@ -188,6 +188,7 @@ function BatchTransactionDialog({ open, onClose }) {
             onSubmit={handleSubmit}
             isSubmitting={isSubmitting}
             error={submitError}
+            onErrorClose={() => setSubmitError(null)}
           />
         );
       case 'edit':
@@ -202,6 +203,7 @@ function BatchTransactionDialog({ open, onClose }) {
             onBack={handleBackToSummary}
             isSubmitting={isSubmitting}
             error={submitError}
+            onErrorClose={() => setSubmitError(null)}
           />
         );
       default:

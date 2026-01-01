@@ -38,6 +38,7 @@ function BatchTransactionEdit({
   onBack,
   isSubmitting,
   error,
+  onErrorClose,
 }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -77,7 +78,7 @@ function BatchTransactionEdit({
 
       <DialogContent sx={{ flexGrow: 1, overflow: 'auto', pt: { xs: 1, sm: 2 }, px: 0 }}>
         {error && (
-          <Alert severity="error" sx={{ mx: 2, mb: 2 }}>
+          <Alert severity="error" sx={{ mx: 2, mb: 2 }} onClose={onErrorClose}>
             {error}
           </Alert>
         )}

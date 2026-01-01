@@ -16,6 +16,7 @@ import {
 import CameraAltIcon from '@mui/icons-material/CameraAlt';
 import PhotoLibraryIcon from '@mui/icons-material/PhotoLibrary';
 import { parseReceipt, isAIConfigured } from '../../lib/api/aiParsing';
+import { useAutoDismissError } from '../../hooks/useAutoDismissError';
 
 /**
  * Receipt Capture Dialog
@@ -40,6 +41,9 @@ function ReceiptCaptureDialog({ open, onClose, onParsed }) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
   const [previewImage, setPreviewImage] = useState(null);
+
+  // Auto-dismiss error after 8 seconds
+  useAutoDismissError(setError, error);
 
   // Refs
   const cameraInputRef = useRef(null);
