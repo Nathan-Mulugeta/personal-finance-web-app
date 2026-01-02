@@ -535,7 +535,11 @@ function Budgets() {
           cleanedData.startMonth
         ) {
           // Parse dates for comparison
-          const budgetStartDate = parseISO(`${editingBudget.start_month.split('-')[0]}-${editingBudget.start_month.split('-')[1]}-01`);
+          const budgetStartDate = parseISO(
+            `${editingBudget.start_month.split('-')[0]}-${
+              editingBudget.start_month.split('-')[1]
+            }-01`
+          );
           const selectedDate = parseISO(`${selectedMonth}-01`);
           const newStartDate = parseISO(`${cleanedData.startMonth}-01`);
 
@@ -547,9 +551,11 @@ function Budgets() {
             // Update the old budget to end at the month before selectedMonth
             // Keep original amount and other original fields, only update end_month
             const originalStartMonth = editingBudget.start_month
-              ? `${editingBudget.start_month.split('-')[0]}-${editingBudget.start_month.split('-')[1]}`
+              ? `${editingBudget.start_month.split('-')[0]}-${
+                  editingBudget.start_month.split('-')[1]
+                }`
               : null;
-            
+
             await dispatch(
               updateBudget({
                 budgetId: editingBudget.budget_id,
@@ -568,11 +574,17 @@ function Budgets() {
 
             // Create a new recurring budget starting from selectedMonth with the new amount and updated fields
             const originalEndMonth = editingBudget.end_month
-              ? parseISO(`${editingBudget.end_month.split('-')[0]}-${editingBudget.end_month.split('-')[1]}-01`)
+              ? parseISO(
+                  `${editingBudget.end_month.split('-')[0]}-${
+                    editingBudget.end_month.split('-')[1]
+                  }-01`
+                )
               : null;
             const newEndMonth =
               originalEndMonth && originalEndMonth >= selectedDate
-                ? `${editingBudget.end_month.split('-')[0]}-${editingBudget.end_month.split('-')[1]}`
+                ? `${editingBudget.end_month.split('-')[0]}-${
+                    editingBudget.end_month.split('-')[1]
+                  }`
                 : cleanedData.endMonth;
 
             await dispatch(
@@ -672,6 +684,10 @@ function Budgets() {
 
   // Organize budgets by category hierarchy
   const organizeBudgetsByCategory = useMemo(() => {
+    const baseCurrency =
+      settings.find((s) => s.setting_key === 'BaseCurrency')?.setting_value ||
+      'USD';
+
     return (budgetsToOrganize) => {
       const grouped = {};
 
@@ -712,15 +728,26 @@ function Budgets() {
         }
 
         const budgetAmount = parseFloat(budget.amount || 0);
+        const budgetCurrency = budget.currency || 'USD';
+
+        // Convert to base currency for consistent totals
+        const convertedAmount =
+          convertAmountWithExchangeRates(
+            budgetAmount,
+            budgetCurrency,
+            baseCurrency,
+            exchangeRates
+          ) ?? budgetAmount;
+
         grouped[parentId].subcategories[subcategoryId].budgets.push(budget);
         grouped[parentId].subcategories[subcategoryId].totalAmount +=
-          budgetAmount;
-        grouped[parentId].totalAmount += budgetAmount;
+          convertedAmount;
+        grouped[parentId].totalAmount += convertedAmount;
       });
 
       return grouped;
     };
-  }, [categoryMap]);
+  }, [categoryMap, settings, exchangeRates]);
 
   // Separate budgets by category type (Income/Expense), then by recurring type
   const organizedBudgets = useMemo(() => {
@@ -765,14 +792,16 @@ function Budgets() {
   }, []);
 
   // Helper function to get currency for a budget group (for display)
-  const getGroupCurrency = useCallback((budgetGroups) => {
-    const firstGroup = Object.values(budgetGroups)[0];
-    if (!firstGroup) return 'USD';
-    const firstSubcategory = Object.values(firstGroup.subcategories)[0];
-    if (!firstSubcategory) return 'USD';
-    const firstBudget = firstSubcategory.budgets[0];
-    return firstBudget?.currency || 'USD';
-  }, []);
+  // Always use base currency since totals are now converted to base currency
+  const getGroupCurrency = useCallback(
+    (budgetGroups) => {
+      const baseCurrency =
+        settings.find((s) => s.setting_key === 'BaseCurrency')?.setting_value ||
+        'USD';
+      return baseCurrency;
+    },
+    [settings]
+  );
 
   // Toggle parent category expansion
   const toggleParentExpansion = (parentId) => {
@@ -985,7 +1014,13 @@ function Budgets() {
                   >
                     Income Goal
                   </Typography>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'flex-end',
+                    }}
+                  >
                     <Typography
                       variant="h5"
                       fontWeight="bold"
@@ -1044,7 +1079,13 @@ function Budgets() {
                   >
                     Total Earned
                   </Typography>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'flex-end',
+                    }}
+                  >
                     <Typography
                       variant="h5"
                       fontWeight="bold"
@@ -1108,7 +1149,13 @@ function Budgets() {
                       ? 'Exceeded Goal'
                       : 'Remaining'}
                   </Typography>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'flex-end',
+                    }}
+                  >
                     <Typography
                       variant="h5"
                       fontWeight="bold"
@@ -1173,7 +1220,13 @@ function Budgets() {
               >
                 Expense Budget
               </Typography>
-              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'flex-end',
+                }}
+              >
                 <Typography
                   variant="h5"
                   fontWeight="bold"
@@ -1232,7 +1285,13 @@ function Budgets() {
               >
                 Total Spent
               </Typography>
-              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'flex-end',
+                }}
+              >
                 <Typography
                   variant="h5"
                   fontWeight="bold"
@@ -1296,7 +1355,13 @@ function Budgets() {
                   ? 'Remaining'
                   : 'Over Budget'}
               </Typography>
-              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'flex-end',
+                }}
+              >
                 <Typography
                   variant="h5"
                   fontWeight="bold"
@@ -1365,7 +1430,13 @@ function Budgets() {
                 >
                   Net Budget
                 </Typography>
-                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'flex-end',
+                  }}
+                >
                   <Typography
                     variant="h5"
                     fontWeight="bold"
@@ -1773,8 +1844,9 @@ function Budgets() {
                           Total:{' '}
                           {formatCurrency(
                             group.totalAmount,
-                            Object.values(group.subcategories)[0]?.budgets[0]
-                              ?.currency || 'USD'
+                            settings.find(
+                              (s) => s.setting_key === 'BaseCurrency'
+                            )?.setting_value || 'USD'
                           )}
                         </Typography>
                       </Box>
@@ -2223,8 +2295,9 @@ function Budgets() {
                                 Total:{' '}
                                 {formatCurrency(
                                   group.totalAmount,
-                                  Object.values(group.subcategories)[0]
-                                    ?.budgets[0]?.currency || 'USD'
+                                  settings.find(
+                                    (s) => s.setting_key === 'BaseCurrency'
+                                  )?.setting_value || 'USD'
                                 )}
                               </Typography>
                             </Box>
@@ -2486,7 +2559,11 @@ function Budgets() {
           </DialogTitle>
           <DialogContent>
             {actionError && (
-              <Alert severity="error" sx={{ mb: 2 }} onClose={() => setActionError(null)}>
+              <Alert
+                severity="error"
+                sx={{ mb: 2 }}
+                onClose={() => setActionError(null)}
+              >
                 {actionError}
               </Alert>
             )}
@@ -2693,7 +2770,11 @@ function Budgets() {
             ?
           </Typography>
           {deleteError && (
-            <Alert severity="error" sx={{ mt: 2 }} onClose={() => setDeleteError(null)}>
+            <Alert
+              severity="error"
+              sx={{ mt: 2 }}
+              onClose={() => setDeleteError(null)}
+            >
               {deleteError}
             </Alert>
           )}
