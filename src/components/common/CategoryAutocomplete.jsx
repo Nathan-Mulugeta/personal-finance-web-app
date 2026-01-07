@@ -6,17 +6,17 @@ import { Autocomplete, TextField, Box, Typography } from '@mui/material';
  * Provides type-ahead search functionality for easy category selection.
  */
 function CategoryAutocomplete({
-  categories,          // Flattened category list with depth info
-  value,               // Selected category_id
-  onChange,            // (category_id) => void
-  onSelect,            // Optional callback after a category is selected (for focus chaining)
-  label = "Category *",
+  categories, // Flattened category list with depth info
+  value, // Selected category_id
+  onChange, // (category_id) => void
+  onSelect, // Optional callback after a category is selected (for focus chaining)
+  label = 'Category *',
   error,
   helperText,
   disabled,
-  filterByType,        // Optional: 'Income' or 'Expense'
+  filterByType, // Optional: 'Income' or 'Expense'
   required = false,
-  autoFocus = false,   // Auto-focus the input on mount
+  autoFocus = false, // Auto-focus the input on mount
   inputRef: externalInputRef, // Optional external ref for parent components to access input
   ...props
 }) {
@@ -36,8 +36,10 @@ function CategoryAutocomplete({
 
   // Filter categories by type if specified
   const baseFilteredCategories = filterByType
-    ? categories.filter(cat => cat.type === filterByType && cat.status === 'Active')
-    : categories.filter(cat => cat.status === 'Active');
+    ? categories.filter(
+        (cat) => cat.type === filterByType && cat.status === 'Active'
+      )
+    : categories.filter((cat) => cat.status === 'Active');
 
   // Custom filter function that includes parent categories when subcategories match
   // and includes all subcategories when parent categories match
@@ -53,7 +55,7 @@ function CategoryAutocomplete({
 
     // Helper function to recursively find all descendants of a category
     const findDescendants = (parentId) => {
-      options.forEach(option => {
+      options.forEach((option) => {
         if (option.parent_category_id === parentId) {
           childIdsToInclude.add(option.category_id);
           // Recursively find children of this child
@@ -63,16 +65,16 @@ function CategoryAutocomplete({
     };
 
     // Find all categories that match the query
-    options.forEach(option => {
+    options.forEach((option) => {
       const name = (option.name || '').toLowerCase();
       if (name.includes(query)) {
         matchingCategoryIds.add(option.category_id);
-        
+
         // If this is a subcategory, include its parent
         if (option.parent_category_id) {
           parentIdsToInclude.add(option.parent_category_id);
         }
-        
+
         // If this is a parent category (has children), include all its subcategories
         if (option.hasChildren) {
           findDescendants(option.category_id);
@@ -81,11 +83,17 @@ function CategoryAutocomplete({
     });
 
     // Build result set: matching categories + their parents + all subcategories of matching parents
-    const resultIds = new Set([...matchingCategoryIds, ...parentIdsToInclude, ...childIdsToInclude]);
-    
+    const resultIds = new Set([
+      ...matchingCategoryIds,
+      ...parentIdsToInclude,
+      ...childIdsToInclude,
+    ]);
+
     // Filter options to only include matching categories, their parents, and subcategories
     // Maintain the original order from the flattened tree
-    const filtered = options.filter(option => resultIds.has(option.category_id));
+    const filtered = options.filter((option) =>
+      resultIds.has(option.category_id)
+    );
 
     // Sort to maintain hierarchy: parents before their children
     // Since the original list is already in hierarchical order, we just need to
@@ -95,15 +103,20 @@ function CategoryAutocomplete({
       if (a.category_id === b.parent_category_id) return -1;
       if (b.category_id === a.parent_category_id) return 1;
       // Otherwise maintain original order (by finding original indices)
-      const indexA = baseFilteredCategories.findIndex(cat => cat.category_id === a.category_id);
-      const indexB = baseFilteredCategories.findIndex(cat => cat.category_id === b.category_id);
+      const indexA = baseFilteredCategories.findIndex(
+        (cat) => cat.category_id === a.category_id
+      );
+      const indexB = baseFilteredCategories.findIndex(
+        (cat) => cat.category_id === b.category_id
+      );
       return indexA - indexB;
     });
 
     return sorted;
   };
 
-  const selectedCategory = baseFilteredCategories.find(cat => cat.category_id === value) || null;
+  const selectedCategory =
+    baseFilteredCategories.find((cat) => cat.category_id === value) || null;
 
   return (
     <Autocomplete
@@ -120,7 +133,9 @@ function CategoryAutocomplete({
         }
       }}
       getOptionLabel={(option) => option.name || ''}
-      isOptionEqualToValue={(option, value) => option?.category_id === value?.category_id}
+      isOptionEqualToValue={(option, value) =>
+        option?.category_id === value?.category_id
+      }
       disabled={disabled}
       fullWidth
       renderInput={(params) => (
@@ -154,4 +169,3 @@ function CategoryAutocomplete({
 }
 
 export default CategoryAutocomplete;
-

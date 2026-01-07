@@ -183,6 +183,7 @@ const MobileTransactionRow = memo(function MobileTransactionRow({
             variant="body2"
             sx={{
               fontSize: '0.8125rem',
+              fontWeight: 500,
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
@@ -2281,7 +2282,10 @@ function Transactions() {
                         <TableCell>
                           <Typography
                             variant="body2"
-                            sx={{ fontSize: '0.8125rem' }}
+                            sx={{
+                              fontSize: '0.8125rem',
+                              fontWeight: 500,
+                            }}
                           >
                             {getCategoryDisplayName(transaction.category_id)}
                           </Typography>
@@ -2410,7 +2414,11 @@ function Transactions() {
         </DialogTitle>
         <DialogContent sx={{ textAlign: 'center', pb: 2 }}>
           {bulkDeleteError && (
-            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setBulkDeleteError(null)}>
+            <Alert
+              severity="error"
+              sx={{ mb: 2 }}
+              onClose={() => setBulkDeleteError(null)}
+            >
               {bulkDeleteError}
             </Alert>
           )}
