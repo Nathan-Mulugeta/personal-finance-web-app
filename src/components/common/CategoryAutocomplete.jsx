@@ -35,16 +35,81 @@ function CategoryAutocomplete({
   }, [autoFocus, disabled]);
 
   // Filter categories by type if specified
-  const filteredCategories = filterByType
+  const baseFilteredCategories = filterByType
     ? categories.filter(cat => cat.type === filterByType && cat.status === 'Active')
     : categories.filter(cat => cat.status === 'Active');
 
-  const selectedCategory = filteredCategories.find(cat => cat.category_id === value) || null;
+  // Custom filter function that includes parent categories when subcategories match
+  // and includes all subcategories when parent categories match
+  const filterOptions = (options, { inputValue }) => {
+    if (!inputValue || inputValue.trim() === '') {
+      return options;
+    }
+
+    const query = inputValue.toLowerCase().trim();
+    const matchingCategoryIds = new Set();
+    const parentIdsToInclude = new Set();
+    const childIdsToInclude = new Set();
+
+    // Helper function to recursively find all descendants of a category
+    const findDescendants = (parentId) => {
+      options.forEach(option => {
+        if (option.parent_category_id === parentId) {
+          childIdsToInclude.add(option.category_id);
+          // Recursively find children of this child
+          findDescendants(option.category_id);
+        }
+      });
+    };
+
+    // Find all categories that match the query
+    options.forEach(option => {
+      const name = (option.name || '').toLowerCase();
+      if (name.includes(query)) {
+        matchingCategoryIds.add(option.category_id);
+        
+        // If this is a subcategory, include its parent
+        if (option.parent_category_id) {
+          parentIdsToInclude.add(option.parent_category_id);
+        }
+        
+        // If this is a parent category (has children), include all its subcategories
+        if (option.hasChildren) {
+          findDescendants(option.category_id);
+        }
+      }
+    });
+
+    // Build result set: matching categories + their parents + all subcategories of matching parents
+    const resultIds = new Set([...matchingCategoryIds, ...parentIdsToInclude, ...childIdsToInclude]);
+    
+    // Filter options to only include matching categories, their parents, and subcategories
+    // Maintain the original order from the flattened tree
+    const filtered = options.filter(option => resultIds.has(option.category_id));
+
+    // Sort to maintain hierarchy: parents before their children
+    // Since the original list is already in hierarchical order, we just need to
+    // ensure parents come before children in the filtered result
+    const sorted = filtered.sort((a, b) => {
+      // If a is parent of b, a should come first
+      if (a.category_id === b.parent_category_id) return -1;
+      if (b.category_id === a.parent_category_id) return 1;
+      // Otherwise maintain original order (by finding original indices)
+      const indexA = baseFilteredCategories.findIndex(cat => cat.category_id === a.category_id);
+      const indexB = baseFilteredCategories.findIndex(cat => cat.category_id === b.category_id);
+      return indexA - indexB;
+    });
+
+    return sorted;
+  };
+
+  const selectedCategory = baseFilteredCategories.find(cat => cat.category_id === value) || null;
 
   return (
     <Autocomplete
-      options={filteredCategories}
+      options={baseFilteredCategories}
       value={selectedCategory}
+      filterOptions={filterOptions}
       onChange={(_, newValue) => {
         const categoryId = newValue?.category_id || '';
         onChange(categoryId);

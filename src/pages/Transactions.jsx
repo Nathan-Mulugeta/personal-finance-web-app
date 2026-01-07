@@ -4,6 +4,7 @@ import {
   selectAccountNameGetter,
   selectAccountCurrencyGetter,
   selectCategoryNameGetter,
+  selectCategoryDisplayNameGetter,
   selectAccountMap,
 } from '../store/selectors';
 import { useForm } from 'react-hook-form';
@@ -102,6 +103,7 @@ const MobileTransactionRow = memo(function MobileTransactionRow({
   selectionMode,
   isBulkDeleting,
   getCategoryName,
+  getCategoryDisplayName,
   getAccountName,
   onLongPressStart,
   onLongPressEnd,
@@ -179,7 +181,6 @@ const MobileTransactionRow = memo(function MobileTransactionRow({
         >
           <Typography
             variant="body2"
-            fontWeight={600}
             sx={{
               fontSize: '0.8125rem',
               overflow: 'hidden',
@@ -189,7 +190,7 @@ const MobileTransactionRow = memo(function MobileTransactionRow({
               flex: 1,
             }}
           >
-            {getCategoryName(transaction.category_id)}
+            {getCategoryDisplayName(transaction.category_id)}
           </Typography>
           <Typography
             variant="body2"
@@ -429,6 +430,7 @@ const DesktopTransactionRow = memo(function DesktopTransactionRow({
   selectionMode,
   isBulkDeleting,
   getCategoryName,
+  getCategoryDisplayName,
   getAccountName,
   getTypeChipSx,
   getStatusChipSx,
@@ -494,7 +496,7 @@ const DesktopTransactionRow = memo(function DesktopTransactionRow({
             fontWeight={500}
             sx={{ fontSize: '0.875rem' }}
           >
-            {getCategoryName(transaction.category_id)}
+            {getCategoryDisplayName(transaction.category_id)}
           </Typography>
           <Chip
             label={transaction.type}
@@ -784,6 +786,7 @@ function Transactions() {
   const getAccountName = useSelector(selectAccountNameGetter);
   const getAccountCurrency = useSelector(selectAccountCurrencyGetter);
   const getCategoryName = useSelector(selectCategoryNameGetter);
+  const getCategoryDisplayName = useSelector(selectCategoryDisplayNameGetter);
   const accountMap = useSelector(selectAccountMap);
   const [openTransferDialog, setOpenTransferDialog] = useState(false);
   const [addTransactionOpen, setAddTransactionOpen] = useState(false);
@@ -1939,6 +1942,7 @@ function Transactions() {
                     selectionMode={selectionMode}
                     isBulkDeleting={isBulkDeleting}
                     getCategoryName={getCategoryName}
+                    getCategoryDisplayName={getCategoryDisplayName}
                     getAccountName={getAccountName}
                     onLongPressStart={handleLongPressStart}
                     onLongPressEnd={handleLongPressEnd}
@@ -2277,10 +2281,9 @@ function Transactions() {
                         <TableCell>
                           <Typography
                             variant="body2"
-                            fontWeight={600}
                             sx={{ fontSize: '0.8125rem' }}
                           >
-                            {getCategoryName(transaction.category_id)}
+                            {getCategoryDisplayName(transaction.category_id)}
                           </Typography>
                         </TableCell>
                         <TableCell>

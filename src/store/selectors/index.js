@@ -123,6 +123,30 @@ export const selectCategoryNameGetter = createSelector(
 );
 
 /**
+ * Get category display name by ID (includes parent if exists)
+ * Returns "Parent > Subcategory" format for subcategories, or just the name for parent categories
+ */
+export const selectCategoryDisplayNameGetter = createSelector(
+  [selectCategoryMap],
+  (categoryMap) => (categoryId) => {
+    if (!categoryId) return 'Unknown';
+    const category = categoryMap.get(categoryId);
+    if (!category) return 'Unknown';
+    
+    // If category has a parent, show "Parent > Subcategory" format
+    if (category.parent_category_id) {
+      const parent = categoryMap.get(category.parent_category_id);
+      if (parent) {
+        return `${parent.name} > ${category.name}`;
+      }
+    }
+    
+    // Otherwise, just return the category name
+    return category.name || 'Unknown';
+  }
+);
+
+/**
  * Select categories filtered by type (parameterized selector factory)
  * Usage: const expenseCategories = useSelector(selectCategoriesByType('Expense'))
  */

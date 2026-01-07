@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import {
   selectAccountNameGetter,
   selectCategoryNameGetter,
+  selectCategoryDisplayNameGetter,
   selectCategoryMap,
 } from '../store/selectors';
 import {
@@ -68,6 +69,7 @@ function Home() {
   // Memoized O(1) lookup functions from selectors
   const getAccountName = useSelector(selectAccountNameGetter);
   const getCategoryName = useSelector(selectCategoryNameGetter);
+  const getCategoryDisplayName = useSelector(selectCategoryDisplayNameGetter);
   const categoryMap = useSelector(selectCategoryMap);
 
   // Refresh data on navigation
@@ -250,7 +252,7 @@ function Home() {
                 flex: 1,
               }}
             >
-              {getCategoryName(transaction.category_id)}
+              {getCategoryDisplayName(transaction.category_id)}
             </Typography>
             <Typography
               variant="body2"
@@ -347,7 +349,7 @@ function Home() {
               fontWeight: 500,
             }}
           >
-            {getCategoryName(transaction.category_id)}
+            {getCategoryDisplayName(transaction.category_id)}
           </Typography>
         </TableCell>
         <TableCell>
