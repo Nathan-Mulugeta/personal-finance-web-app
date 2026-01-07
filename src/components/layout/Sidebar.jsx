@@ -7,6 +7,9 @@ import {
   ListItemText,
   Toolbar,
   Divider,
+  useMediaQuery,
+  useTheme,
+  Box,
 } from '@mui/material';
 import HomeIcon from '@mui/icons-material/Home';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
@@ -41,6 +44,8 @@ const menuItems = [
 function Sidebar({ onClose }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   const handleNavigation = (path) => {
     navigate(path);
@@ -50,23 +55,62 @@ function Sidebar({ onClose }) {
   };
 
   return (
-    <div>
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+      }}
+    >
       <Toolbar />
       <Divider />
-      <List>
-        {menuItems.map((item) => (
-          <ListItem key={item.text} disablePadding>
-            <ListItemButton
-              selected={location.pathname === item.path}
-              onClick={() => handleNavigation(item.path)}
-            >
-              <ListItemIcon>{item.icon}</ListItemIcon>
-              <ListItemText primary={item.text} />
-            </ListItemButton>
-          </ListItem>
-        ))}
-      </List>
-    </div>
+      <Box
+        sx={{
+          flexGrow: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: isMobile ? 'flex-end' : 'flex-start',
+          position: 'relative',
+        }}
+      >
+        {isMobile && (
+          <Box
+            sx={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'flex-start',
+              pt: 4,
+            }}
+          >
+            <AccountBalanceWalletIcon
+              sx={{
+                fontSize: { xs: 180, sm: 200 },
+                color: 'primary.main',
+                opacity: 0.15,
+              }}
+            />
+          </Box>
+        )}
+        <List>
+          {menuItems.map((item) => (
+            <ListItem key={item.text} disablePadding>
+              <ListItemButton
+                selected={location.pathname === item.path}
+                onClick={() => handleNavigation(item.path)}
+              >
+                <ListItemIcon>{item.icon}</ListItemIcon>
+                <ListItemText primary={item.text} />
+              </ListItemButton>
+            </ListItem>
+          ))}
+        </List>
+      </Box>
+    </Box>
   );
 }
 
