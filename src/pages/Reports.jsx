@@ -19,6 +19,8 @@ import {
   Chip,
   useMediaQuery,
   useTheme,
+  ToggleButtonGroup,
+  ToggleButton,
 } from '@mui/material';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
@@ -60,6 +62,7 @@ function Reports() {
   const [selectedMonth, setSelectedMonth] = useState(
     format(new Date(), 'yyyy-MM')
   );
+  const [periodType, setPeriodType] = useState('month'); // 'month' | '6months' | '1year'
   const [expandedCategories, setExpandedCategories] = useState(new Set());
   const [transactionModalOpen, setTransactionModalOpen] = useState(false);
   const [selectedCategoryForModal, setSelectedCategoryForModal] =
@@ -70,17 +73,57 @@ function Reports() {
     settings.find((s) => s.setting_key === 'BaseCurrency')?.setting_value ||
     'USD';
 
+  // Get date range based on selected month and period type
+  const getDateRange = (selectedMonth, periodType) => {
+    const endDate = endOfMonth(parseISO(`${selectedMonth}-01`));
+    let startDate;
+    
+    if (periodType === 'month') {
+      startDate = startOfMonth(parseISO(`${selectedMonth}-01`));
+    } else if (periodType === '6months') {
+      startDate = startOfMonth(subMonths(endDate, 5)); // 6 months including current
+    } else if (periodType === '1year') {
+      startDate = startOfMonth(subMonths(endDate, 11)); // 12 months including current
+    }
+    
+    return { start: startDate, end: endDate };
+  };
+
+  // Get current date range
+  const dateRange = useMemo(
+    () => getDateRange(selectedMonth, periodType),
+    [selectedMonth, periodType]
+  );
+
   // Month navigation handlers
-  const handlePreviousMonth = () => {
+  const handlePreviousPeriod = () => {
     const currentDate = parseISO(`${selectedMonth}-01`);
-    const newDate = subMonths(currentDate, 1);
+    let monthsToSubtract = 1;
+    if (periodType === '6months') {
+      monthsToSubtract = 6;
+    } else if (periodType === '1year') {
+      monthsToSubtract = 12;
+    }
+    const newDate = subMonths(currentDate, monthsToSubtract);
     setSelectedMonth(format(newDate, 'yyyy-MM'));
   };
 
-  const handleNextMonth = () => {
+  const handleNextPeriod = () => {
     const currentDate = parseISO(`${selectedMonth}-01`);
-    const newDate = addMonths(currentDate, 1);
+    let monthsToAdd = 1;
+    if (periodType === '6months') {
+      monthsToAdd = 6;
+    } else if (periodType === '1year') {
+      monthsToAdd = 12;
+    }
+    const newDate = addMonths(currentDate, monthsToAdd);
     setSelectedMonth(format(newDate, 'yyyy-MM'));
+  };
+
+  const handlePeriodTypeChange = (event, newPeriodType) => {
+    if (newPeriodType !== null) {
+      setPeriodType(newPeriodType);
+    }
   };
 
   // Toggle category expansion
@@ -102,11 +145,24 @@ function Reports() {
     return [categoryId, ...descendants.map((d) => d.category_id)];
   };
 
-  // Calculate budget for a category in a given month (converted to base currency)
-  const calculateCategoryBudget = (categoryId, month) => {
+  // Helper function to count months between two dates (inclusive)
+  const countMonthsBetween = (startDate, endDate) => {
+    let count = 0;
+    let current = startOfMonth(startDate);
+    const end = endOfMonth(endDate);
+    
+    while (current <= end) {
+      count++;
+      current = addMonths(current, 1);
+    }
+    
+    return count;
+  };
+
+  // Calculate budget for a category in a given date range (converted to base currency)
+  const calculateCategoryBudget = (categoryId, dateRange) => {
     const categoryIds = getCategoryAndDescendantIds(categoryId);
-    const [year, monthNum] = month.split('-');
-    const monthDate = parseISO(`${year}-${monthNum}-01`);
+    const { start: rangeStart, end: rangeEnd } = dateRange;
 
     let totalBudget = 0;
     const currencies = new Set();
@@ -116,38 +172,51 @@ function Reports() {
       if (!categoryIds.includes(budget.category_id)) return;
       if (budget.status !== 'Active') return;
 
-      let appliesToMonth = false;
+      let applicableMonths = 0;
 
       if (budget.recurring) {
-        // Recurring budget
-        if (budget.start_month) {
-          const startDate = parseISO(budget.start_month);
-          if (monthDate >= startOfMonth(startDate)) {
-            if (!budget.end_month) {
-              appliesToMonth = true;
-            } else {
-              const endDate = parseISO(budget.end_month);
-              if (monthDate <= endOfMonth(endDate)) {
-                appliesToMonth = true;
-              }
-            }
-          }
+        // Recurring budget: count how many months in the range this budget applies to
+        const budgetStart = budget.start_month
+          ? startOfMonth(parseISO(budget.start_month))
+          : null;
+        const budgetEnd = budget.end_month
+          ? endOfMonth(parseISO(budget.end_month))
+          : null;
+
+        // Check if budget overlaps with the date range
+        const budgetAppliesToRange =
+          (!budgetStart || rangeEnd >= budgetStart) &&
+          (!budgetEnd || rangeStart <= budgetEnd);
+
+        if (budgetAppliesToRange) {
+          // Calculate the actual overlap period
+          const overlapStart =
+            budgetStart && budgetStart > rangeStart ? budgetStart : rangeStart;
+          const overlapEnd =
+            budgetEnd && budgetEnd < rangeEnd ? budgetEnd : rangeEnd;
+
+          // Count exact number of months in the overlap
+          applicableMonths = countMonthsBetween(overlapStart, overlapEnd);
         }
       } else {
-        // One-time budget
+        // One-time budget: include if budget month falls within the date range
         if (budget.month) {
           const budgetMonth = parseISO(budget.month);
+          const budgetMonthStart = startOfMonth(budgetMonth);
+          const budgetMonthEnd = endOfMonth(budgetMonth);
+
           if (
-            monthDate >= startOfMonth(budgetMonth) &&
-            monthDate <= endOfMonth(budgetMonth)
+            budgetMonthStart <= rangeEnd &&
+            budgetMonthEnd >= rangeStart
           ) {
-            appliesToMonth = true;
+            applicableMonths = 1;
           }
         }
       }
 
-      if (appliesToMonth) {
-        const budgetAmount = parseFloat(budget.amount || 0);
+      if (applicableMonths > 0) {
+        const monthlyBudgetAmount = parseFloat(budget.amount || 0);
+        const budgetAmount = monthlyBudgetAmount * applicableMonths;
         const budgetCurrency = budget.currency || baseCurrency;
 
         // Track original amount by currency
@@ -181,19 +250,17 @@ function Reports() {
     };
   };
 
-  // Calculate actual transactions for a category in a given month (including descendants, converted to base currency)
+  // Calculate actual transactions for a category in a given date range (including descendants, converted to base currency)
   const calculateCategoryActual = (
     categoryId,
-    month,
+    dateRange,
     type,
     includeDescendants = true
   ) => {
     const categoryIds = includeDescendants
       ? getCategoryAndDescendantIds(categoryId)
       : [categoryId];
-    const [year, monthNum] = month.split('-');
-    const monthStart = startOfMonth(parseISO(`${year}-${monthNum}-01`));
-    const monthEnd = endOfMonth(parseISO(`${year}-${monthNum}-01`));
+    const { start: rangeStart, end: rangeEnd } = dateRange;
 
     let totalActual = 0;
     const currencies = new Set();
@@ -211,9 +278,9 @@ function Reports() {
         if (txn.type !== 'Expense' && txn.type !== 'Transfer Out') return;
       }
 
-      // Filter by date
+      // Filter by date range
       const txnDate = parseISO(txn.date);
-      if (txnDate < monthStart || txnDate > monthEnd) return;
+      if (txnDate < rangeStart || txnDate > rangeEnd) return;
 
       const amount = Math.abs(parseFloat(txn.amount || 0));
       const txnCurrency = txn.currency || baseCurrency;
@@ -287,7 +354,7 @@ function Reports() {
   const calculateCategoryData = (category, type) => {
     const budgetData = calculateCategoryBudget(
       category.category_id,
-      selectedMonth
+      dateRange
     );
 
     // If category has children, calculate separately to avoid double-counting
@@ -302,14 +369,14 @@ function Reports() {
       // First, calculate the parent's own budget (without children) to avoid double-counting
       const parentOwnBudgetData = calculateCategoryBudget(
         category.category_id,
-        selectedMonth
+        dateRange
       );
       // But we need to subtract children's budgets since getCategoryAndDescendantIds includes them
       // So we'll calculate children separately and use that
 
       const directActual = calculateCategoryActual(
         category.category_id,
-        selectedMonth,
+        dateRange,
         type,
         false // Don't include descendants for direct calculation
       );
@@ -332,11 +399,11 @@ function Reports() {
       category.children.forEach((child) => {
         const childBudget = calculateCategoryBudget(
           child.category_id,
-          selectedMonth
+          dateRange
         );
         const childActual = calculateCategoryActual(
           child.category_id,
-          selectedMonth,
+          dateRange,
           type,
           true // Include descendants for children
         );
@@ -368,55 +435,90 @@ function Reports() {
         if (budget.category_id !== category.category_id) return false;
         if (budget.status !== 'Active') return false;
 
-        const [year, monthNum] = selectedMonth.split('-');
-        const monthDate = parseISO(`${year}-${monthNum}-01`);
+        const { start: rangeStart, end: rangeEnd } = dateRange;
 
-        let appliesToMonth = false;
+        let appliesToRange = false;
         if (budget.recurring) {
           if (budget.start_month) {
-            const startDate = parseISO(budget.start_month);
-            if (monthDate >= startOfMonth(startDate)) {
-              if (!budget.end_month) {
-                appliesToMonth = true;
-              } else {
-                const endDate = parseISO(budget.end_month);
-                if (monthDate <= endOfMonth(endDate)) {
-                  appliesToMonth = true;
-                }
-              }
-            }
+            const startDate = startOfMonth(parseISO(budget.start_month));
+            const endDate = budget.end_month
+              ? endOfMonth(parseISO(budget.end_month))
+              : null;
+            appliesToRange =
+              (!endDate || rangeStart <= endDate) &&
+              (!startDate || rangeEnd >= startDate);
           }
         } else {
           if (budget.month) {
             const budgetMonth = parseISO(budget.month);
-            if (
-              monthDate >= startOfMonth(budgetMonth) &&
-              monthDate <= endOfMonth(budgetMonth)
-            ) {
-              appliesToMonth = true;
-            }
+            const budgetMonthStart = startOfMonth(budgetMonth);
+            const budgetMonthEnd = endOfMonth(budgetMonth);
+            appliesToRange =
+              budgetMonthStart <= rangeEnd && budgetMonthEnd >= rangeStart;
           }
         }
-        return appliesToMonth;
+        return appliesToRange;
       });
 
       let parentOwnBudget = 0;
+      const { start: rangeStart, end: rangeEnd } = dateRange;
+
       parentOwnBudgets.forEach((budget) => {
-        const budgetAmount = parseFloat(budget.amount || 0);
-        const budgetCurrency = budget.currency || baseCurrency;
-        const convertedAmount = convertAmountWithExchangeRates(
-          budgetAmount,
-          budgetCurrency,
-          baseCurrency,
-          exchangeRates
-        );
-        parentOwnBudget +=
-          convertedAmount !== null ? convertedAmount : budgetAmount;
-        if (!budgetOriginalAmounts[budgetCurrency]) {
-          budgetOriginalAmounts[budgetCurrency] = 0;
+        let applicableMonths = 0;
+        
+        if (budget.recurring) {
+          // Count months for recurring budget
+          const budgetStart = budget.start_month
+            ? startOfMonth(parseISO(budget.start_month))
+            : null;
+          const budgetEnd = budget.end_month
+            ? endOfMonth(parseISO(budget.end_month))
+            : null;
+
+          const budgetAppliesToRange =
+            (!budgetStart || rangeEnd >= budgetStart) &&
+            (!budgetEnd || rangeStart <= budgetEnd);
+
+          if (budgetAppliesToRange) {
+            const overlapStart =
+              budgetStart && budgetStart > rangeStart ? budgetStart : rangeStart;
+            const overlapEnd =
+              budgetEnd && budgetEnd < rangeEnd ? budgetEnd : rangeEnd;
+            applicableMonths = countMonthsBetween(overlapStart, overlapEnd);
+          }
+        } else {
+          // One-time budget
+          if (budget.month) {
+            const budgetMonth = parseISO(budget.month);
+            const budgetMonthStart = startOfMonth(budgetMonth);
+            const budgetMonthEnd = endOfMonth(budgetMonth);
+            if (
+              budgetMonthStart <= rangeEnd &&
+              budgetMonthEnd >= rangeStart
+            ) {
+              applicableMonths = 1;
+            }
+          }
         }
-        budgetOriginalAmounts[budgetCurrency] += budgetAmount;
-        allCurrencies.add(budgetCurrency);
+
+        if (applicableMonths > 0) {
+          const monthlyBudgetAmount = parseFloat(budget.amount || 0);
+          const budgetAmount = monthlyBudgetAmount * applicableMonths;
+          const budgetCurrency = budget.currency || baseCurrency;
+          const convertedAmount = convertAmountWithExchangeRates(
+            budgetAmount,
+            budgetCurrency,
+            baseCurrency,
+            exchangeRates
+          );
+          parentOwnBudget +=
+            convertedAmount !== null ? convertedAmount : budgetAmount;
+          if (!budgetOriginalAmounts[budgetCurrency]) {
+            budgetOriginalAmounts[budgetCurrency] = 0;
+          }
+          budgetOriginalAmounts[budgetCurrency] += budgetAmount;
+          allCurrencies.add(budgetCurrency);
+        }
       });
 
       // Parent category budget: sum of parent's own budget + children's budgets
@@ -429,7 +531,7 @@ function Reports() {
       // For leaf categories: calculate including descendants (in case there are nested categories)
       const actualData = calculateCategoryActual(
         category.category_id,
-        selectedMonth,
+        dateRange,
         type,
         true
       );
@@ -596,9 +698,7 @@ function Reports() {
 
     const { categoryId, type } = selectedCategoryForModal;
     const categoryIds = getCategoryAndDescendantIds(categoryId);
-    const [year, monthNum] = selectedMonth.split('-');
-    const monthStart = startOfMonth(parseISO(`${year}-${monthNum}-01`));
-    const monthEnd = endOfMonth(parseISO(`${year}-${monthNum}-01`));
+    const { start: rangeStart, end: rangeEnd } = dateRange;
 
     return allTransactions
       .filter((txn) => {
@@ -613,7 +713,7 @@ function Reports() {
         }
 
         const txnDate = parseISO(txn.date);
-        return txnDate >= monthStart && txnDate <= monthEnd;
+        return txnDate >= rangeStart && txnDate <= rangeEnd;
       })
       .sort((a, b) => {
         const dateDiff = new Date(b.date) - new Date(a.date);
@@ -748,7 +848,7 @@ function Reports() {
       categories,
       budgets,
       allTransactions,
-      selectedMonth,
+      dateRange,
       exchangeRates,
       baseCurrency,
     ]
@@ -760,7 +860,7 @@ function Reports() {
       categories,
       budgets,
       allTransactions,
-      selectedMonth,
+      dateRange,
       exchangeRates,
       baseCurrency,
     ]
@@ -784,15 +884,39 @@ function Reports() {
 
   const modalTransactions = useMemo(
     () => getTransactionsForModal(),
-    [selectedCategoryForModal, selectedMonth, allTransactions]
+    [selectedCategoryForModal, dateRange, allTransactions]
   );
 
   if (loading && !isInitialized) {
     return <LoadingSpinner />;
   }
 
-  const selectedMonthDate = parseISO(`${selectedMonth}-01`);
-  const monthDisplay = format(selectedMonthDate, 'MMMM yyyy');
+  // Format period display
+  const getPeriodDisplay = () => {
+    if (periodType === 'month') {
+      const selectedMonthDate = parseISO(`${selectedMonth}-01`);
+      return format(selectedMonthDate, 'MMMM yyyy');
+    } else if (periodType === '6months') {
+      const startDate = dateRange.start;
+      const endDate = dateRange.end;
+      if (format(startDate, 'yyyy') === format(endDate, 'yyyy')) {
+        return `${format(startDate, 'MMM')} - ${format(endDate, 'MMM yyyy')}`;
+      } else {
+        return `${format(startDate, 'MMM yyyy')} - ${format(endDate, 'MMM yyyy')}`;
+      }
+    } else if (periodType === '1year') {
+      const startDate = dateRange.start;
+      const endDate = dateRange.end;
+      if (format(startDate, 'yyyy') === format(endDate, 'yyyy')) {
+        return format(startDate, 'yyyy');
+      } else {
+        return `${format(startDate, 'MMM yyyy')} - ${format(endDate, 'MMM yyyy')}`;
+      }
+    }
+    return '';
+  };
+
+  const periodDisplay = getPeriodDisplay();
 
   // Render category row
   const renderCategoryRow = (item, type, level = 0) => {
@@ -1015,29 +1139,64 @@ function Reports() {
 
       {error && <ErrorMessage error={error} />}
 
-      {/* Month Navigation */}
+      {/* Period Navigation */}
       <Card sx={{ mb: { xs: 2, sm: 3 } }}>
         <CardContent sx={{ p: { xs: 1.5, sm: 2 }, '&:last-child': { pb: { xs: 1.5, sm: 2 } } }}>
           <Box
             sx={{
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: { xs: 1, sm: 2 },
+              flexDirection: 'column',
+              gap: 2,
             }}
           >
-            <IconButton onClick={handlePreviousMonth} size="small">
-              <ChevronLeftIcon />
-            </IconButton>
-            <Typography
-              variant="h6"
-              sx={{ minWidth: { xs: 150, sm: 200 }, textAlign: 'center', fontSize: { xs: '1rem', sm: '1.25rem' } }}
+            {/* Period Type Selector */}
+            <Box
+              sx={{
+                display: 'flex',
+                justifyContent: 'center',
+              }}
             >
-              {monthDisplay}
-            </Typography>
-            <IconButton onClick={handleNextMonth} size="small">
-              <ChevronRightIcon />
-            </IconButton>
+              <ToggleButtonGroup
+                value={periodType}
+                exclusive
+                onChange={handlePeriodTypeChange}
+                aria-label="period type"
+                size="small"
+              >
+                <ToggleButton value="month" aria-label="month">
+                  Month
+                </ToggleButton>
+                <ToggleButton value="6months" aria-label="6 months">
+                  6 Months
+                </ToggleButton>
+                <ToggleButton value="1year" aria-label="1 year">
+                  1 Year
+                </ToggleButton>
+              </ToggleButtonGroup>
+            </Box>
+
+            {/* Period Navigation */}
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: { xs: 1, sm: 2 },
+              }}
+            >
+              <IconButton onClick={handlePreviousPeriod} size="small">
+                <ChevronLeftIcon />
+              </IconButton>
+              <Typography
+                variant="h6"
+                sx={{ minWidth: { xs: 150, sm: 250 }, textAlign: 'center', fontSize: { xs: '1rem', sm: '1.25rem' } }}
+              >
+                {periodDisplay}
+              </Typography>
+              <IconButton onClick={handleNextPeriod} size="small">
+                <ChevronRightIcon />
+              </IconButton>
+            </Box>
           </Box>
         </CardContent>
       </Card>
@@ -1548,7 +1707,7 @@ function Reports() {
         fullScreen={isMobile}
       >
         <DialogTitle sx={{ pb: 1 }}>
-          Transactions - {monthDisplay}
+          Transactions - {periodDisplay}
           {selectedCategoryForModal && (
             <Typography variant="body2" color="text.secondary">
               {

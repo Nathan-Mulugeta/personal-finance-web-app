@@ -54,4 +54,3 @@ export function calculateAllAccountBalances(accounts, transactions) {
   
   return balances
 }
-
