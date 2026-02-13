@@ -43,7 +43,7 @@ import { format, parseISO, isToday, isYesterday } from 'date-fns';
 import { usePageRefresh } from '../hooks/usePageRefresh';
 import { clearError } from '../store/slices/transactionsSlice';
 
-function Home() {
+function Home({ quickAddExpense = false }) {
   const dispatch = useDispatch();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -60,6 +60,7 @@ function Home() {
   const [aiParsedData, setAiParsedData] = useState(null);
   const [isReceiptParsing, setIsReceiptParsing] = useState(false);
   const searchInputRef = useRef(null);
+  const hasOpenedQuickAddRef = useRef(false);
 
   // Get data from Redux
   const { allTransactions, error } = useSelector((state) => state.transactions);
@@ -89,6 +90,14 @@ function Home() {
 
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  // When opened via the quick-add route, open the Add Transaction dialog once
+  useEffect(() => {
+    if (quickAddExpense && !hasOpenedQuickAddRef.current) {
+      hasOpenedQuickAddRef.current = true;
+      setAddTransactionOpen(true);
+    }
+  }, [quickAddExpense]);
 
   // Auto-focus search input when page becomes visible
   useEffect(() => {

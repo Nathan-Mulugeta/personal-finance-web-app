@@ -48,6 +48,14 @@ function App() {
             }
           />
           <Route
+            path="add-expense"
+            element={
+              <Suspense fallback={<LoadingSpinner />}>
+                <Home quickAddExpense />
+              </Suspense>
+            }
+          />
+          <Route
             path="transactions"
             element={
               <Suspense fallback={<LoadingSpinner />}>
