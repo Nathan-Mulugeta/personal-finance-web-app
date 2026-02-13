@@ -143,6 +143,22 @@ function AddTransactionDialog({ open, onClose }) {
     }
   }, [watchedAccountId, accounts, setValue]);
 
+  // Ensure Category field is auto-focused when dialog opens
+  // (especially for quick-add flows launched via PWA shortcut)
+  useEffect(() => {
+    if (!open) return;
+
+    // Wait a tick for the dialog to fully mount and for default
+    // account/type values to be applied, then focus Category.
+    if (watchedType && watchedAccountId) {
+      const timer = setTimeout(() => {
+        categoryInputRef.current?.focus();
+      }, 150);
+
+      return () => clearTimeout(timer);
+    }
+  }, [open, watchedType, watchedAccountId]);
+
   // Filter categories by type and flatten with hierarchy
   const getFilteredCategories = () => {
     if (!watchedType) return flattenCategoryTree(categories);
