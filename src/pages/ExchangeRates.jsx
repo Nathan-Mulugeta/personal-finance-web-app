@@ -26,7 +26,7 @@ function ExchangeRates() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { exchangeRates, loading, isInitialized, error } = useSelector(
-    (state) => state.exchangeRates
+    (state) => state.exchangeRates,
   );
   const [showAll, setShowAll] = useState(false);
 
@@ -62,9 +62,21 @@ function ExchangeRates() {
   return (
     <Box>
       {/* Page Header */}
-      <Box sx={{ mb: { xs: 1.5, sm: 2, md: 3 }, display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 1.5 } }}>
-        <CurrencyExchangeIcon sx={{ fontSize: { xs: 24, sm: 28 }, color: 'primary.main' }} />
-        <Typography variant="h4" sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' }, fontWeight: 500 }}>
+      <Box
+        sx={{
+          mb: { xs: 1.5, sm: 2, md: 3 },
+          display: 'flex',
+          alignItems: 'center',
+          gap: { xs: 1, sm: 1.5 },
+        }}
+      >
+        <CurrencyExchangeIcon
+          sx={{ fontSize: { xs: 24, sm: 28 }, color: 'primary.main' }}
+        />
+        <Typography
+          variant="h4"
+          sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' }, fontWeight: 500 }}
+        >
           Exchange Rates
         </Typography>
       </Box>
@@ -82,12 +94,28 @@ function ExchangeRates() {
             backgroundColor: 'background.paper',
           }}
         >
-          <CurrencyExchangeIcon sx={{ fontSize: { xs: 48, sm: 64 }, color: 'text.secondary', mb: { xs: 1.5, sm: 2 } }} />
-          <Typography variant="h6" color="text.secondary" gutterBottom sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}>
+          <CurrencyExchangeIcon
+            sx={{
+              fontSize: { xs: 48, sm: 64 },
+              color: 'text.secondary',
+              mb: { xs: 1.5, sm: 2 },
+            }}
+          />
+          <Typography
+            variant="h6"
+            color="text.secondary"
+            gutterBottom
+            sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}
+          >
             No exchange rates yet
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}>
-            Exchange rates are automatically created when you make multi-currency transfers
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}
+          >
+            Exchange rates are automatically created when you make
+            multi-currency transfers
           </Typography>
         </Box>
       ) : (
@@ -104,7 +132,9 @@ function ExchangeRates() {
                   minHeight: 36,
                 }}
               >
-                {showAll ? 'Show Less (10 Most Recent)' : `Show All (${sortedExchangeRates.length} total)`}
+                {showAll
+                  ? 'Show Less (10 Most Recent)'
+                  : `Show All (${sortedExchangeRates.length} total)`}
               </Button>
             </Box>
           )}
@@ -123,32 +153,97 @@ function ExchangeRates() {
                   backgroundColor: 'background.paper',
                 }}
               >
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                    {rate.date ? format(new Date(rate.date), 'MMM dd, yyyy') : 'N/A'}
+                <Box
+                  sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-start',
+                    mb: 1,
+                  }}
+                >
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ fontSize: '0.75rem' }}
+                  >
+                    {rate.date
+                      ? format(new Date(rate.date), 'MMM dd, yyyy')
+                      : 'N/A'}
                   </Typography>
-                  <Typography variant="body1" fontWeight={600} sx={{ fontSize: '0.875rem' }}>
+                  <Typography
+                    variant="body1"
+                    fontWeight={600}
+                    sx={{ fontSize: '0.875rem' }}
+                  >
                     {rate.rate?.toFixed(4) || 'N/A'}
                   </Typography>
                 </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
-                  <Typography variant="body1" fontWeight={500} sx={{ fontSize: '0.9375rem' }}>
-                    {rate.from_currency}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>→</Typography>
-                  <Typography variant="body1" fontWeight={500} sx={{ fontSize: '0.9375rem' }}>
-                    {rate.to_currency}
-                  </Typography>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    mb: 0.5,
+                  }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <Typography
+                      variant="body1"
+                      fontWeight={500}
+                      sx={{ fontSize: '0.9375rem' }}
+                    >
+                      {rate.from_currency}
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ fontSize: '0.75rem' }}
+                    >
+                      →
+                    </Typography>
+                    <Typography
+                      variant="body1"
+                      fontWeight={500}
+                      sx={{ fontSize: '0.9375rem' }}
+                    >
+                      {rate.to_currency}
+                    </Typography>
+                  </Box>
+                  {rate.description?.trim() && (
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ fontSize: '0.75rem', textAlign: 'right' }}
+                    >
+                      {rate.description.trim()}
+                    </Typography>
+                  )}
                 </Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                    From: {rate.from_amount !== null && rate.from_amount !== undefined
-                      ? rate.from_amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ fontSize: '0.75rem' }}
+                  >
+                    From:{' '}
+                    {rate.from_amount !== null && rate.from_amount !== undefined
+                      ? rate.from_amount.toLocaleString('en-US', {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })
                       : 'N/A'}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                    To: {rate.to_amount !== null && rate.to_amount !== undefined
-                      ? rate.to_amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ fontSize: '0.75rem' }}
+                  >
+                    To:{' '}
+                    {rate.to_amount !== null && rate.to_amount !== undefined
+                      ? rate.to_amount.toLocaleString('en-US', {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })
                       : 'N/A'}
                   </Typography>
                 </Box>
@@ -188,6 +283,7 @@ function ExchangeRates() {
                   <TableCell>From Currency</TableCell>
                   <TableCell>To Currency</TableCell>
                   <TableCell align="right">Rate</TableCell>
+                  <TableCell>Description</TableCell>
                   <TableCell align="right">From Amount</TableCell>
                   <TableCell align="right">To Amount</TableCell>
                 </TableRow>
@@ -207,25 +303,45 @@ function ExchangeRates() {
                     }}
                   >
                     <TableCell>
-                      {rate.date ? format(new Date(rate.date), 'MMM dd, yyyy') : 'N/A'}
+                      {rate.date
+                        ? format(new Date(rate.date), 'MMM dd, yyyy')
+                        : 'N/A'}
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2" fontWeight={500} sx={{ fontSize: '0.875rem' }}>
+                      <Typography
+                        variant="body2"
+                        fontWeight={500}
+                        sx={{ fontSize: '0.875rem' }}
+                      >
                         {rate.from_currency}
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2" fontWeight={500} sx={{ fontSize: '0.875rem' }}>
+                      <Typography
+                        variant="body2"
+                        fontWeight={500}
+                        sx={{ fontSize: '0.875rem' }}
+                      >
                         {rate.to_currency}
                       </Typography>
                     </TableCell>
                     <TableCell align="right">
-                      <Typography variant="body2" fontWeight={500} sx={{ fontSize: '0.875rem' }}>
+                      <Typography
+                        variant="body2"
+                        fontWeight={500}
+                        sx={{ fontSize: '0.875rem' }}
+                      >
                         {rate.rate?.toFixed(6) || 'N/A'}
                       </Typography>
                     </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
+                        {rate.description?.trim() || '-'}
+                      </Typography>
+                    </TableCell>
                     <TableCell align="right">
-                      {rate.from_amount !== null && rate.from_amount !== undefined
+                      {rate.from_amount !== null &&
+                      rate.from_amount !== undefined
                         ? rate.from_amount.toLocaleString('en-US', {
                             minimumFractionDigits: 2,
                             maximumFractionDigits: 2,

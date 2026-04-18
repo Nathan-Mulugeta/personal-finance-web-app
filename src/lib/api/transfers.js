@@ -127,6 +127,7 @@ export async function createTransfer(transferData) {
       rate,
       fromAmount: finalFromAmount,
       toAmount: finalToAmount,
+      description: description || null,
       date: transferDate.toISOString(),
     })
   }

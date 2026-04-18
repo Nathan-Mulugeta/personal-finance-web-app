@@ -12,6 +12,7 @@ export async function createExchangeRate(exchangeRateData) {
     rate,
     fromAmount,
     toAmount,
+    description = null,
     date,
   } = exchangeRateData
 
@@ -41,6 +42,7 @@ export async function createExchangeRate(exchangeRateData) {
       rate,
       from_amount: fromAmount,
       to_amount: toAmount,
+      description: description || null,
       date: rateDate.toISOString(),
     })
     .select()
