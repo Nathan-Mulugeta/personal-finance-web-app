@@ -37,7 +37,7 @@ import { useAutoDismissError } from '../../hooks/useAutoDismissError';
  * Global Add Transaction Dialog component.
  * Used for quickly adding transactions from anywhere in the app.
  */
-function AddTransactionDialog({ open, onClose }) {
+function AddTransactionDialog({ open, onClose, initialValues = null }) {
   const dispatch = useDispatch();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -103,13 +103,30 @@ function AddTransactionDialog({ open, onClose }) {
     if (open && !hasInitializedRef.current) {
       hasInitializedRef.current = true;
       const defaultAccountId = getDefaultAccountId();
+      const prefilledCategory = initialValues?.categoryId
+        ? categories.find(
+            (cat) =>
+              cat.category_id === initialValues.categoryId && cat.status === 'Active'
+          )
+        : null;
+      const prefilledType =
+        initialValues?.type === 'Income' || initialValues?.type === 'Expense'
+          ? initialValues.type
+          : prefilledCategory?.type === 'Income'
+          ? 'Income'
+          : 'Expense';
+      const prefilledCategoryId =
+        prefilledCategory && prefilledCategory.type === prefilledType
+          ? prefilledCategory.category_id
+          : '';
+
       reset({
         accountId: defaultAccountId,
-        categoryId: '',
+        categoryId: prefilledCategoryId,
         amount: '',
         currency: '',
         description: '',
-        type: 'Expense',
+        type: prefilledType,
         status: 'Cleared',
         // Date-only format for HTML date input; API will add current time when saving
         date: format(new Date(), 'yyyy-MM-dd'),
@@ -131,7 +148,7 @@ function AddTransactionDialog({ open, onClose }) {
     if (!open) {
       hasInitializedRef.current = false;
     }
-  }, [open, accounts, settings, reset, setValue]);
+  }, [open, accounts, settings, reset, setValue, initialValues, categories]);
 
   // Auto-set currency when account is selected
   useEffect(() => {
@@ -152,12 +169,16 @@ function AddTransactionDialog({ open, onClose }) {
     // account/type values to be applied, then focus Category.
     if (watchedType && watchedAccountId) {
       const timer = setTimeout(() => {
-        categoryInputRef.current?.focus();
+        if (watchedCategoryId) {
+          amountInputRef.current?.focus();
+        } else {
+          categoryInputRef.current?.focus();
+        }
       }, 150);
 
       return () => clearTimeout(timer);
     }
-  }, [open, watchedType, watchedAccountId]);
+  }, [open, watchedType, watchedAccountId, watchedCategoryId]);
 
   // Filter categories by type and flatten with hierarchy
   const getFilteredCategories = () => {

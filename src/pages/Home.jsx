@@ -7,11 +7,20 @@ import {
   selectCategoryMap,
 } from '../store/selectors';
 import {
+  Button,
   Box,
+  Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Fab,
+  FormControlLabel,
   IconButton,
   InputAdornment,
   Paper,
+  Checkbox,
+  Stack,
   Table,
   TableBody,
   TableCell,
@@ -42,6 +51,9 @@ import ErrorMessage from '../components/common/ErrorMessage';
 import { format, parseISO, isToday, isYesterday } from 'date-fns';
 import { usePageRefresh } from '../hooks/usePageRefresh';
 import { clearError } from '../store/slices/transactionsSlice';
+import { updateSetting } from '../store/slices/settingsSlice';
+
+const HOME_SHORTCUTS_SETTING_KEY = 'HomeCategoryShortcuts';
 
 function Home({ quickAddExpense = false }) {
   const dispatch = useDispatch();
@@ -52,6 +64,7 @@ function Home({ quickAddExpense = false }) {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState(null);
   const [addTransactionOpen, setAddTransactionOpen] = useState(false);
+  const [addTransactionPrefill, setAddTransactionPrefill] = useState(null);
   const [batchTransactionOpen, setBatchTransactionOpen] = useState(false);
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [receiptCaptureOpen, setReceiptCaptureOpen] = useState(false);
@@ -59,6 +72,10 @@ function Home({ quickAddExpense = false }) {
   const [aiReviewOpen, setAiReviewOpen] = useState(false);
   const [aiParsedData, setAiParsedData] = useState(null);
   const [isReceiptParsing, setIsReceiptParsing] = useState(false);
+  const [manageShortcutsOpen, setManageShortcutsOpen] = useState(false);
+  const [shortcutDraftIds, setShortcutDraftIds] = useState([]);
+  const [shortcutSearchQuery, setShortcutSearchQuery] = useState('');
+  const [isSavingShortcuts, setIsSavingShortcuts] = useState(false);
   const searchInputRef = useRef(null);
   const hasOpenedQuickAddRef = useRef(false);
 
@@ -66,12 +83,56 @@ function Home({ quickAddExpense = false }) {
   const { allTransactions, error } = useSelector((state) => state.transactions);
   const { categories } = useSelector((state) => state.categories);
   const { accounts } = useSelector((state) => state.accounts);
+  const { settings } = useSelector((state) => state.settings);
   
   // Memoized O(1) lookup functions from selectors
   const getAccountName = useSelector(selectAccountNameGetter);
   const getCategoryName = useSelector(selectCategoryNameGetter);
   const getCategoryDisplayName = useSelector(selectCategoryDisplayNameGetter);
   const categoryMap = useSelector(selectCategoryMap);
+
+  const activeShortcutCategories = useMemo(
+    () =>
+      categories.filter(
+        (category) =>
+          category.status === 'Active' &&
+          (category.type === 'Income' || category.type === 'Expense')
+      ),
+    [categories]
+  );
+
+  const savedShortcutIds = useMemo(() => {
+    const savedValue = settings.find(
+      (setting) => setting.setting_key === HOME_SHORTCUTS_SETTING_KEY
+    )?.setting_value;
+
+    if (!savedValue) return [];
+
+    try {
+      const parsed = JSON.parse(savedValue);
+      return Array.isArray(parsed) ? parsed.filter((id) => typeof id === 'string') : [];
+    } catch {
+      return [];
+    }
+  }, [settings]);
+
+  const shortcutCategories = useMemo(() => {
+    const activeById = new Map(
+      activeShortcutCategories.map((category) => [category.category_id, category])
+    );
+
+    return savedShortcutIds
+      .map((id) => activeById.get(id))
+      .filter(Boolean);
+  }, [savedShortcutIds, activeShortcutCategories]);
+
+  const filteredShortcutOptions = useMemo(() => {
+    const query = shortcutSearchQuery.trim().toLowerCase();
+    if (!query) return activeShortcutCategories;
+    return activeShortcutCategories.filter((category) =>
+      category.name.toLowerCase().includes(query)
+    );
+  }, [activeShortcutCategories, shortcutSearchQuery]);
 
   // Refresh data on navigation
   usePageRefresh({
@@ -211,6 +272,54 @@ function Home({ quickAddExpense = false }) {
     setAiReviewOpen(false);
     setAiParsedData(null);
     setIsReceiptParsing(false);
+  }, []);
+
+  const handleOpenManageShortcuts = useCallback(() => {
+    const availableIds = new Set(activeShortcutCategories.map((cat) => cat.category_id));
+    setShortcutDraftIds(
+      savedShortcutIds.filter((id) => availableIds.has(id))
+    );
+    setShortcutSearchQuery('');
+    setManageShortcutsOpen(true);
+  }, [activeShortcutCategories, savedShortcutIds]);
+
+  const handleToggleShortcutCategory = useCallback((categoryId) => {
+    setShortcutDraftIds((prev) => {
+      if (prev.includes(categoryId)) {
+        return prev.filter((id) => id !== categoryId);
+      }
+      return [...prev, categoryId];
+    });
+  }, []);
+
+  const handleSaveShortcuts = useCallback(async () => {
+    setIsSavingShortcuts(true);
+    try {
+      await dispatch(
+        updateSetting({
+          key: HOME_SHORTCUTS_SETTING_KEY,
+          value: JSON.stringify(shortcutDraftIds),
+        })
+      ).unwrap();
+      setManageShortcutsOpen(false);
+    } catch (saveError) {
+      console.error('Failed to save home category shortcuts:', saveError);
+    } finally {
+      setIsSavingShortcuts(false);
+    }
+  }, [dispatch, shortcutDraftIds]);
+
+  const handleShortcutClick = useCallback((category) => {
+    setAddTransactionPrefill({
+      categoryId: category.category_id,
+      type: category.type === 'Income' ? 'Income' : 'Expense',
+    });
+    setAddTransactionOpen(true);
+  }, []);
+
+  const handleCloseAddTransaction = useCallback(() => {
+    setAddTransactionOpen(false);
+    setAddTransactionPrefill(null);
   }, []);
 
   // Render mobile transaction row
@@ -629,7 +738,8 @@ function Home({ quickAddExpense = false }) {
       {/* Add Transaction Dialog */}
       <AddTransactionDialog
         open={addTransactionOpen}
-        onClose={() => setAddTransactionOpen(false)}
+        onClose={handleCloseAddTransaction}
+        initialValues={addTransactionPrefill}
       />
 
       {/* Edit Transaction Dialog */}
@@ -729,6 +839,53 @@ function Home({ quickAddExpense = false }) {
         )}
       </Box>
 
+      {!debouncedSearchQuery && (
+        <Box
+          sx={{
+            mb: { xs: 2, sm: 2.5 },
+            p: { xs: 1.5, sm: 2 },
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 1,
+            backgroundColor: 'background.paper',
+          }}
+        >
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              mb: 1.5,
+            }}
+          >
+            <Typography variant="subtitle1" sx={{ fontWeight: 500 }}>
+              Category Shortcuts
+            </Typography>
+            <Button size="small" onClick={handleOpenManageShortcuts}>
+              Manage
+            </Button>
+          </Box>
+          {shortcutCategories.length > 0 ? (
+            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
+              {shortcutCategories.map((category) => (
+                <Chip
+                  key={category.category_id}
+                  label={category.name}
+                  onClick={() => handleShortcutClick(category)}
+                  clickable
+                  color="primary"
+                  variant="outlined"
+                />
+              ))}
+            </Stack>
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              Add category shortcuts for quick transaction entry.
+            </Typography>
+          )}
+        </Box>
+      )}
+
       {/* Search Results */}
       {debouncedSearchQuery && (
         <Box>{renderTransactions(searchResults, 'Search Results')}</Box>
@@ -750,6 +907,81 @@ function Home({ quickAddExpense = false }) {
           {renderTransactions(recentTransactions, 'Recent Transactions')}
         </Box>
       )}
+
+      <Dialog
+        open={manageShortcutsOpen}
+        onClose={() => !isSavingShortcuts && setManageShortcutsOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Manage Category Shortcuts</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            Select categories to show as shortcuts.
+          </Typography>
+          <TextField
+            fullWidth
+            size="small"
+            placeholder="Search categories..."
+            value={shortcutSearchQuery}
+            onChange={(event) => setShortcutSearchQuery(event.target.value)}
+            sx={{ mb: 1.5 }}
+          />
+          <Box sx={{ maxHeight: 360, overflowY: 'auto' }}>
+            {filteredShortcutOptions.map((category) => {
+              const checked = shortcutDraftIds.includes(category.category_id);
+              return (
+                <FormControlLabel
+                  key={category.category_id}
+                  sx={{
+                    m: 0,
+                    px: 1,
+                    py: 0.5,
+                    width: '100%',
+                    borderBottom: '1px solid',
+                    borderColor: 'divider',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                  }}
+                  labelPlacement="start"
+                  control={
+                    <Checkbox
+                      checked={checked}
+                      disabled={isSavingShortcuts}
+                      onChange={() => handleToggleShortcutCategory(category.category_id)}
+                    />
+                  }
+                  label={
+                    <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                      <Typography variant="body2">{category.name}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {category.type}
+                      </Typography>
+                    </Box>
+                  }
+                />
+              );
+            })}
+            {filteredShortcutOptions.length === 0 && (
+              <Typography variant="body2" color="text.secondary" sx={{ px: 1, py: 2 }}>
+                No categories found.
+              </Typography>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setManageShortcutsOpen(false)} disabled={isSavingShortcuts}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleSaveShortcuts}
+            disabled={isSavingShortcuts}
+          >
+            {isSavingShortcuts ? 'Saving...' : 'Save'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Floating Action Buttons for AI Features */}
       <Box
