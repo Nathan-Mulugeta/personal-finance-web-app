@@ -5,7 +5,7 @@
  */
 
 const GROQ_API_BASE = 'https://api.groq.com/openai/v1';
-const GROQ_MODEL = 'openai/gpt-oss-20b';
+const GROQ_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct';
 
 /**
  * Build the prompt for receipt parsing
@@ -226,7 +226,7 @@ function formatError(error) {
 export async function parseReceipt(base64Image, categories, apiKey) {
   if (!apiKey) {
     throw new Error(
-      'Groq API key not configured. Please add your API key in Settings.'
+      'Groq API key not configured. Please add your API key in Settings.',
     );
   }
 
@@ -269,7 +269,7 @@ export async function parseReceipt(base64Image, categories, apiKey) {
 export async function parseNaturalLanguage(text, categories, apiKey) {
   if (!apiKey) {
     throw new Error(
-      'Groq API key not configured. Please add your API key in Settings.'
+      'Groq API key not configured. Please add your API key in Settings.',
     );
   }
 
