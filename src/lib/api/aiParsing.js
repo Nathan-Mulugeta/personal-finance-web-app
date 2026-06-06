@@ -5,7 +5,7 @@
  */
 
 const GROQ_API_BASE = 'https://api.groq.com/openai/v1';
-const GROQ_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct';
+const GROQ_MODEL = 'openai/gpt-oss-20b';
 
 /**
  * Build the prompt for receipt parsing
