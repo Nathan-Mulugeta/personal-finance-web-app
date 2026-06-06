@@ -66,7 +66,7 @@ function Settings() {
     defaultValues: {
       baseCurrency: '',
       defaultAccountId: '',
-      geminiApiKey: '',
+      groqApiKey: '',
       borrowingCategoryId: '',
       lendingCategoryId: '',
       borrowingPaymentCategoryId: '',
@@ -75,7 +75,7 @@ function Settings() {
   });
 
   const watchedDefaultAccountId = watch('defaultAccountId');
-  const watchedGeminiApiKey = watch('geminiApiKey');
+  const watchedGroqApiKey = watch('groqApiKey');
   const watchedBorrowingCategoryId = watch('borrowingCategoryId');
   const watchedLendingCategoryId = watch('lendingCategoryId');
   const watchedBorrowingPaymentCategoryId = watch('borrowingPaymentCategoryId');
@@ -99,7 +99,8 @@ function Settings() {
       const defaultAccountId =
         settings.find((s) => s.setting_key === 'DefaultAccountID')
           ?.setting_value || '';
-      const geminiApiKey =
+      const groqApiKey =
+        settings.find((s) => s.setting_key === 'GroqAPIKey')?.setting_value ||
         settings.find((s) => s.setting_key === 'GeminiAPIKey')?.setting_value ||
         '';
       const borrowingCategoryId =
@@ -118,7 +119,7 @@ function Settings() {
       reset({
         baseCurrency,
         defaultAccountId,
-        geminiApiKey,
+        groqApiKey,
         borrowingCategoryId,
         lendingCategoryId,
         borrowingPaymentCategoryId,
@@ -136,7 +137,8 @@ function Settings() {
       defaultAccountId:
         settings.find((s) => s.setting_key === 'DefaultAccountID')
           ?.setting_value || '',
-      geminiApiKey:
+      groqApiKey:
+        settings.find((s) => s.setting_key === 'GroqAPIKey')?.setting_value ||
         settings.find((s) => s.setting_key === 'GeminiAPIKey')?.setting_value ||
         '',
       borrowingCategoryId:
@@ -178,8 +180,9 @@ function Settings() {
       } else {
         updates.DefaultAccountID = '';
       }
-      // Always save geminiApiKey (even if empty to clear it)
-      updates.GeminiAPIKey = data.geminiApiKey || '';
+      // Always save groqApiKey (even if empty to clear it)
+      updates.GroqAPIKey = data.groqApiKey || '';
+      updates.GeminiAPIKey = '';
       if (data.borrowingCategoryId) {
         updates.BorrowingCategoryID = data.borrowingCategoryId;
       } else {
@@ -421,7 +424,7 @@ function Settings() {
               </Typography>
             </Box>
 
-            {/* Gemini API Key */}
+            {/* Groq API Key */}
             <Box
               sx={{
                 p: { xs: 1.5, sm: 2 },
@@ -434,15 +437,18 @@ function Settings() {
                 color="text.secondary"
                 sx={{ fontSize: { xs: '0.75rem', sm: '0.8125rem' }, mb: 0.5 }}
               >
-                Gemini API Key
+                Groq API Key
               </Typography>
               <Typography
                 variant="body1"
                 fontWeight={500}
                 sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}
               >
-                {getSettingValue('GeminiAPIKey')
-                  ? '••••••••' + getSettingValue('GeminiAPIKey').slice(-4)
+                {getSettingValue('GroqAPIKey') || getSettingValue('GeminiAPIKey')
+                  ? '••••••••' +
+                    (getSettingValue('GroqAPIKey') || getSettingValue('GeminiAPIKey')).slice(
+                      -4
+                    )
                   : 'Not set'}
               </Typography>
               <Typography
@@ -707,19 +713,19 @@ function Settings() {
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="Gemini API Key (Optional)"
+                  label="Groq API Key (Optional)"
                   type="password"
-                  {...register('geminiApiKey')}
+                  {...register('groqApiKey')}
                   helperText={
                     <span>
                       Get a free API key from{' '}
                       <a
-                        href="https://aistudio.google.com/apikey"
+                        href="https://console.groq.com/keys"
                         target="_blank"
                         rel="noopener noreferrer"
                         style={{ color: 'inherit' }}
                       >
-                        Google AI Studio
+                        Groq Console
                       </a>
                       . Required for AI features.
                     </span>

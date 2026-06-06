@@ -32,10 +32,13 @@ function NaturalLanguageDialog({ open, onClose, onParsed }) {
   const { categories } = useSelector((state) => state.categories);
   const { settings } = useSelector((state) => state.settings);
 
-  // Get Gemini API key from settings
-  const geminiApiKey = useMemo(() => {
-    const setting = settings.find((s) => s.setting_key === 'GeminiAPIKey');
-    return setting?.setting_value || '';
+  // Get Groq API key from settings
+  const groqApiKey = useMemo(() => {
+    const groqSetting = settings.find((s) => s.setting_key === 'GroqAPIKey');
+    const legacySetting = settings.find(
+      (s) => s.setting_key === 'GeminiAPIKey'
+    );
+    return groqSetting?.setting_value || legacySetting?.setting_value || '';
   }, [settings]);
 
   // State
@@ -72,8 +75,8 @@ function NaturalLanguageDialog({ open, onClose, onParsed }) {
     }
 
     // Check if AI is configured
-    if (!isAIConfigured(geminiApiKey)) {
-      setError('Gemini API key not configured. Please add your API key in Settings.');
+    if (!isAIConfigured(groqApiKey)) {
+      setError('Groq API key not configured. Please add your API key in Settings.');
       return;
     }
 
@@ -92,7 +95,7 @@ function NaturalLanguageDialog({ open, onClose, onParsed }) {
         }));
 
       // Call AI parsing API
-      const result = await parseNaturalLanguage(text.trim(), activeCategories, geminiApiKey);
+      const result = await parseNaturalLanguage(text.trim(), activeCategories, groqApiKey);
 
       if (result.success) {
         // Pass parsed data to parent

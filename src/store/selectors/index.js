@@ -184,11 +184,12 @@ export const selectDefaultAccountId = createSelector(
 );
 
 /**
- * Get Gemini API key from settings
+ * Get Groq API key from settings
  */
-export const selectGeminiApiKey = createSelector(
+export const selectGroqApiKey = createSelector(
   [selectSettingsMap],
-  (settingsMap) => settingsMap.get('GeminiAPIKey') || null
+  (settingsMap) =>
+    settingsMap.get('GroqAPIKey') || settingsMap.get('GeminiAPIKey') || null
 );
 
 /**

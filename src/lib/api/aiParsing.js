@@ -1,11 +1,11 @@
 /**
  * AI Parsing Service
- * Calls Google Gemini API directly from the client for parsing receipts and natural language.
+ * Calls Groq API directly from the client for parsing receipts and natural language.
  * Based on proven working implementation patterns.
  */
 
-const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1/models';
-const GEMINI_MODEL = 'gemini-2.5-flash';
+const GROQ_API_BASE = 'https://api.groq.com/openai/v1';
+const GROQ_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct';
 
 /**
  * Build the prompt for receipt parsing
@@ -120,37 +120,44 @@ function fileToBase64(file) {
 }
 
 /**
- * Call Gemini API
+ * Call Groq API
  */
-async function callGemini(apiKey, prompt, imageBase64 = null, mimeType = null) {
-  const url = `${GEMINI_API_BASE}/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+async function callGroq(apiKey, prompt, imageBase64 = null, mimeType = null) {
+  const url = `${GROQ_API_BASE}/chat/completions`;
 
-  // Build request parts
-  const parts = [{ text: prompt }];
-
-  // Add image if provided
-  if (imageBase64) {
-    parts.push({
-      inline_data: {
-        mime_type: mimeType || 'image/jpeg',
-        data: imageBase64,
-      },
-    });
-  }
-
-  const body = {
-    contents: [{ parts }],
-    generationConfig: {
-      temperature: 0.1,
-      topK: 32,
-      topP: 1,
-      maxOutputTokens: 4096,
-    },
-  };
+  const body = imageBase64
+    ? {
+        model: GROQ_MODEL,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: prompt },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: `data:${mimeType || 'image/jpeg'};base64,${imageBase64}`,
+                },
+              },
+            ],
+          },
+        ],
+        temperature: 0.1,
+        max_tokens: 4096,
+      }
+    : {
+        model: GROQ_MODEL,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.1,
+        max_tokens: 4096,
+      };
 
   const response = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
     body: JSON.stringify(body),
   });
 
@@ -162,10 +169,10 @@ async function callGemini(apiKey, prompt, imageBase64 = null, mimeType = null) {
   }
 
   const data = await response.json();
-  const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  const responseText = data.choices?.[0]?.message?.content;
 
   if (!responseText) {
-    throw new Error('Invalid response format from Gemini API');
+    throw new Error('Invalid response format from Groq API');
   }
 
   const parsedData = extractJSON(responseText);
@@ -188,7 +195,8 @@ function formatError(error) {
   if (
     message.includes('quota') ||
     message.includes('rate limit') ||
-    message.includes('RATE_LIMIT')
+    message.includes('RATE_LIMIT') ||
+    message.includes('RATE_LIMIT_EXCEEDED')
   ) {
     return 'API rate limit exceeded. Please try again in a few moments.';
   }
@@ -212,13 +220,13 @@ function formatError(error) {
  * Parse a receipt image using AI
  * @param {string} base64Image - Base64 encoded image (with or without data URL prefix)
  * @param {Array} categories - Array of category objects with category_id, name, type
- * @param {string} apiKey - Gemini API key from settings
+ * @param {string} apiKey - Groq API key from settings
  * @returns {Promise<Object>} Parsed transactions and receipt info
  */
 export async function parseReceipt(base64Image, categories, apiKey) {
   if (!apiKey) {
     throw new Error(
-      'Gemini API key not configured. Please add your API key in Settings.'
+      'Groq API key not configured. Please add your API key in Settings.'
     );
   }
 
@@ -238,7 +246,7 @@ export async function parseReceipt(base64Image, categories, apiKey) {
     }
 
     const prompt = buildReceiptPrompt(categories);
-    const result = await callGemini(apiKey, prompt, imageData, mimeType);
+    const result = await callGroq(apiKey, prompt, imageData, mimeType);
 
     return {
       success: true,
@@ -246,7 +254,7 @@ export async function parseReceipt(base64Image, categories, apiKey) {
       ...result,
     };
   } catch (error) {
-    console.error('Error parsing receipt:', error);
+    console.error('Error parsing receipt (Groq):', error);
     throw new Error(formatError(error));
   }
 }
@@ -255,19 +263,19 @@ export async function parseReceipt(base64Image, categories, apiKey) {
  * Parse natural language text into transactions using AI
  * @param {string} text - Natural language description of transactions
  * @param {Array} categories - Array of category objects with category_id, name, type
- * @param {string} apiKey - Gemini API key from settings
+ * @param {string} apiKey - Groq API key from settings
  * @returns {Promise<Object>} Parsed transactions
  */
 export async function parseNaturalLanguage(text, categories, apiKey) {
   if (!apiKey) {
     throw new Error(
-      'Gemini API key not configured. Please add your API key in Settings.'
+      'Groq API key not configured. Please add your API key in Settings.'
     );
   }
 
   try {
     const prompt = buildNaturalLanguagePrompt(text, categories);
-    const result = await callGemini(apiKey, prompt);
+    const result = await callGroq(apiKey, prompt);
 
     return {
       success: true,
@@ -275,14 +283,14 @@ export async function parseNaturalLanguage(text, categories, apiKey) {
       ...result,
     };
   } catch (error) {
-    console.error('Error parsing natural language:', error);
+    console.error('Error parsing natural language (Groq):', error);
     throw new Error(formatError(error));
   }
 }
 
 /**
  * Check if AI features are configured
- * @param {string} apiKey - Gemini API key from settings
+ * @param {string} apiKey - Groq API key from settings
  * @returns {boolean} Whether AI features are available
  */
 export function isAIConfigured(apiKey) {
