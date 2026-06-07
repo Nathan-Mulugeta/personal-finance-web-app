@@ -1,11 +1,21 @@
 /**
  * AI Parsing Service
- * Calls Groq API directly from the client for parsing receipts and natural language.
+ * Calls the configured AI provider directly from the client for parsing receipts and natural language.
  * Based on proven working implementation patterns.
  */
 
-const GROQ_API_BASE = 'https://api.groq.com/openai/v1';
-const GROQ_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct';
+// AI provider configuration — change only here to switch providers
+const AI_API_BASE = 'https://generativelanguage.googleapis.com/v1/models';
+const AI_MODEL = 'gemini-3.5-flash';
+
+const AI_RETRY_CONFIG = {
+  maxRetries: 3,
+  baseDelayMs: 1000,
+};
+
+/** URL where users can obtain an API key for the configured provider */
+export const AI_API_KEY_URL = 'https://aistudio.google.com/apikey';
+export const AI_API_KEY_LINK_LABEL = 'Google AI Studio';
 
 /**
  * Build the prompt for receipt parsing
@@ -119,44 +129,82 @@ function fileToBase64(file) {
   });
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableError(error) {
+  const msg = error.message || '';
+  return (
+    msg.includes('quota') ||
+    msg.includes('rate limit') ||
+    msg.includes('RATE_LIMIT') ||
+    msg.includes('503') ||
+    msg.includes('500') ||
+    msg.includes('network') ||
+    msg.includes('Failed to fetch')
+  );
+}
+
+async function callAIWithRetry(apiKey, prompt, imageBase64 = null, mimeType = null) {
+  const { maxRetries, baseDelayMs } = AI_RETRY_CONFIG;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await callAI(apiKey, prompt, imageBase64, mimeType);
+    } catch (error) {
+      if (!isRetryableError(error) || attempt === maxRetries) {
+        throw error;
+      }
+      const delay = baseDelayMs * Math.pow(2, attempt - 1);
+      console.warn(
+        `AI call failed (attempt ${attempt}/${maxRetries}), retrying in ${delay}ms:`,
+        error.message
+      );
+      await sleep(delay);
+    }
+  }
+}
+
 /**
- * Call Groq API
+ * Call AI provider
  */
-async function callGroq(apiKey, prompt, imageBase64 = null, mimeType = null) {
-  const url = `${GROQ_API_BASE}/chat/completions`;
+async function callAI(apiKey, prompt, imageBase64 = null, mimeType = null) {
+  const url = `${AI_API_BASE}/${AI_MODEL}:generateContent?key=${apiKey}`;
+
+  const generationConfig = {
+    temperature: 0.1,
+    topK: 32,
+    topP: 1,
+    maxOutputTokens: 4096,
+  };
 
   const body = imageBase64
     ? {
-        model: GROQ_MODEL,
-        messages: [
+        contents: [
           {
-            role: 'user',
-            content: [
-              { type: 'text', text: prompt },
+            parts: [
+              { text: prompt },
               {
-                type: 'image_url',
-                image_url: {
-                  url: `data:${mimeType || 'image/jpeg'};base64,${imageBase64}`,
+                inline_data: {
+                  mime_type: mimeType || 'image/jpeg',
+                  data: imageBase64,
                 },
               },
             ],
           },
         ],
-        temperature: 0.1,
-        max_tokens: 4096,
+        generationConfig,
       }
     : {
-        model: GROQ_MODEL,
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.1,
-        max_tokens: 4096,
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig,
       };
 
   const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify(body),
   });
@@ -169,10 +217,10 @@ async function callGroq(apiKey, prompt, imageBase64 = null, mimeType = null) {
   }
 
   const data = await response.json();
-  const responseText = data.choices?.[0]?.message?.content;
+  const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
   if (!responseText) {
-    throw new Error('Invalid response format from Groq API');
+    throw new Error('Invalid response format from AI provider');
   }
 
   const parsedData = extractJSON(responseText);
@@ -190,7 +238,7 @@ async function callGroq(apiKey, prompt, imageBase64 = null, mimeType = null) {
 function formatError(error) {
   const message = error.message || 'Unknown error';
   if (message.includes('API key') || message.includes('API_KEY_INVALID')) {
-    return 'API key not configured or invalid. Please check your settings.';
+    return 'API key not configured or invalid. Please check your AI settings.';
   }
   if (
     message.includes('quota') ||
@@ -220,13 +268,13 @@ function formatError(error) {
  * Parse a receipt image using AI
  * @param {string} base64Image - Base64 encoded image (with or without data URL prefix)
  * @param {Array} categories - Array of category objects with category_id, name, type
- * @param {string} apiKey - Groq API key from settings
+ * @param {string} apiKey - AI provider API key from settings
  * @returns {Promise<Object>} Parsed transactions and receipt info
  */
 export async function parseReceipt(base64Image, categories, apiKey) {
   if (!apiKey) {
     throw new Error(
-      'Groq API key not configured. Please add your API key in Settings.',
+      'AI API key not configured. Please add your API key in Settings.',
     );
   }
 
@@ -246,7 +294,7 @@ export async function parseReceipt(base64Image, categories, apiKey) {
     }
 
     const prompt = buildReceiptPrompt(categories);
-    const result = await callGroq(apiKey, prompt, imageData, mimeType);
+    const result = await callAIWithRetry(apiKey, prompt, imageData, mimeType);
 
     return {
       success: true,
@@ -254,7 +302,7 @@ export async function parseReceipt(base64Image, categories, apiKey) {
       ...result,
     };
   } catch (error) {
-    console.error('Error parsing receipt (Groq):', error);
+    console.error('Error parsing receipt:', error);
     throw new Error(formatError(error));
   }
 }
@@ -263,19 +311,19 @@ export async function parseReceipt(base64Image, categories, apiKey) {
  * Parse natural language text into transactions using AI
  * @param {string} text - Natural language description of transactions
  * @param {Array} categories - Array of category objects with category_id, name, type
- * @param {string} apiKey - Groq API key from settings
+ * @param {string} apiKey - AI provider API key from settings
  * @returns {Promise<Object>} Parsed transactions
  */
 export async function parseNaturalLanguage(text, categories, apiKey) {
   if (!apiKey) {
     throw new Error(
-      'Groq API key not configured. Please add your API key in Settings.',
+      'AI API key not configured. Please add your API key in Settings.',
     );
   }
 
   try {
     const prompt = buildNaturalLanguagePrompt(text, categories);
-    const result = await callGroq(apiKey, prompt);
+    const result = await callAIWithRetry(apiKey, prompt);
 
     return {
       success: true,
@@ -283,14 +331,14 @@ export async function parseNaturalLanguage(text, categories, apiKey) {
       ...result,
     };
   } catch (error) {
-    console.error('Error parsing natural language (Groq):', error);
+    console.error('Error parsing natural language:', error);
     throw new Error(formatError(error));
   }
 }
 
 /**
  * Check if AI features are configured
- * @param {string} apiKey - Groq API key from settings
+ * @param {string} apiKey - AI provider API key from settings
  * @returns {boolean} Whether AI features are available
  */
 export function isAIConfigured(apiKey) {

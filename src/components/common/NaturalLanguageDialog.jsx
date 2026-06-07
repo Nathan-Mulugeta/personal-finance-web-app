@@ -32,8 +32,8 @@ function NaturalLanguageDialog({ open, onClose, onParsed }) {
   const { categories } = useSelector((state) => state.categories);
   const { settings } = useSelector((state) => state.settings);
 
-  // Get Groq API key from settings
-  const groqApiKey = useMemo(() => {
+  // Get AI API key from settings
+  const aiApiKey = useMemo(() => {
     const groqSetting = settings.find((s) => s.setting_key === 'GroqAPIKey');
     const legacySetting = settings.find(
       (s) => s.setting_key === 'GeminiAPIKey'
@@ -75,8 +75,8 @@ function NaturalLanguageDialog({ open, onClose, onParsed }) {
     }
 
     // Check if AI is configured
-    if (!isAIConfigured(groqApiKey)) {
-      setError('Groq API key not configured. Please add your API key in Settings.');
+    if (!isAIConfigured(aiApiKey)) {
+      setError('AI API key not configured. Please add your API key in Settings.');
       return;
     }
 
@@ -95,7 +95,7 @@ function NaturalLanguageDialog({ open, onClose, onParsed }) {
         }));
 
       // Call AI parsing API
-      const result = await parseNaturalLanguage(text.trim(), activeCategories, groqApiKey);
+      const result = await parseNaturalLanguage(text.trim(), activeCategories, aiApiKey);
 
       if (result.success) {
         // Pass parsed data to parent

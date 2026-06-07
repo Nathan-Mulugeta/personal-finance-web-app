@@ -184,13 +184,16 @@ export const selectDefaultAccountId = createSelector(
 );
 
 /**
- * Get Groq API key from settings
+ * Get AI API key from settings
  */
-export const selectGroqApiKey = createSelector(
+export const selectAIApiKey = createSelector(
   [selectSettingsMap],
   (settingsMap) =>
     settingsMap.get('GroqAPIKey') || settingsMap.get('GeminiAPIKey') || null
 );
+
+/** @deprecated Use selectAIApiKey */
+export const selectGroqApiKey = selectAIApiKey;
 
 /**
  * Get borrowing category ID from settings

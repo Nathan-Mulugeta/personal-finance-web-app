@@ -23,6 +23,7 @@ import {
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import SettingsIcon from '@mui/icons-material/Settings';
+import { AI_API_KEY_LINK_LABEL, AI_API_KEY_URL } from '../lib/api/aiParsing';
 import {
   fetchSettings,
   updateSetting,
@@ -424,7 +425,7 @@ function Settings() {
               </Typography>
             </Box>
 
-            {/* Groq API Key */}
+            {/* AI API Key */}
             <Box
               sx={{
                 p: { xs: 1.5, sm: 2 },
@@ -437,7 +438,7 @@ function Settings() {
                 color="text.secondary"
                 sx={{ fontSize: { xs: '0.75rem', sm: '0.8125rem' }, mb: 0.5 }}
               >
-                Groq API Key
+                AI API Key
               </Typography>
               <Typography
                 variant="body1"
@@ -713,19 +714,19 @@ function Settings() {
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="Groq API Key (Optional)"
+                  label="AI API Key (Optional)"
                   type="password"
                   {...register('groqApiKey')}
                   helperText={
                     <span>
-                      Get a free API key from{' '}
+                      Enter your AI API key from{' '}
                       <a
-                        href="https://console.groq.com/keys"
+                        href={AI_API_KEY_URL}
                         target="_blank"
                         rel="noopener noreferrer"
                         style={{ color: 'inherit' }}
                       >
-                        Groq Console
+                        {AI_API_KEY_LINK_LABEL}
                       </a>
                       . Required for AI features.
                     </span>
