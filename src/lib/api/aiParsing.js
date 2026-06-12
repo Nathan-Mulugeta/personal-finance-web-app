@@ -1,21 +1,36 @@
+import { jsonrepair } from 'jsonrepair';
+
 /**
  * AI Parsing Service
  * Calls the configured AI provider directly from the client for parsing receipts and natural language.
  * Based on proven working implementation patterns.
  */
 
-// AI provider configuration — change only here to switch providers
-const AI_API_BASE = 'https://generativelanguage.googleapis.com/v1/models';
-const AI_MODEL = 'gemini-3.5-flash';
+// Multi-provider configuration — update models and URLs here only
+const PROVIDERS = {
+  openai: {
+    apiBase: 'https://api.openai.com/v1',
+    model: 'gpt-4.1',
+  },
+  gemini: {
+    apiBase: 'https://generativelanguage.googleapis.com/v1/models',
+    model: 'gemini-3.5-flash',
+  },
+};
 
 const AI_RETRY_CONFIG = {
   maxRetries: 3,
   baseDelayMs: 1000,
 };
 
-/** URL where users can obtain an API key for the configured provider */
-export const AI_API_KEY_URL = 'https://aistudio.google.com/apikey';
-export const AI_API_KEY_LINK_LABEL = 'Google AI Studio';
+// Exported for use in Settings UI — list all supported providers
+export const AI_PROVIDER_LINKS = [
+  {
+    url: 'https://aistudio.google.com/apikey',
+    label: 'Google AI Studio (Gemini)',
+  },
+  { url: 'https://platform.openai.com/api-keys', label: 'OpenAI Platform' },
+];
 
 /**
  * Build the prompt for receipt parsing
@@ -42,7 +57,7 @@ Return ONLY valid JSON with this structure:
       "amount": 0.00,
       "suggestedCategoryId": "CAT_XXX",
       "suggestedCategoryName": "Category Name",
-      "type": "Expense"
+      "type": "Expense",
     }
   ]
 }
@@ -54,6 +69,8 @@ Rules:
 - DO NOT extract subtotals, totals, discounts, fees, or payment method lines
 - DO NOT extract summary lines like "Subtotal", "Total", "Amount Due", etc.
 - Create a separate transaction for each distinct product/item purchased
+- ALWAYS prefer the most specific subcategory over a parent category; never assign a parent category if subcategories exist beneath it
+- If no specific subcategory matches an item, use the one whose name contains "General" (e.g. "General: groceries") rather than the parent
 - Match each item to the most appropriate category from the list
 - Use the exact CategoryID from the list
 - Amount should be a positive number (use the item price as listed, before tax)
@@ -96,22 +113,88 @@ Rules:
 }
 
 /**
- * Extract JSON from AI response (handles markdown code blocks)
+ * Extract and parse JSON from AI response.
+ * Handles markdown code blocks, partial wrapping, and malformed JSON
+ * (unquoted keys, single quotes, trailing commas) via jsonrepair.
  */
 function extractJSON(text) {
-  try {
-    return JSON.parse(text);
-  } catch (e) {
-    // Try to extract from markdown code blocks
-    const jsonMatch = text.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
-    if (jsonMatch) return JSON.parse(jsonMatch[1]);
-
-    // Try to find any JSON object in the text
-    const objectMatch = text.match(/\{[\s\S]*\}/);
-    if (objectMatch) return JSON.parse(objectMatch[0]);
-
+  if (text == null) {
     throw new Error('Could not extract valid JSON from response');
   }
+
+  const raw = typeof text === 'string' ? text : String(text);
+
+  // Strip markdown code fences if present
+  const stripped = raw
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
+
+  // Attempt 1: strict parse on stripped text
+  try {
+    return JSON.parse(stripped);
+  } catch (_) {}
+
+  // Attempt 2: extract the first {...} block then strict parse
+  const objectMatch = stripped.match(/\{[\s\S]*\}/);
+  if (objectMatch) {
+    try {
+      return JSON.parse(objectMatch[0]);
+    } catch (_) {}
+  }
+
+  // Attempt 3: repair then parse (handles unquoted keys, single quotes,
+  // trailing commas, and other common AI output quirks)
+  try {
+    return JSON.parse(jsonrepair(stripped));
+  } catch (_) {}
+
+  // Attempt 4: repair the extracted object block
+  if (objectMatch) {
+    try {
+      return JSON.parse(jsonrepair(objectMatch[0]));
+    } catch (_) {}
+  }
+
+  throw new Error('Could not extract valid JSON from response');
+}
+
+/**
+ * Normalize AI message content to a plain string (OpenAI may return string or part array).
+ */
+function extractResponseText(content) {
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    const text = content
+      .filter((part) => part?.type === 'text' && typeof part.text === 'string')
+      .map((part) => part.text)
+      .join('');
+    return text || null;
+  }
+  return null;
+}
+
+/**
+ * Normalize parsed JSON to the expected { transactions: [...] } shape.
+ */
+function normalizeParsedData(parsed) {
+  if (Array.isArray(parsed)) {
+    return { transactions: parsed };
+  }
+
+  if (parsed && typeof parsed === 'object') {
+    const transactions =
+      parsed.transactions ??
+      parsed.Transactions ??
+      parsed.transaction ??
+      parsed.Transaction;
+
+    if (Array.isArray(transactions)) {
+      return { ...parsed, transactions };
+    }
+  }
+
+  return parsed;
 }
 
 /**
@@ -146,12 +229,18 @@ function isRetryableError(error) {
   );
 }
 
-async function callAIWithRetry(apiKey, prompt, imageBase64 = null, mimeType = null) {
+async function callAIWithRetry(
+  apiKey,
+  prompt,
+  imageBase64 = null,
+  mimeType = null,
+  parseType = 'text',
+) {
   const { maxRetries, baseDelayMs } = AI_RETRY_CONFIG;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      return await callAI(apiKey, prompt, imageBase64, mimeType);
+      return await callAI(apiKey, prompt, imageBase64, mimeType, parseType);
     } catch (error) {
       if (!isRetryableError(error) || attempt === maxRetries) {
         throw error;
@@ -159,7 +248,7 @@ async function callAIWithRetry(apiKey, prompt, imageBase64 = null, mimeType = nu
       const delay = baseDelayMs * Math.pow(2, attempt - 1);
       console.warn(
         `AI call failed (attempt ${attempt}/${maxRetries}), retrying in ${delay}ms:`,
-        error.message
+        error.message,
       );
       await sleep(delay);
     }
@@ -167,69 +256,217 @@ async function callAIWithRetry(apiKey, prompt, imageBase64 = null, mimeType = nu
 }
 
 /**
- * Call AI provider
+ * Detect the AI provider from the API key format.
+ * OpenAI keys start with 'sk-'.
+ * @param {string} apiKey
+ * @returns {'openai' | 'gemini' | null}
  */
-async function callAI(apiKey, prompt, imageBase64 = null, mimeType = null) {
-  const url = `${AI_API_BASE}/${AI_MODEL}:generateContent?key=${apiKey}`;
+function detectProvider(apiKey) {
+  if (!apiKey) return null;
+  if (apiKey.startsWith('sk-')) return 'openai';
+  // Gemini keys can start with 'AIza', 'AQ', or other Google-issued prefixes.
+  // Since OpenAI is always 'sk-', treat everything else as Gemini.
+  return 'gemini';
+}
 
-  const generationConfig = {
-    temperature: 0.1,
-    topK: 32,
-    topP: 1,
-    maxOutputTokens: 4096,
+/**
+ * Build a strict JSON schema for OpenAI structured outputs.
+ * 'type' controls whether the receipt fields (merchant, receiptDate)
+ * are included — receipt needs them, natural language does not.
+ */
+function buildResponseSchema(type) {
+  const transactionSchema = {
+    type: 'object',
+    properties: {
+      description: { type: 'string' },
+      amount: { type: 'number' },
+      suggestedCategoryId: { type: 'string' },
+      suggestedCategoryName: { type: 'string' },
+      type: { type: 'string', enum: ['Expense', 'Income'] },
+    },
+    required: [
+      'description',
+      'amount',
+      'suggestedCategoryId',
+      'suggestedCategoryName',
+      'type',
+    ],
+    additionalProperties: false,
   };
 
-  const body = imageBase64
-    ? {
-        contents: [
-          {
-            parts: [
-              { text: prompt },
-              {
-                inline_data: {
-                  mime_type: mimeType || 'image/jpeg',
-                  data: imageBase64,
-                },
-              },
-            ],
+  if (type === 'receipt') {
+    return {
+      type: 'json_schema',
+      json_schema: {
+        name: 'receipt_parse',
+        strict: true,
+        schema: {
+          type: 'object',
+          properties: {
+            merchant: { type: 'string' },
+            receiptDate: { type: 'string' },
+            transactions: {
+              type: 'array',
+              items: transactionSchema,
+            },
           },
-        ],
-        generationConfig,
-      }
-    : {
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig,
-      };
+          required: ['merchant', 'receiptDate', 'transactions'],
+          additionalProperties: false,
+        },
+      },
+    };
+  }
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
+  return {
+    type: 'json_schema',
+    json_schema: {
+      name: 'transaction_parse',
+      strict: true,
+      schema: {
+        type: 'object',
+        properties: {
+          transactions: {
+            type: 'array',
+            items: transactionSchema,
+          },
+        },
+        required: ['transactions'],
+        additionalProperties: false,
+      },
     },
-    body: JSON.stringify(body),
-  });
+  };
+}
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    const errorMessage =
-      errorData.error?.message || `API request failed: ${response.status}`;
-    throw new Error(errorMessage);
+/**
+ * Call AI provider
+ */
+async function callAI(
+  apiKey,
+  prompt,
+  imageBase64 = null,
+  mimeType = null,
+  parseType = 'text',
+) {
+  const provider = detectProvider(apiKey);
+
+  if (provider === 'openai') {
+    const url = `${PROVIDERS.openai.apiBase}/chat/completions`;
+
+    const systemMessage = {
+      role: 'system',
+      content:
+        'You are a precise financial data extraction assistant. ' +
+        'Extract data exactly as instructed. ' +
+        'Return only the JSON fields defined in the schema — ' +
+        'no additional fields, no commentary.',
+    };
+
+    const userContent = imageBase64
+      ? [
+          { type: 'text', text: prompt },
+          {
+            type: 'image_url',
+            image_url: {
+              url: `data:${mimeType || 'image/jpeg'};base64,${imageBase64}`,
+              detail: 'high',
+            },
+          },
+        ]
+      : prompt;
+
+    const messages = [systemMessage, { role: 'user', content: userContent }];
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: PROVIDERS.openai.model,
+        messages,
+        temperature: 0.1,
+        max_tokens: 4096,
+        response_format: buildResponseSchema(parseType),
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const errorMessage =
+        errorData.error?.message || `API request failed: ${response.status}`;
+      throw new Error(errorMessage);
+    }
+
+    const data = await response.json();
+    const responseText = extractResponseText(
+      data.choices?.[0]?.message?.content,
+    );
+
+    if (!responseText) {
+      throw new Error('Invalid response format from AI provider');
+    }
+
+    const parsedData = normalizeParsedData(extractJSON(responseText));
+    if (!parsedData.transactions || !Array.isArray(parsedData.transactions)) {
+      throw new Error('Invalid response structure: missing transactions array');
+    }
+    return parsedData;
+  } else if (provider === 'gemini') {
+    const { apiBase, model } = PROVIDERS.gemini;
+    const url = `${apiBase}/${model}:generateContent?key=${apiKey}`;
+
+    const parts = [{ text: prompt }];
+    if (imageBase64) {
+      parts.push({
+        inline_data: {
+          mime_type: mimeType || 'image/jpeg',
+          data: imageBase64,
+        },
+      });
+    }
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts }],
+        generationConfig: {
+          temperature: 0.1,
+          topK: 32,
+          topP: 1,
+          maxOutputTokens: 4096,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const errorMessage =
+        errorData.error?.message || `API request failed: ${response.status}`;
+      throw new Error(errorMessage);
+    }
+
+    const data = await response.json();
+    const responseText = data.candidates?.[0]?.content?.parts
+      ?.map((part) => part.text)
+      .filter(Boolean)
+      .join('');
+
+    if (!responseText) {
+      throw new Error('Invalid response format from AI provider');
+    }
+
+    const parsedData = normalizeParsedData(extractJSON(responseText));
+    if (!parsedData.transactions || !Array.isArray(parsedData.transactions)) {
+      throw new Error('Invalid response structure: missing transactions array');
+    }
+    return parsedData;
+  } else {
+    throw new Error(
+      'Unrecognized API key format. Please enter a valid Gemini or OpenAI key.',
+    );
   }
-
-  const data = await response.json();
-  const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-  if (!responseText) {
-    throw new Error('Invalid response format from AI provider');
-  }
-
-  const parsedData = extractJSON(responseText);
-
-  if (!parsedData.transactions || !Array.isArray(parsedData.transactions)) {
-    throw new Error('Invalid response structure: missing transactions array');
-  }
-
-  return parsedData;
 }
 
 /**
@@ -237,6 +474,9 @@ async function callAI(apiKey, prompt, imageBase64 = null, mimeType = null) {
  */
 function formatError(error) {
   const message = error.message || 'Unknown error';
+  if (message.includes('Unrecognized API key format')) {
+    return 'Unrecognized API key format. Please enter a valid Gemini or OpenAI key.';
+  }
   if (message.includes('API key') || message.includes('API_KEY_INVALID')) {
     return 'API key not configured or invalid. Please check your AI settings.';
   }
@@ -256,7 +496,7 @@ function formatError(error) {
     return 'Network error. Please check your internet connection.';
   }
   if (
-    message.includes('Invalid response') ||
+    message.includes('Invalid response format') ||
     message.includes('Could not extract')
   ) {
     return 'Unable to parse AI response. Please try again or rephrase your input.';
@@ -294,7 +534,13 @@ export async function parseReceipt(base64Image, categories, apiKey) {
     }
 
     const prompt = buildReceiptPrompt(categories);
-    const result = await callAIWithRetry(apiKey, prompt, imageData, mimeType);
+    const result = await callAIWithRetry(
+      apiKey,
+      prompt,
+      imageData,
+      mimeType,
+      'receipt',
+    );
 
     return {
       success: true,
@@ -323,7 +569,7 @@ export async function parseNaturalLanguage(text, categories, apiKey) {
 
   try {
     const prompt = buildNaturalLanguagePrompt(text, categories);
-    const result = await callAIWithRetry(apiKey, prompt);
+    const result = await callAIWithRetry(apiKey, prompt, null, null, 'text');
 
     return {
       success: true,
@@ -338,9 +584,10 @@ export async function parseNaturalLanguage(text, categories, apiKey) {
 
 /**
  * Check if AI features are configured
- * @param {string} apiKey - AI provider API key from settings
- * @returns {boolean} Whether AI features are available
+ * @param {string} apiKey - API key from settings (Gemini or OpenAI)
+ * @returns {boolean} Whether the key is present and from a recognized provider
  */
 export function isAIConfigured(apiKey) {
-  return !!apiKey && apiKey.trim().length > 0;
+  if (!apiKey || apiKey.trim().length === 0) return false;
+  return detectProvider(apiKey) !== null;
 }

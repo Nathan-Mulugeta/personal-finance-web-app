@@ -65,7 +65,7 @@ function AITransactionsReviewModal({
   const [transactions, setTransactions] = useState([]);
   const [selectedAccountId, setSelectedAccountId] = useState('');
   const [selectedDate, setSelectedDate] = useState(
-    format(new Date(), 'yyyy-MM-dd')
+    format(new Date(), 'yyyy-MM-dd'),
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
@@ -82,7 +82,7 @@ function AITransactionsReviewModal({
   // Get selected account currency
   const selectedCurrency = useMemo(() => {
     const account = accounts.find(
-      (acc) => acc.account_id === selectedAccountId
+      (acc) => acc.account_id === selectedAccountId,
     );
     return account?.currency || 'USD';
   }, [accounts, selectedAccountId]);
@@ -97,8 +97,10 @@ function AITransactionsReviewModal({
           const baseAmount = txn.amount || 0;
           const applyTax = isReceipt; // Default to true for receipts
           // If tax is applied, multiply base amount by 1.15, otherwise use base amount
-          const displayAmount = applyTax ? Math.round(baseAmount * 1.15 * 100) / 100 : baseAmount;
-          
+          const displayAmount = applyTax
+            ? Math.round(baseAmount * 1.15 * 100) / 100
+            : baseAmount;
+
           return {
             id: `ai_${Date.now()}_${index}`,
             description: txn.description || '',
@@ -109,7 +111,7 @@ function AITransactionsReviewModal({
             type: txn.type || 'Expense',
             applyTax: applyTax,
           };
-        }
+        },
       );
 
       setTransactions(initialTransactions);
@@ -146,28 +148,28 @@ function AITransactionsReviewModal({
     setTransactions((prev) =>
       prev.map((txn) => {
         if (txn.id !== id) return txn;
-        
+
         // If amount is being changed, update baseAmount and recalculate display amount
         if (field === 'amount') {
           const newAmount = parseFloat(value) || 0;
           // Calculate base amount based on current applyTax state
-          const newBaseAmount = txn.applyTax 
-            ? Math.round((newAmount / 1.15) * 100) / 100 
+          const newBaseAmount = txn.applyTax
+            ? Math.round((newAmount / 1.15) * 100) / 100
             : newAmount;
           // Recalculate display amount based on applyTax
-          const displayAmount = txn.applyTax 
-            ? Math.round(newBaseAmount * 1.15 * 100) / 100 
+          const displayAmount = txn.applyTax
+            ? Math.round(newBaseAmount * 1.15 * 100) / 100
             : newBaseAmount;
-          
-          return { 
-            ...txn, 
+
+          return {
+            ...txn,
             baseAmount: newBaseAmount,
-            amount: displayAmount 
+            amount: displayAmount,
           };
         }
-        
+
         return { ...txn, [field]: value };
-      })
+      }),
     );
   };
 
@@ -178,26 +180,27 @@ function AITransactionsReviewModal({
     setTransactions((prev) =>
       prev.map((txn) => {
         if (txn.id !== id) return txn;
-        
+
         // Get the base amount (pre-tax)
-        const baseAmount = txn.baseAmount !== undefined 
-          ? txn.baseAmount 
-          : (currentApplyTax 
-              ? Math.round((parseFloat(currentAmount) / 1.15) * 100) / 100 
-              : parseFloat(currentAmount));
-        
+        const baseAmount =
+          txn.baseAmount !== undefined
+            ? txn.baseAmount
+            : currentApplyTax
+              ? Math.round((parseFloat(currentAmount) / 1.15) * 100) / 100
+              : parseFloat(currentAmount);
+
         // Calculate new display amount based on new tax state
         const newAmount = newApplyTax
           ? Math.round(baseAmount * 1.15 * 100) / 100 // Add 15% tax
           : baseAmount; // Use base amount (no tax)
 
-        return { 
-          ...txn, 
+        return {
+          ...txn,
           baseAmount: baseAmount, // Ensure baseAmount is stored
-          applyTax: newApplyTax, 
-          amount: newAmount 
+          applyTax: newApplyTax,
+          amount: newAmount,
         };
-      })
+      }),
     );
   };
 
@@ -210,7 +213,7 @@ function AITransactionsReviewModal({
   const handleConfirmDelete = () => {
     if (deleteConfirmId) {
       setTransactions((prev) =>
-        prev.filter((txn) => txn.id !== deleteConfirmId)
+        prev.filter((txn) => txn.id !== deleteConfirmId),
       );
       setDeleteConfirmId(null);
     }
@@ -220,8 +223,10 @@ function AITransactionsReviewModal({
   const handleAddTransaction = () => {
     const applyTax = isReceipt;
     const baseAmount = 0;
-    const displayAmount = applyTax ? Math.round(baseAmount * 1.15 * 100) / 100 : baseAmount;
-    
+    const displayAmount = applyTax
+      ? Math.round(baseAmount * 1.15 * 100) / 100
+      : baseAmount;
+
     const newTransaction = {
       id: `ai_${Date.now()}_new`,
       description: '',
@@ -250,12 +255,12 @@ function AITransactionsReviewModal({
 
     // Filter out empty transactions
     const validTransactions = transactions.filter(
-      (txn) => txn.amount > 0 && txn.categoryId
+      (txn) => txn.amount > 0 && txn.categoryId,
     );
 
     if (validTransactions.length === 0) {
       setError(
-        'No valid transactions to save. Each transaction needs an amount and category.'
+        'No valid transactions to save. Each transaction needs an amount and category.',
       );
       return;
     }
@@ -284,7 +289,7 @@ function AITransactionsReviewModal({
     } catch (err) {
       console.error('Error saving transactions:', err);
       setError(
-        err?.message || 'Failed to save transactions. Please try again.'
+        err?.message || 'Failed to save transactions. Please try again.',
       );
     } finally {
       setIsSubmitting(false);
@@ -303,7 +308,7 @@ function AITransactionsReviewModal({
   // Get filtered categories by type
   const getCategoriesForType = (type) => {
     return categories.filter(
-      (cat) => cat.type === type && cat.status === 'Active'
+      (cat) => cat.type === type && cat.status === 'Active',
     );
   };
 
@@ -457,7 +462,7 @@ function AITransactionsReviewModal({
                       handleTransactionChange(
                         txn.id,
                         'amount',
-                        parseFloat(e.target.value) || 0
+                        parseFloat(e.target.value) || 0,
                       )
                     }
                     size="small"
@@ -471,7 +476,7 @@ function AITransactionsReviewModal({
                       handleTransactionChange(
                         txn.id,
                         'description',
-                        e.target.value
+                        e.target.value,
                       )
                     }
                     size="small"

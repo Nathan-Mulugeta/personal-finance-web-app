@@ -23,7 +23,7 @@ import {
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import SettingsIcon from '@mui/icons-material/Settings';
-import { AI_API_KEY_LINK_LABEL, AI_API_KEY_URL } from '../lib/api/aiParsing';
+import { AI_PROVIDER_LINKS } from '../lib/api/aiParsing';
 import {
   fetchSettings,
   updateSetting,
@@ -719,15 +719,20 @@ function Settings() {
                   {...register('groqApiKey')}
                   helperText={
                     <span>
-                      Enter your AI API key from{' '}
-                      <a
-                        href={AI_API_KEY_URL}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ color: 'inherit' }}
-                      >
-                        {AI_API_KEY_LINK_LABEL}
-                      </a>
+                      Get a key from:{' '}
+                      {AI_PROVIDER_LINKS.map((link, index) => (
+                        <span key={link.url}>
+                          {index > 0 && ' · '}
+                          <a
+                            href={link.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: 'inherit' }}
+                          >
+                            {link.label}
+                          </a>
+                        </span>
+                      ))}
                       . Required for AI features.
                     </span>
                   }
