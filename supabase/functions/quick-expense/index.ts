@@ -9,6 +9,61 @@ function generateId(prefix: string): string {
   return `${prefix}_${timestamp}_${random}`;
 }
 
+// AI Prompt Builder
+function buildNaturalLanguagePrompt(text: string, categories: any[]) {
+  const categoryList = categories
+    .map((cat) => `- ${cat.name} (${cat.type}, ID: ${cat.category_id})`)
+    .join('\n');
+
+  return `Parse this text into transactions: "${text}"
+
+Available categories:
+${categoryList}
+
+Return ONLY valid JSON:
+{
+  "transactions": [
+    {
+      "description": "Transaction description",
+      "amount": 0.00,
+      "suggestedCategoryId": "CAT_XXX",
+      "suggestedCategoryName": "Category Name",
+      "type": "Income" or "Expense"
+    }
+  ]
+}
+
+Rules:
+- Parse multiple transactions if mentioned (e.g., "groceries $50 and coffee $5" = 2 transactions)
+- Infer type from context: spending/bought/paid = Expense, received/earned/got paid = Income
+- ALWAYS prefer the most specific subcategory over a parent category; never assign a parent category if subcategories exist beneath it
+- If no specific subcategory matches an item, use the one whose name contains "General" (e.g. "General: groceries") rather than the parent
+- Match each item to the most appropriate category from the list
+- Use the exact CategoryID from the list
+- Amount should be a positive number
+- Return JSON only, no markdown or explanation`;
+}
+
+// AI JSON Extractor
+function extractJSON(text: string) {
+  if (!text) throw new Error('Empty response');
+  const stripped = text
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
+  const objectMatch = stripped.match(/\{[\s\S]*\}/);
+  if (objectMatch) {
+    try {
+      return JSON.parse(objectMatch[0]);
+    } catch (_) {}
+  }
+  try {
+    return JSON.parse(stripped);
+  } catch (_) {
+    throw new Error('Could not parse valid JSON from AI response');
+  }
+}
+
 // CORS headers for preflight requests
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -151,7 +206,7 @@ Deno.serve(async (req: Request) => {
 
           const { data: accounts, error: accountsError } = await query.order(
             'name',
-            { ascending: true }
+            { ascending: true },
           );
 
           if (accountsError) {
@@ -175,7 +230,7 @@ Deno.serve(async (req: Request) => {
 
         default:
           return errorResponse(
-            `Unknown action: ${action}. Valid actions: getAccountBalance, getCategories, getAccounts`
+            `Unknown action: ${action}. Valid actions: getAccountBalance, getCategories, getAccounts`,
           );
       }
     }
@@ -222,7 +277,7 @@ Deno.serve(async (req: Request) => {
       ];
       if (!validTypes.includes(Type)) {
         return errorResponse(
-          `Invalid Type. Must be one of: ${validTypes.join(', ')}`
+          `Invalid Type. Must be one of: ${validTypes.join(', ')}`,
         );
       }
 
@@ -244,7 +299,7 @@ Deno.serve(async (req: Request) => {
             now.getHours(),
             now.getMinutes(),
             now.getSeconds(),
-            now.getMilliseconds()
+            now.getMilliseconds(),
           );
         }
         transactionDate = parsedDate;
@@ -371,7 +426,7 @@ Deno.serve(async (req: Request) => {
               now.getHours(),
               now.getMinutes(),
               now.getSeconds(),
-              now.getMilliseconds()
+              now.getMilliseconds(),
             );
           }
           transactionDate = parsedDate;
@@ -404,7 +459,7 @@ Deno.serve(async (req: Request) => {
             error: `Validation failed for ${validationErrors.length} transaction(s)`,
             validationErrors,
           },
-          400
+          400,
         );
       }
 
@@ -434,9 +489,133 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    if (action === 'parseTextAndCreate') {
+      const { Text, AccountID, Currency } = body;
+
+      if (!Text) return errorResponse('Text is required');
+      if (!AccountID) return errorResponse('AccountID is required');
+      if (!Currency) return errorResponse('Currency is required');
+
+      const geminiKey = Deno.env.get('GEMINI_API_KEY');
+      if (!geminiKey) {
+        console.error('GEMINI_API_KEY not configured');
+        return errorResponse(
+          'Server configuration error: GEMINI_API_KEY missing',
+          500,
+        );
+      }
+
+      // Fetch categories
+      const { data: categories, error: catError } = await supabase
+        .from('categories')
+        .select('category_id, name, type, parent_category_id')
+        .eq('user_id', userId)
+        .eq('status', 'Active');
+
+      if (catError) {
+        console.error('Failed to fetch categories:', catError);
+        return errorResponse('Failed to fetch categories', 500);
+      }
+
+      const categoryMap = new Map(
+        categories.map((c) => [c.category_id, c.name]),
+      );
+      const parentIds = new Set(
+        categories.map((c) => c.parent_category_id).filter(Boolean),
+      );
+      const leafCategories = categories
+        .filter((c) => !parentIds.has(c.category_id))
+        .map((c) => ({
+          ...c,
+          name: c.parent_category_id
+            ? `${categoryMap.get(c.parent_category_id)} > ${c.name}`
+            : c.name,
+        }));
+
+      const prompt = buildNaturalLanguagePrompt(Text, leafCategories);
+      const url = `https://generativelanguage.googleapis.com/v1/models/gemini-3.1-flash-lite:generateContent?key=${geminiKey}`;
+
+      const aiResponse = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 1024 },
+        }),
+      });
+
+      if (!aiResponse.ok) {
+        const errTxt = await aiResponse.text();
+        console.error('AI API Error:', errTxt);
+        return errorResponse('Failed to communicate with AI', 502);
+      }
+
+      const aiData = await aiResponse.json();
+      const responseText = aiData.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      let parsed;
+      try {
+        parsed = extractJSON(responseText || '');
+      } catch (e) {
+        return errorResponse('Failed to parse AI response', 500);
+      }
+
+      const txns = parsed.transactions || [];
+      if (txns.length === 0) {
+        return errorResponse('No transactions found in text', 400);
+      }
+
+      // Prepare transactions for insertion
+      const transactionsToInsert = [];
+      const now = new Date();
+
+      for (const txn of txns) {
+        transactionsToInsert.push({
+          transaction_id: generateId('TXN'),
+          user_id: userId,
+          account_id: AccountID,
+          category_id: txn.suggestedCategoryId,
+          date: now.toISOString(),
+          amount: Number(txn.amount),
+          currency: Currency.toUpperCase(),
+          description: txn.description || '',
+          type: txn.type || 'Expense',
+          status: 'Cleared',
+          transfer_id: null,
+          linked_transaction_id: null,
+          created_at: now.toISOString(),
+        });
+      }
+
+      const { data, error } = await supabase
+        .from('transactions')
+        .insert(transactionsToInsert)
+        .select();
+
+      if (error) {
+        console.error('Database error:', error);
+        return errorResponse(error.message, 500);
+      }
+
+      return jsonResponse({
+        success: true,
+        data: {
+          inserted: data.length,
+          transactions: data.map((t: any) => ({
+            TransactionID: t.transaction_id,
+            Amount: t.amount,
+            Currency: t.currency,
+            Description: t.description,
+            Category: t.category_id,
+          })),
+        },
+        message: `${data.length} transaction(s) parsed and added successfully`,
+      });
+    }
+
     // If no valid action specified, return error
     return errorResponse(
-      'action is required in POST body. Valid actions: "createTransaction", "createTransactionsBatch"'
+      'action is required in POST body. Valid actions: "createTransaction", "createTransactionsBatch", "parseTextAndCreate"',
     );
   } catch (err) {
     console.error('Unexpected error:', err);

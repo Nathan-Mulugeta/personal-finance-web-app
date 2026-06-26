@@ -11,10 +11,12 @@ const PROVIDERS = {
   openai: {
     apiBase: 'https://api.openai.com/v1',
     model: 'gpt-4.1',
+    textModel: 'gpt-4o-mini',
   },
   gemini: {
     apiBase: 'https://generativelanguage.googleapis.com/v1/models',
     model: 'gemini-3.5-flash',
+    textModel: 'gemini-3.1-flash-lite',
   },
 };
 
@@ -32,11 +34,27 @@ export const AI_PROVIDER_LINKS = [
   { url: 'https://platform.openai.com/api-keys', label: 'OpenAI Platform' },
 ];
 
+function buildLeafCategoryList(categories) {
+  const categoryMap = new Map(categories.map((c) => [c.category_id, c.name]));
+  const parentIds = new Set(
+    categories.map((c) => c.parent_category_id).filter(Boolean),
+  );
+
+  return categories
+    .filter((c) => !parentIds.has(c.category_id))
+    .map((c) => ({
+      ...c,
+      name: c.parent_category_id
+        ? `${categoryMap.get(c.parent_category_id)} > ${c.name}`
+        : c.name,
+    }));
+}
+
 /**
  * Build the prompt for receipt parsing
  */
 function buildReceiptPrompt(categories) {
-  const categoryList = categories
+  const categoryList = buildLeafCategoryList(categories)
     .map((cat) => `- ${cat.name} (${cat.type}, ID: ${cat.category_id})`)
     .join('\n');
 
@@ -81,7 +99,7 @@ Rules:
  * Build the prompt for natural language parsing
  */
 function buildNaturalLanguagePrompt(text, categories) {
-  const categoryList = categories
+  const categoryList = buildLeafCategoryList(categories)
     .map((cat) => `- ${cat.name} (${cat.type}, ID: ${cat.category_id})`)
     .join('\n');
 
@@ -106,7 +124,9 @@ Return ONLY valid JSON:
 Rules:
 - Parse multiple transactions if mentioned (e.g., "groceries $50 and coffee $5" = 2 transactions)
 - Infer type from context: spending/bought/paid = Expense, received/earned/got paid = Income
-- Match to the most specific category (prefer sub-categories over parent categories)
+- ALWAYS prefer the most specific subcategory over a parent category; never assign a parent category if subcategories exist beneath it
+- If no specific subcategory matches an item, use the one whose name contains "General" (e.g. "General: groceries") rather than the parent
+- Match each item to the most appropriate category from the list
 - Use the exact CategoryID from the list
 - Amount should be a positive number
 - Return JSON only, no markdown or explanation`;
@@ -348,9 +368,14 @@ async function callAI(
   parseType = 'text',
 ) {
   const provider = detectProvider(apiKey);
+  const isText = parseType === 'text';
 
   if (provider === 'openai') {
     const url = `${PROVIDERS.openai.apiBase}/chat/completions`;
+    const modelToUse =
+      isText && PROVIDERS.openai.textModel
+        ? PROVIDERS.openai.textModel
+        : PROVIDERS.openai.model;
 
     const systemMessage = {
       role: 'system',
@@ -383,7 +408,7 @@ async function callAI(
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: PROVIDERS.openai.model,
+        model: modelToUse,
         messages,
         temperature: 0.1,
         max_tokens: 4096,
@@ -413,8 +438,10 @@ async function callAI(
     }
     return parsedData;
   } else if (provider === 'gemini') {
-    const { apiBase, model } = PROVIDERS.gemini;
-    const url = `${apiBase}/${model}:generateContent?key=${apiKey}`;
+    const { apiBase, model, textModel } = PROVIDERS.gemini;
+    const modelToUse = isText && textModel ? textModel : model;
+
+    const url = `${apiBase}/${modelToUse}:generateContent?key=${apiKey}`;
 
     const parts = [{ text: prompt }];
     if (imageBase64) {

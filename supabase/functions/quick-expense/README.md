@@ -28,6 +28,7 @@ In the Supabase Dashboard, go to **Project Settings > Edge Functions** and add t
 | ----------------------- | ---------------------------------------------------------------------------------------------- |
 | `QUICK_EXPENSE_API_KEY` | A secret key for authentication. Generate one with: `uuidgen` or use any random string         |
 | `QUICK_EXPENSE_USER_ID` | Your Supabase user ID (UUID). Find it in the `auth.users` table or in your app's user settings |
+| `GEMINI_API_KEY` | Your Gemini API key required for the `parseTextAndCreate` action. |
 
 Note: `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are automatically available in Edge Functions.
 
@@ -190,6 +191,38 @@ Content-Type: application/json
   "message": "Transaction of 25.5 USD added successfully"
 }
 ```
+
+---
+
+### Parse Text and Create Transaction
+
+```
+POST /
+Content-Type: application/json
+```
+
+**Request Body:**
+
+```json
+{
+  "action": "parseTextAndCreate",
+  "Text": "Taxi to the airport $25.50",
+  "AccountID": "ACC_xxx_xxx",
+  "Currency": "USD"
+}
+```
+
+#### Required Fields
+
+| Field       | Type   | Description                                 |
+| ----------- | ------ | ------------------------------------------- |
+| `action`    | string | Must be `"parseTextAndCreate"`              |
+| `Text`      | string | Natural language string to be parsed        |
+| `AccountID` | string | Account ID (e.g., `ACC_1234567890_001`)     |
+| `Currency`  | string | 3-letter currency code (e.g., `USD`, `EUR`) |
+
+**Response:**
+Returns the same success payload as `createTransaction` with the AI-parsed details.
 
 ---
 
