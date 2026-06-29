@@ -599,22 +599,35 @@ Deno.serve(async (req: Request) => {
 
       const totalAmount = data.reduce((sum: number, t: any) => sum + Number(t.amount), 0);
       const currency = data[0]?.currency ?? Currency.toUpperCase();
+      const roundedTotal = Math.round(totalAmount * 100) / 100;
+
+      // Build compact breakdown using AI category names (strip parent prefix for brevity)
+      const breakdown = txns
+        .map((txn: any) => {
+          const leafName = txn.suggestedCategoryName?.includes('>')
+            ? txn.suggestedCategoryName.split('>').pop()!.trim()
+            : (txn.suggestedCategoryName ?? 'Unknown');
+          const amt = Math.round(Number(txn.amount) * 100) / 100;
+          return `${leafName} ${amt}`;
+        })
+        .join(' · ');
 
       return jsonResponse({
         success: true,
         data: {
           inserted: data.length,
-          totalAmount: Math.round(totalAmount * 100) / 100,
+          totalAmount: roundedTotal,
           currency,
-          transactions: data.map((t: any) => ({
+          transactions: data.map((t: any, i: number) => ({
             TransactionID: t.transaction_id,
             Amount: t.amount,
             Currency: t.currency,
             Description: t.description,
-            Category: t.category_id,
+            CategoryID: t.category_id,
+            CategoryName: txns[i]?.suggestedCategoryName ?? null,
           })),
         },
-        message: `${data.length} transaction(s) parsed and added successfully. Total: ${Math.round(totalAmount * 100) / 100} ${currency}`,
+        message: `${data.length} transaction(s) | ${roundedTotal} | ${breakdown}`,
       });
     }
 

@@ -1,0 +1,2 @@
+[functions.quick-expense]
+verify_jwt = false
