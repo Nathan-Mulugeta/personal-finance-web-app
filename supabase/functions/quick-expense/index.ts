@@ -597,10 +597,15 @@ Deno.serve(async (req: Request) => {
         return errorResponse(error.message, 500);
       }
 
+      const totalAmount = data.reduce((sum: number, t: any) => sum + Number(t.amount), 0);
+      const currency = data[0]?.currency ?? Currency.toUpperCase();
+
       return jsonResponse({
         success: true,
         data: {
           inserted: data.length,
+          totalAmount: Math.round(totalAmount * 100) / 100,
+          currency,
           transactions: data.map((t: any) => ({
             TransactionID: t.transaction_id,
             Amount: t.amount,
@@ -609,7 +614,7 @@ Deno.serve(async (req: Request) => {
             Category: t.category_id,
           })),
         },
-        message: `${data.length} transaction(s) parsed and added successfully`,
+        message: `${data.length} transaction(s) parsed and added successfully. Total: ${Math.round(totalAmount * 100) / 100} ${currency}`,
       });
     }
 
