@@ -601,16 +601,20 @@ Deno.serve(async (req: Request) => {
       const currency = data[0]?.currency ?? Currency.toUpperCase();
       const roundedTotal = Math.round(totalAmount * 100) / 100;
 
-      // Build compact breakdown using AI category names (strip parent prefix for brevity)
-      const breakdown = txns
-        .map((txn: any) => {
-          const leafName = txn.suggestedCategoryName?.includes('>')
-            ? txn.suggestedCategoryName.split('>').pop()!.trim()
-            : (txn.suggestedCategoryName ?? 'Unknown');
-          const amt = Math.round(Number(txn.amount) * 100) / 100;
-          return `${leafName} ${amt}`;
-        })
-        .join(' · ');
+      // Build readable multi-line message for Tasker layout display
+      const itemLines = txns.map((txn: any, i: number) => {
+        const desc = txn.description || data[i]?.description || 'Untitled';
+        const amt = Math.round(Number(txn.amount) * 100) / 100;
+        const cat = txn.suggestedCategoryName ?? 'Uncategorized';
+        return `${i + 1}. ${desc} — ${amt}\n   ${cat}`;
+      });
+
+      const message = [
+        `✅ ${data.length} transaction(s) added`,
+        `Total: ${roundedTotal} ${currency}`,
+        '',
+        ...itemLines,
+      ].join('\n');
 
       return jsonResponse({
         success: true,
@@ -627,7 +631,7 @@ Deno.serve(async (req: Request) => {
             CategoryName: txns[i]?.suggestedCategoryName ?? null,
           })),
         },
-        message: `${data.length} transaction(s) | ${roundedTotal} | ${breakdown}`,
+        message,
       });
     }
 
