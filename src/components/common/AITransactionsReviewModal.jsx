@@ -95,7 +95,11 @@ function AITransactionsReviewModal({
       const initialTransactions = (parsedData.transactions || []).map(
         (txn, index) => {
           const baseAmount = txn.amount || 0;
-          const applyTax = isReceipt; // Default to true for receipts
+          // Use the AI-returned taxable flag when available (e.g., items
+          // marked with "(N)" on the receipt are non-taxable).
+          // Fall back to true for receipts when the field is absent.
+          const applyTax =
+            isReceipt && txn.taxable !== undefined ? txn.taxable : isReceipt;
           // If tax is applied, multiply base amount by 1.15, otherwise use base amount
           const displayAmount = applyTax
             ? Math.round(baseAmount * 1.15 * 100) / 100

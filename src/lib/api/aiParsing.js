@@ -76,6 +76,7 @@ Return ONLY valid JSON with this structure:
       "suggestedCategoryId": "CAT_XXX",
       "suggestedCategoryName": "Category Name",
       "type": "Expense",
+      "taxable": true
     }
   ]
 }
@@ -92,6 +93,8 @@ Rules:
 - Match each item to the most appropriate category from the list
 - Use the exact CategoryID from the list
 - Amount should be a positive number (use the item price as listed, before tax)
+- If an item name has "(N)" next to it, it is non-taxable: set "taxable" to false. Otherwise set "taxable" to true
+- Do NOT include the "(N)" marker in the description field — strip it from the item name
 - Return JSON only, no markdown or explanation`;
 }
 
@@ -295,22 +298,32 @@ function detectProvider(apiKey) {
  * are included — receipt needs them, natural language does not.
  */
 function buildResponseSchema(type) {
+  const baseProperties = {
+    description: { type: 'string' },
+    amount: { type: 'number' },
+    suggestedCategoryId: { type: 'string' },
+    suggestedCategoryName: { type: 'string' },
+    type: { type: 'string', enum: ['Expense', 'Income'] },
+  };
+
+  const baseRequired = [
+    'description',
+    'amount',
+    'suggestedCategoryId',
+    'suggestedCategoryName',
+    'type',
+  ];
+
   const transactionSchema = {
     type: 'object',
-    properties: {
-      description: { type: 'string' },
-      amount: { type: 'number' },
-      suggestedCategoryId: { type: 'string' },
-      suggestedCategoryName: { type: 'string' },
-      type: { type: 'string', enum: ['Expense', 'Income'] },
-    },
-    required: [
-      'description',
-      'amount',
-      'suggestedCategoryId',
-      'suggestedCategoryName',
-      'type',
-    ],
+    properties:
+      type === 'receipt'
+        ? { ...baseProperties, taxable: { type: 'boolean' } }
+        : baseProperties,
+    required:
+      type === 'receipt'
+        ? [...baseRequired, 'taxable']
+        : baseRequired,
     additionalProperties: false,
   };
 
