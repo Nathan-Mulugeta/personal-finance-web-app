@@ -839,7 +839,10 @@ function Home({ quickAddExpense = false }) {
         )}
       </Box>
 
-      {!debouncedSearchQuery && (
+      {/* Hidden entirely when no shortcuts are configured; shortcuts can
+          still be managed via the "Manage shortcuts" button below the
+          Recent Transactions list */}
+      {!debouncedSearchQuery && shortcutCategories.length > 0 && (
         <Box
           sx={{
             mb: { xs: 2, sm: 2.5 },
@@ -865,24 +868,18 @@ function Home({ quickAddExpense = false }) {
               Manage
             </Button>
           </Box>
-          {shortcutCategories.length > 0 ? (
-            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
-              {shortcutCategories.map((category) => (
-                <Chip
-                  key={category.category_id}
-                  label={category.name}
-                  onClick={() => handleShortcutClick(category)}
-                  clickable
-                  color="primary"
-                  variant="outlined"
-                />
-              ))}
-            </Stack>
-          ) : (
-            <Typography variant="body2" color="text.secondary">
-              Add category shortcuts for quick transaction entry.
-            </Typography>
-          )}
+          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
+            {shortcutCategories.map((category) => (
+              <Chip
+                key={category.category_id}
+                label={category.name}
+                onClick={() => handleShortcutClick(category)}
+                clickable
+                color="primary"
+                variant="outlined"
+              />
+            ))}
+          </Stack>
         </Box>
       )}
 
@@ -905,6 +902,16 @@ function Home({ quickAddExpense = false }) {
             Recent Transactions
           </Typography>
           {renderTransactions(recentTransactions, 'Recent Transactions')}
+        </Box>
+      )}
+
+      {/* Fallback entry point for shortcut management while the Category
+          Shortcuts section is hidden (no shortcuts configured yet) */}
+      {!debouncedSearchQuery && shortcutCategories.length === 0 && (
+        <Box sx={{ mt: 1.5, display: 'flex', justifyContent: 'center' }}>
+          <Button size="small" color="inherit" onClick={handleOpenManageShortcuts} sx={{ color: 'text.secondary', textTransform: 'none' }}>
+            Manage category shortcuts
+          </Button>
         </Box>
       )}
 

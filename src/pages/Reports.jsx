@@ -366,14 +366,8 @@ function Reports() {
 
     if (category.children && category.children.length > 0) {
       // For parent categories: calculate direct transactions + sum of children
-      // First, calculate the parent's own budget (without children) to avoid double-counting
-      const parentOwnBudgetData = calculateCategoryBudget(
-        category.category_id,
-        dateRange
-      );
-      // But we need to subtract children's budgets since getCategoryAndDescendantIds includes them
-      // So we'll calculate children separately and use that
-
+      // (children's budgets are calculated separately below to avoid
+      // double-counting, since getCategoryAndDescendantIds includes them)
       const directActual = calculateCategoryActual(
         category.category_id,
         dateRange,
@@ -1124,6 +1118,311 @@ function Reports() {
     );
   };
 
+  // Render a label/amount line for the mobile card view
+  const renderMobileAmountRow = ({
+    label,
+    amount,
+    currencies,
+    isMixed,
+    originalAmounts,
+    foreignInfo,
+    valueColor = 'text.primary',
+    bold = false,
+  }) => (
+    <Box
+      key={label}
+      sx={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'baseline',
+        gap: 1,
+      }}
+    >
+      <Typography
+        variant="body2"
+        color="text.secondary"
+        sx={{ fontSize: '0.75rem', flexShrink: 0 }}
+      >
+        {label}
+      </Typography>
+      <Box sx={{ textAlign: 'right', minWidth: 0 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            gap: 0.5,
+          }}
+        >
+          {isMixed && (
+            <Chip
+              label="Mixed currencies"
+              size="small"
+              sx={{ height: 18, fontSize: '0.65rem' }}
+              color="default"
+              variant="outlined"
+            />
+          )}
+          <Typography
+            variant="body2"
+            sx={{
+              fontSize: '0.8125rem',
+              color: valueColor,
+              fontWeight: bold ? 'bold' : 'medium',
+            }}
+          >
+            {formatCurrencyDisplay(amount, currencies, isMixed, originalAmounts)}
+          </Typography>
+        </Box>
+        {foreignInfo && (
+          <Typography
+            variant="caption"
+            sx={{
+              fontSize: '0.7rem',
+              color: 'text.secondary',
+              display: 'block',
+            }}
+          >
+            {formatCurrency(foreignInfo.amount, foreignInfo.currency)}
+          </Typography>
+        )}
+      </Box>
+    </Box>
+  );
+
+  // Render a category as a card (mobile view)
+  const renderCategoryCard = (item, type, level = 0) => {
+    const {
+      category,
+      budget,
+      actual,
+      difference,
+      variance,
+      isMixed,
+      currencies,
+      budgetOriginalAmounts,
+      actualOriginalAmounts,
+      differenceOriginalAmounts,
+    } = item;
+    const hasChildren = category.children && category.children.length > 0;
+    const isExpanded = expandedCategories.has(category.category_id);
+
+    const budgetForeign = getForeignCurrencyDisplay(
+      currencies,
+      budgetOriginalAmounts
+    );
+    const actualForeign = getForeignCurrencyDisplay(
+      currencies,
+      actualOriginalAmounts
+    );
+    const differenceForeign = getForeignCurrencyDisplay(
+      currencies,
+      differenceOriginalAmounts
+    );
+
+    return (
+      <Fragment key={category.category_id}>
+        <Box
+          onClick={() => handleRowClick(category.category_id, type)}
+          sx={{
+            mb: 1,
+            p: 1.5,
+            ml: level * 2,
+            cursor: 'pointer',
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 1,
+            backgroundColor: 'background.paper',
+            '&:hover': { backgroundColor: 'action.hover' },
+          }}
+        >
+          {/* Header: category name + variance */}
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              mb: 1,
+              gap: 1,
+            }}
+          >
+            <Box
+              sx={{ display: 'flex', alignItems: 'center', minWidth: 0 }}
+            >
+              {hasChildren && (
+                <IconButton
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleCategoryExpansion(category.category_id);
+                  }}
+                  sx={{ ml: -0.5, mr: 0.5 }}
+                >
+                  {isExpanded ? (
+                    <ExpandMoreIcon fontSize="small" />
+                  ) : (
+                    <ChevronRightIcon fontSize="small" />
+                  )}
+                </IconButton>
+              )}
+              <Typography
+                variant="body1"
+                fontWeight="medium"
+                noWrap
+                sx={{ fontSize: '0.875rem' }}
+              >
+                {category.name}
+              </Typography>
+            </Box>
+            <Typography
+              variant="body2"
+              sx={{
+                fontSize: '0.8125rem',
+                fontWeight: 'medium',
+                color: getVarianceColor(variance, type),
+                flexShrink: 0,
+              }}
+            >
+              {formatVariance(variance, type)}
+            </Typography>
+          </Box>
+
+          {/* Amounts */}
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+            {renderMobileAmountRow({
+              label: 'Budgeted',
+              amount: budget,
+              currencies,
+              isMixed,
+              originalAmounts: budgetOriginalAmounts,
+              foreignInfo: budgetForeign,
+            })}
+            {renderMobileAmountRow({
+              label: type === 'Income' ? 'Actual Income' : 'Actual Spending',
+              amount: actual,
+              currencies,
+              isMixed,
+              originalAmounts: actualOriginalAmounts,
+              foreignInfo: actualForeign,
+            })}
+            {renderMobileAmountRow({
+              label: 'Difference',
+              amount: difference,
+              currencies,
+              isMixed,
+              originalAmounts: differenceOriginalAmounts,
+              foreignInfo: differenceForeign,
+              valueColor: getDifferenceColor(difference, type),
+            })}
+          </Box>
+        </Box>
+        {hasChildren &&
+          isExpanded &&
+          category.children.map((child) => {
+            const childData = calculateCategoryData(child, type);
+            const hasChildData = childData.budget > 0 || childData.actual > 0;
+            if (!hasChildData) return null;
+            return renderCategoryCard(
+              { category: child, ...childData },
+              type,
+              level + 1
+            );
+          })}
+      </Fragment>
+    );
+  };
+
+  // Render a full report section as cards (mobile view)
+  const renderSectionMobile = (reportData, totals, type) => {
+    const budgetForeign = getForeignCurrencyDisplay(
+      totals.currencies,
+      totals.budgetOriginalAmounts
+    );
+    const actualForeign = getForeignCurrencyDisplay(
+      totals.currencies,
+      totals.actualOriginalAmounts
+    );
+
+    return (
+      <Box sx={{ display: { xs: 'block', md: 'none' } }}>
+        {reportData.length === 0 && (
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ mb: 1.5, fontSize: '0.8125rem' }}
+          >
+            No categories with budget or activity for this period
+          </Typography>
+        )}
+        {reportData.map((item) => renderCategoryCard(item, type))}
+
+        {/* Total card */}
+        <Box
+          sx={{
+            p: 1.5,
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 1,
+            bgcolor: 'action.hover',
+          }}
+        >
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              mb: 1,
+              gap: 1,
+            }}
+          >
+            <Typography variant="body1" sx={{ fontSize: '0.875rem', fontWeight: 'bold' }}>
+              Total
+            </Typography>
+            <Typography
+              variant="body2"
+              sx={{
+                fontSize: '0.8125rem',
+                fontWeight: 'bold',
+                color: getVarianceColor(totals.variance, type),
+              }}
+            >
+              {formatVariance(totals.variance, type)}
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+            {renderMobileAmountRow({
+              label: 'Budgeted',
+              amount: totals.budget,
+              currencies: totals.currencies,
+              isMixed: totals.isMixed,
+              originalAmounts: totals.budgetOriginalAmounts,
+              foreignInfo: budgetForeign,
+              bold: true,
+            })}
+            {renderMobileAmountRow({
+              label: type === 'Income' ? 'Actual Income' : 'Actual Spending',
+              amount: totals.actual,
+              currencies: totals.currencies,
+              isMixed: totals.isMixed,
+              originalAmounts: totals.actualOriginalAmounts,
+              foreignInfo: actualForeign,
+              bold: true,
+            })}
+            {renderMobileAmountRow({
+              label: 'Difference',
+              amount: totals.difference,
+              currencies: totals.currencies,
+              isMixed: totals.isMixed,
+              originalAmounts: totals.differenceOriginalAmounts,
+              valueColor: getDifferenceColor(totals.difference, type),
+              bold: true,
+            })}
+          </Box>
+        </Box>
+      </Box>
+    );
+  };
+
   return (
     <Box>
       <Typography 
@@ -1207,23 +1506,13 @@ function Reports() {
           <Typography variant="h6" sx={{ mb: { xs: 1.5, sm: 2 }, fontWeight: 'bold', fontSize: { xs: '1rem', sm: '1.125rem' } }}>
             Income Budget vs Actual
           </Typography>
+          {/* Mobile card view */}
+          {renderSectionMobile(incomeReportData, incomeTotals, 'Income')}
+          {/* Desktop table view */}
           <Box
             sx={{
+              display: { xs: 'none', md: 'block' },
               overflowX: 'auto',
-              mx: { xs: -1.5, sm: 0 },
-              px: { xs: 1.5, sm: 0 },
-              // Scroll shadow indicators
-              background: {
-                xs: `linear-gradient(to right, ${theme.palette.background.paper}, ${theme.palette.background.paper}),
-                     linear-gradient(to right, ${theme.palette.background.paper}, ${theme.palette.background.paper}),
-                     linear-gradient(to right, rgba(0,0,0,.08), rgba(255,255,255,0)),
-                     linear-gradient(to left, rgba(0,0,0,.08), rgba(255,255,255,0))`,
-                sm: 'none',
-              },
-              backgroundPosition: 'left center, right center, left center, right center',
-              backgroundRepeat: 'no-repeat',
-              backgroundSize: '20px 100%, 20px 100%, 10px 100%, 10px 100%',
-              backgroundAttachment: 'local, local, scroll, scroll',
             }}
           >
             <Table size="small" sx={{ minWidth: 600 }}>
@@ -1433,23 +1722,13 @@ function Reports() {
           <Typography variant="h6" sx={{ mb: { xs: 1.5, sm: 2 }, fontWeight: 'bold', fontSize: { xs: '1rem', sm: '1.125rem' } }}>
             Expense Budget vs Actual
           </Typography>
+          {/* Mobile card view */}
+          {renderSectionMobile(expenseReportData, expenseTotals, 'Expense')}
+          {/* Desktop table view */}
           <Box
             sx={{
+              display: { xs: 'none', md: 'block' },
               overflowX: 'auto',
-              mx: { xs: -1.5, sm: 0 },
-              px: { xs: 1.5, sm: 0 },
-              // Scroll shadow indicators
-              background: {
-                xs: `linear-gradient(to right, ${theme.palette.background.paper}, ${theme.palette.background.paper}),
-                     linear-gradient(to right, ${theme.palette.background.paper}, ${theme.palette.background.paper}),
-                     linear-gradient(to right, rgba(0,0,0,.08), rgba(255,255,255,0)),
-                     linear-gradient(to left, rgba(0,0,0,.08), rgba(255,255,255,0))`,
-                sm: 'none',
-              },
-              backgroundPosition: 'left center, right center, left center, right center',
-              backgroundRepeat: 'no-repeat',
-              backgroundSize: '20px 100%, 20px 100%, 10px 100%, 10px 100%',
-              backgroundAttachment: 'local, local, scroll, scroll',
             }}
           >
             <Table size="small" sx={{ minWidth: 600 }}>
@@ -1719,6 +1998,74 @@ function Reports() {
           )}
         </DialogTitle>
         <DialogContent sx={{ p: { xs: 1, sm: 2 } }}>
+          {/* Mobile list view */}
+          {isMobile ? (
+            modalTransactions.length === 0 ? (
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ textAlign: 'center', py: 2 }}
+              >
+                No transactions found
+              </Typography>
+            ) : (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                {modalTransactions.map((txn) => {
+                  const category = categories.find(
+                    (c) => c.category_id === txn.category_id
+                  );
+                  return (
+                    <Box
+                      key={txn.transaction_id}
+                      sx={{
+                        p: 1.5,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        borderRadius: 1,
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'baseline',
+                          gap: 1,
+                        }}
+                      >
+                        <Typography
+                          variant="body2"
+                          fontWeight="medium"
+                          sx={{ fontSize: '0.875rem', minWidth: 0 }}
+                          noWrap
+                        >
+                          {txn.description || (category ? category.name : '-')}
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          fontWeight="medium"
+                          sx={{ fontSize: '0.875rem', flexShrink: 0 }}
+                        >
+                          {formatCurrency(
+                            Math.abs(parseFloat(txn.amount || 0)),
+                            txn.currency
+                          )}
+                        </Typography>
+                      </Box>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ fontSize: '0.75rem' }}
+                      >
+                        {format(parseISO(txn.date), 'MMM dd, yyyy')}
+                        {category ? ` · ${category.name}` : ''}
+                        {` · ${txn.currency}`}
+                      </Typography>
+                    </Box>
+                  );
+                })}
+              </Box>
+            )
+          ) : (
           <Box sx={{ overflowX: 'auto' }}>
             <Table size="small" sx={{ minWidth: 500 }}>
               <TableHead>
@@ -1767,6 +2114,7 @@ function Reports() {
               </TableBody>
             </Table>
           </Box>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setTransactionModalOpen(false)}>Close</Button>
