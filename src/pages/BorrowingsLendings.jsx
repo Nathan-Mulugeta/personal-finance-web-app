@@ -57,7 +57,7 @@ import {
   BORROWING_LENDING_TYPES,
   BORROWING_LENDING_STATUSES,
 } from '../lib/api/borrowingsLendings';
-import LoadingSpinner from '../components/common/LoadingSpinner';
+import PageSkeleton from '../components/common/PageSkeleton';
 import ErrorMessage from '../components/common/ErrorMessage';
 import { usePageRefresh } from '../hooks/usePageRefresh';
 import {
@@ -599,7 +599,7 @@ function BorrowingsLendings() {
   };
 
   if (loading && records.length === 0) {
-    return <LoadingSpinner />;
+    return <PageSkeleton />;
   }
 
   const activeFilterCount = Object.values(filters).filter(

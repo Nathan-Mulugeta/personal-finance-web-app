@@ -5,6 +5,7 @@ import {
   AppBar,
   Toolbar,
   Typography,
+  Divider,
   IconButton,
   ListItemIcon,
   ListItemText,
@@ -18,6 +19,8 @@ import MenuIcon from '@mui/icons-material/Menu'
 import LightModeIcon from '@mui/icons-material/LightMode'
 import DarkModeIcon from '@mui/icons-material/DarkMode'
 import SettingsBrightnessIcon from '@mui/icons-material/SettingsBrightness'
+import SettingsIcon from '@mui/icons-material/Settings'
+import LogoutIcon from '@mui/icons-material/Logout'
 import { supabase } from '../../lib/supabase'
 import { clearAuth } from '../../store/slices/authSlice'
 import { useColorMode } from '../../theme'
@@ -103,18 +106,6 @@ function Header({ onMenuClick }) {
               }}
             />
           </Fade>
-          <Typography 
-            variant="body2" 
-            sx={{ 
-              color: 'text.secondary',
-              display: { xs: 'none', sm: 'block' },
-              maxWidth: { sm: 150, md: 'none' },
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}
-          >
-            {user?.email}
-          </Typography>
           <IconButton
             onClick={(event) => setAppearanceAnchorEl(event.currentTarget)}
             sx={{ color: 'text.secondary' }}
@@ -160,7 +151,29 @@ function Header({ onMenuClick }) {
             open={Boolean(anchorEl)}
             onClose={handleMenuClose}
           >
-            <MenuItem onClick={handleLogout}>Logout</MenuItem>
+            <Box sx={{ px: 2, py: 1 }}>
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                {user?.email}
+              </Typography>
+            </Box>
+            <Divider sx={{ mb: 0.5 }} />
+            <MenuItem
+              onClick={() => {
+                navigate('/settings')
+                handleMenuClose()
+              }}
+            >
+              <ListItemIcon>
+                <SettingsIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Settings</ListItemText>
+            </MenuItem>
+            <MenuItem onClick={handleLogout}>
+              <ListItemIcon>
+                <LogoutIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Logout</ListItemText>
+            </MenuItem>
           </Menu>
         </Box>
       </Toolbar>

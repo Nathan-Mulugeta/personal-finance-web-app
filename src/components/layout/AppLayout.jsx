@@ -3,6 +3,8 @@ import { Outlet } from 'react-router-dom';
 import { Box, Drawer, useMediaQuery, useTheme } from '@mui/material';
 import Sidebar from './Sidebar';
 import Header from './Header';
+import BottomNav from './BottomNav';
+import AppSnackbar from '../common/AppSnackbar';
 import { useDataRefresh } from '../../hooks/useDataRefresh';
 
 const DRAWER_WIDTH = 240;
@@ -139,6 +141,12 @@ function AppLayout() {
         sx={{
           flexGrow: 1,
           p: { xs: 1.5, sm: 2, md: 3 },
+          // Clear the fixed bottom navigation on mobile (56px + iOS safe area)
+          pb: {
+            xs: 'calc(68px + env(safe-area-inset-bottom))',
+            sm: 'calc(72px + env(safe-area-inset-bottom))',
+            md: 3,
+          },
           width: { md: `calc(100% - ${DRAWER_WIDTH}px)` },
           // Subtract the fixed AppBar height so the page doesn't always
           // overflow the viewport by the height of the AppBar
@@ -149,6 +157,8 @@ function AppLayout() {
       >
         <Outlet />
       </Box>
+      <BottomNav onMoreClick={handleDrawerToggle} />
+      <AppSnackbar />
     </Box>
   );
 }

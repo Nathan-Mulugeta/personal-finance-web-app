@@ -59,7 +59,7 @@ import {
 import { fetchCategories } from '../store/slices/categoriesSlice';
 import { budgetSchema } from '../schemas/budgetSchema';
 import { BUDGET_STATUSES } from '../lib/api/budgets';
-import LoadingSpinner from '../components/common/LoadingSpinner';
+import PageSkeleton from '../components/common/PageSkeleton';
 import ErrorMessage from '../components/common/ErrorMessage';
 import CategoryAutocomplete from '../components/common/CategoryAutocomplete';
 import { usePageRefresh } from '../hooks/usePageRefresh';
@@ -854,7 +854,7 @@ function Budgets() {
   };
 
   if (loading && budgets.length === 0) {
-    return <LoadingSpinner />;
+    return <PageSkeleton />;
   }
 
   const activeFilterCount = Object.values(filters).filter(

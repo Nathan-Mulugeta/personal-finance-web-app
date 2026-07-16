@@ -13,6 +13,8 @@ import settingsReducer from './slices/settingsSlice'
 import exchangeRatesReducer from './slices/exchangeRatesSlice'
 import appInitReducer from './slices/appInitSlice'
 import syncReducer from './slices/syncSlice'
+import notificationsReducer from './slices/notificationsSlice'
+import { notificationsMiddleware } from './notificationsMiddleware'
 import '../utils/storageDebug' // Import debug utilities
 
 // Configure localforage to explicitly use IndexedDB
@@ -55,6 +57,8 @@ const rootReducer = combineReducers({
   exchangeRates: exchangeRatesReducer,
   appInit: appInitReducer,
   sync: syncReducer,
+  // Transient — deliberately absent from the persist whitelist
+  notifications: notificationsReducer,
 })
 
 const persistedReducer = persistReducer(persistConfig, rootReducer)
@@ -73,7 +77,7 @@ const store = configureStore({
         // Ignore large transaction arrays which can cause slow checks
         ignoredPaths: ['transactions.allTransactions', 'transactions.transactions'],
       },
-    }),
+    }).concat(notificationsMiddleware),
 })
 
 export const persistor = persistStore(store)

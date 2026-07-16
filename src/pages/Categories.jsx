@@ -42,7 +42,7 @@ import {
 } from '../store/slices/categoriesSlice';
 import { categorySchema } from '../schemas/categorySchema';
 import { CATEGORY_TYPES, CATEGORY_STATUSES } from '../lib/api/categories';
-import LoadingSpinner from '../components/common/LoadingSpinner';
+import PageSkeleton from '../components/common/PageSkeleton';
 import ErrorMessage from '../components/common/ErrorMessage';
 import { usePageRefresh } from '../hooks/usePageRefresh';
 import { buildCategoryTree } from '../utils/categoryHierarchy';
@@ -527,7 +527,7 @@ function Categories() {
   };
 
   if (loading && !isInitialized && categories.length === 0) {
-    return <LoadingSpinner />;
+    return <PageSkeleton />;
   }
 
   const activeFilterCount = Object.values(filters).filter(

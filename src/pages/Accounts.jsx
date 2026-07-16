@@ -51,7 +51,7 @@ import {
 import { fetchSettings } from '../store/slices/settingsSlice';
 import { accountSchema } from '../schemas/accountSchema';
 import { ACCOUNT_TYPES, ACCOUNT_STATUSES } from '../lib/api/accounts';
-import LoadingSpinner from '../components/common/LoadingSpinner';
+import PageSkeleton from '../components/common/PageSkeleton';
 import ErrorMessage from '../components/common/ErrorMessage';
 import { formatCurrency } from '../utils/currencyConversion';
 import { usePageRefresh } from '../hooks/usePageRefresh';
@@ -367,7 +367,7 @@ function Accounts() {
   };
 
   if (loading && accounts.length === 0) {
-    return <LoadingSpinner />;
+    return <PageSkeleton />;
   }
 
   return (

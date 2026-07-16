@@ -15,7 +15,7 @@ import {
   useTheme,
 } from '@mui/material';
 import CurrencyExchangeIcon from '@mui/icons-material/CurrencyExchange';
-import LoadingSpinner from '../components/common/LoadingSpinner';
+import PageSkeleton from '../components/common/PageSkeleton';
 import ErrorMessage from '../components/common/ErrorMessage';
 import { fetchExchangeRates } from '../store/slices/exchangeRatesSlice';
 import { format } from 'date-fns';
@@ -56,7 +56,7 @@ function ExchangeRates() {
   }, [sortedExchangeRates, showAll]);
 
   if (loading && !isInitialized) {
-    return <LoadingSpinner />;
+    return <PageSkeleton />;
   }
 
   return (

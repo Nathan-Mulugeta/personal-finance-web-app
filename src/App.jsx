@@ -3,7 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import AppLayout from './components/layout/AppLayout';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import InstallPrompt from './components/common/InstallPrompt';
-import LoadingSpinner from './components/common/LoadingSpinner';
+import PageSkeleton from './components/common/PageSkeleton';
 import ScrollToTop from './components/common/ScrollToTop';
 
 // Auth pages - keep eager loaded for fast initial access
@@ -42,7 +42,7 @@ function App() {
           <Route
             path="home"
             element={
-              <Suspense fallback={<LoadingSpinner />}>
+              <Suspense fallback={<PageSkeleton />}>
                 <Home />
               </Suspense>
             }
@@ -50,7 +50,7 @@ function App() {
           <Route
             path="add-expense"
             element={
-              <Suspense fallback={<LoadingSpinner />}>
+              <Suspense fallback={<PageSkeleton />}>
                 <Home quickAddExpense />
               </Suspense>
             }
@@ -58,7 +58,7 @@ function App() {
           <Route
             path="transactions"
             element={
-              <Suspense fallback={<LoadingSpinner />}>
+              <Suspense fallback={<PageSkeleton />}>
                 <Transactions />
               </Suspense>
             }
@@ -66,7 +66,7 @@ function App() {
           <Route
             path="accounts"
             element={
-              <Suspense fallback={<LoadingSpinner />}>
+              <Suspense fallback={<PageSkeleton />}>
                 <Accounts />
               </Suspense>
             }
@@ -74,7 +74,7 @@ function App() {
           <Route
             path="categories"
             element={
-              <Suspense fallback={<LoadingSpinner />}>
+              <Suspense fallback={<PageSkeleton />}>
                 <Categories />
               </Suspense>
             }
@@ -82,7 +82,7 @@ function App() {
           <Route
             path="budgets"
             element={
-              <Suspense fallback={<LoadingSpinner />}>
+              <Suspense fallback={<PageSkeleton />}>
                 <Budgets />
               </Suspense>
             }
@@ -90,7 +90,7 @@ function App() {
           <Route
             path="borrowings-lendings"
             element={
-              <Suspense fallback={<LoadingSpinner />}>
+              <Suspense fallback={<PageSkeleton />}>
                 <BorrowingsLendings />
               </Suspense>
             }
@@ -98,7 +98,7 @@ function App() {
           <Route
             path="reports"
             element={
-              <Suspense fallback={<LoadingSpinner />}>
+              <Suspense fallback={<PageSkeleton />}>
                 <Reports />
               </Suspense>
             }
@@ -106,7 +106,7 @@ function App() {
           <Route
             path="exchange-rates"
             element={
-              <Suspense fallback={<LoadingSpinner />}>
+              <Suspense fallback={<PageSkeleton />}>
                 <ExchangeRates />
               </Suspense>
             }
@@ -114,7 +114,7 @@ function App() {
           <Route
             path="settings"
             element={
-              <Suspense fallback={<LoadingSpinner />}>
+              <Suspense fallback={<PageSkeleton />}>
                 <Settings />
               </Suspense>
             }

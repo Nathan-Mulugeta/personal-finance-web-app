@@ -53,7 +53,7 @@ import {
   TRANSACTION_TYPES,
   TRANSACTION_STATUSES,
 } from '../lib/api/transactions';
-import LoadingSpinner from '../components/common/LoadingSpinner';
+import PageSkeleton from '../components/common/PageSkeleton';
 import ErrorMessage from '../components/common/ErrorMessage';
 import AddTransactionDialog from '../components/common/AddTransactionDialog';
 import EditTransactionDialog from '../components/common/EditTransactionDialog';
@@ -856,9 +856,9 @@ function Transactions() {
     combinedItems.some((item) => selectedItems.has(getItemId(item))) &&
     !isAllSelected;
 
-  // Only show loading spinner on initial load
+  // Only show loading skeleton on initial load
   if (loading && !isInitialized && transactions.length === 0) {
-    return <LoadingSpinner />;
+    return <PageSkeleton />;
   }
 
   return (

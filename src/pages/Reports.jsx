@@ -26,7 +26,7 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { usePageRefresh } from '../hooks/usePageRefresh';
-import LoadingSpinner from '../components/common/LoadingSpinner';
+import PageSkeleton from '../components/common/PageSkeleton';
 import ErrorMessage from '../components/common/ErrorMessage';
 import {
   formatCurrency,
@@ -882,7 +882,7 @@ function Reports() {
   );
 
   if (loading && !isInitialized) {
-    return <LoadingSpinner />;
+    return <PageSkeleton />;
   }
 
   // Format period display
