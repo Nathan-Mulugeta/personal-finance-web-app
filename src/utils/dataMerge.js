@@ -60,6 +60,35 @@ export function getIdField(entityType) {
 }
 
 /**
+ * Derive the next incremental-sync timestamp from fetched records.
+ *
+ * Uses the max updated_at/created_at of the returned rows (server clocks)
+ * instead of the client clock, so incremental sync is immune to client
+ * clock skew and to records written while a fetch was in flight.
+ *
+ * @param {Array} records - Rows returned by the fetch
+ * @param {string|null} previousSync - Current lastSync value to fall back to
+ * @returns {string|null} Timestamp to store as lastSync, or null if unknown
+ */
+export function getLatestSyncTimestamp(records, previousSync = null) {
+  let latest = previousSync || null
+  let latestMs = latest ? new Date(latest).getTime() : -Infinity
+
+  ;(records || []).forEach(record => {
+    [record?.updated_at, record?.created_at].forEach(ts => {
+      if (!ts) return
+      const ms = new Date(ts).getTime()
+      if (!Number.isNaN(ms) && ms > latestMs) {
+        latestMs = ms
+        latest = ts
+      }
+    })
+  })
+
+  return latest
+}
+
+/**
  * Merge transfers (special case - transfers have nested structure)
  */
 export function mergeTransfers(existing, incoming) {

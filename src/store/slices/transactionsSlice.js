@@ -1,36 +1,117 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import * as transactionsApi from '../../lib/api/transactions';
-import { mergeIncrementalData, getIdField } from '../../utils/dataMerge';
+import { mergeIncrementalData, getIdField, getLatestSyncTimestamp } from '../../utils/dataMerge';
 import { updateLastSync } from './syncSlice';
 import { deduplicatedRequest } from '../../lib/api/requestDeduplication';
+
+// Apply client-side filters + sort to produce the visible transactions list
+function applyTransactionFilters(allTransactions, filters = {}) {
+  let filtered = [...allTransactions];
+
+  // Always filter out deleted transactions
+  filtered = filtered.filter(t => !t.deleted_at);
+
+  if (filters.accountId) {
+    filtered = filtered.filter(t => t.account_id === filters.accountId);
+  }
+  if (filters.categoryId) {
+    filtered = filtered.filter(t => t.category_id === filters.categoryId);
+  }
+  if (filters.type) {
+    filtered = filtered.filter(t => t.type === filters.type);
+  }
+  if (filters.status) {
+    filtered = filtered.filter(t => t.status === filters.status);
+  }
+  // Date filtering: extract date portion from TIMESTAMPTZ for comparison
+  // t.date may be a full ISO timestamp like "2025-12-30T12:00:00+00:00"
+  // filters use date-only strings like "2025-12-30"
+  if (filters.startDate) {
+    filtered = filtered.filter(t => {
+      const txnDate = t.date ? t.date.split('T')[0] : '';
+      return txnDate >= filters.startDate;
+    });
+  }
+  if (filters.endDate) {
+    filtered = filtered.filter(t => {
+      const txnDate = t.date ? t.date.split('T')[0] : '';
+      return txnDate <= filters.endDate;
+    });
+  }
+
+  // Sort by date descending, then by created_at if available (newest first)
+  filtered.sort((a, b) => {
+    const dateDiff = new Date(b.date) - new Date(a.date);
+    if (dateDiff !== 0) return dateDiff;
+    // If same date, sort by created_at descending (newest first)
+    if (a.created_at && b.created_at) {
+      return new Date(b.created_at) - new Date(a.created_at);
+    }
+    return 0;
+  });
+
+  return filtered;
+}
+
+// How long fetched copies of locally-deleted transactions are ignored.
+// A fetch that starts before a delete commits on the server can resolve
+// after the local removal; without a tombstone the merge would resurrect
+// the stale row until the next sync.
+const DELETION_TOMBSTONE_TTL_MS = 60000;
+
+// Record local deletions so in-flight fetch responses can't resurrect them
+function addDeletionTombstones(state, transactionIds) {
+  if (!state.recentlyDeletedIds) state.recentlyDeletedIds = {};
+  const now = Date.now();
+  transactionIds.forEach((id) => {
+    if (id) state.recentlyDeletedIds[id] = now;
+  });
+}
+
+// Drop fetched rows that were deleted locally within the tombstone TTL,
+// pruning expired tombstones along the way
+function filterRecentlyDeleted(state, rows) {
+  if (!state.recentlyDeletedIds) state.recentlyDeletedIds = {};
+  const now = Date.now();
+  Object.keys(state.recentlyDeletedIds).forEach((id) => {
+    if (now - state.recentlyDeletedIds[id] >= DELETION_TOMBSTONE_TTL_MS) {
+      delete state.recentlyDeletedIds[id];
+    }
+  });
+  return (rows || []).filter(
+    (t) => !(t.transaction_id in state.recentlyDeletedIds)
+  );
+}
 
 // Async thunks
 export const fetchTransactions = createAsyncThunk(
   'transactions/fetchTransactions',
-  async (filters, { rejectWithValue, getState, dispatch }) => {
+  async (filters = {}, { rejectWithValue, getState, dispatch }) => {
     try {
       // Get last sync timestamp for incremental fetch
       const syncState = getState().sync;
       const lastSync = syncState.lastSyncTransactions;
       const isIncremental = !!lastSync && !filters.forceFull;
-      
+
       // Add since parameter if we have a last sync timestamp
-      const fetchFilters = isIncremental 
+      const fetchFilters = isIncremental
         ? { ...filters, since: lastSync }
         : filters;
-      
+
       // Use deduplication to prevent duplicate concurrent requests
       const data = await deduplicatedRequest(
         'transactions/getTransactions',
         fetchFilters,
         () => transactionsApi.getTransactions(fetchFilters)
       );
-      
-      // Update sync timestamp after successful fetch
-      if (data && data.length >= 0) {
-        dispatch(updateLastSync({ entity: 'transactions', timestamp: new Date().toISOString() }));
+
+      // Advance the sync timestamp using server-side record timestamps,
+      // not the client clock (which may be skewed relative to the server)
+      const nextSync = getLatestSyncTimestamp(data, lastSync);
+      if (nextSync) {
+        dispatch(updateLastSync({ entity: 'transactions', timestamp: nextSync }));
       }
-      
+
       return { data, isIncremental };
     } catch (error) {
       return rejectWithValue(error.message);
@@ -111,6 +192,8 @@ export const bulkDeleteTransactions = createAsyncThunk(
 const initialState = {
   transactions: [],
   allTransactions: [], // Cache all transactions for client-side filtering
+  activeFilters: null, // Last filters applied via filterTransactions, re-applied after background syncs
+  recentlyDeletedIds: {}, // Tombstones: transaction_id -> deletion time (ms), see filterRecentlyDeleted
   currentTransaction: null,
   loading: false,
   backgroundLoading: false, // For background updates
@@ -149,6 +232,7 @@ const transactionsSlice = createSlice({
     // Optimistic delete
     optimisticDeleteTransaction: (state, action) => {
       const transactionId = action.payload;
+      addDeletionTombstones(state, [transactionId]);
       state.transactions = state.transactions.filter(
         (txn) => txn.transaction_id !== transactionId
       );
@@ -159,6 +243,7 @@ const transactionsSlice = createSlice({
     // Bulk delete transactions (for cascading deletes) - reducer action
     removeDeletedTransactions: (state, action) => {
       const transactionIds = Array.isArray(action.payload) ? action.payload : [action.payload];
+      addDeletionTombstones(state, transactionIds);
       state.transactions = state.transactions.filter(
         (txn) => !transactionIds.includes(txn.transaction_id)
       );
@@ -173,56 +258,14 @@ const transactionsSlice = createSlice({
     // Filter transactions client-side
     filterTransactions: (state, action) => {
       const filters = action.payload || {};
-      let filtered = [...state.allTransactions];
-      
-      // Always filter out deleted transactions
-      filtered = filtered.filter(t => !t.deleted_at);
-      
-      if (filters.accountId) {
-        filtered = filtered.filter(t => t.account_id === filters.accountId);
-      }
-      if (filters.categoryId) {
-        filtered = filtered.filter(t => t.category_id === filters.categoryId);
-      }
-      if (filters.type) {
-        filtered = filtered.filter(t => t.type === filters.type);
-      }
-      if (filters.status) {
-        filtered = filtered.filter(t => t.status === filters.status);
-      }
-      // Date filtering: extract date portion from TIMESTAMPTZ for comparison
-      // t.date may be a full ISO timestamp like "2025-12-30T12:00:00+00:00"
-      // filters use date-only strings like "2025-12-30"
-      if (filters.startDate) {
-        filtered = filtered.filter(t => {
-          const txnDate = t.date ? t.date.split('T')[0] : '';
-          return txnDate >= filters.startDate;
-        });
-      }
-      if (filters.endDate) {
-        filtered = filtered.filter(t => {
-          const txnDate = t.date ? t.date.split('T')[0] : '';
-          return txnDate <= filters.endDate;
-        });
-      }
-      
-      // Sort by date descending, then by created_at if available (newest first)
-      filtered.sort((a, b) => {
-        const dateDiff = new Date(b.date) - new Date(a.date);
-        if (dateDiff !== 0) return dateDiff;
-        // If same date, sort by created_at descending (newest first)
-        if (a.created_at && b.created_at) {
-          return new Date(b.created_at) - new Date(a.created_at);
-        }
-        return 0;
-      });
-      state.transactions = filtered;
+      state.activeFilters = filters;
+      state.transactions = applyTransactionFilters(state.allTransactions, filters);
     },
   },
   extraReducers: (builder) => {
     builder
       // Fetch transactions
-      .addCase(fetchTransactions.pending, (state, action) => {
+      .addCase(fetchTransactions.pending, (state) => {
         // Only show loading if we don't have cached data
         if (!state.isInitialized || state.allTransactions.length === 0) {
           state.loading = true;
@@ -234,15 +277,19 @@ const transactionsSlice = createSlice({
       .addCase(fetchTransactions.fulfilled, (state, action) => {
         state.loading = false;
         state.backgroundLoading = false;
-        const { data: transactions, isIncremental } = action.payload || { data: [], isIncremental: false };
-        
+        const { data } = action.payload || { data: [] };
+
+        // Ignore rows deleted locally moments ago: a fetch that started
+        // before the delete committed on the server would resurrect them
+        const transactions = filterRecentlyDeleted(state, data);
+
         // If no filters, store all transactions but don't update filtered list
         const hasFilters = action.meta.arg && Object.keys(action.meta.arg).length > 0 && !action.meta.arg.forceFull;
-        
+
         // Always merge data to preserve locally-added transactions that may not be in the fetch response yet
         // This prevents race conditions where realtime sync overwrites recently created transactions
         const shouldMerge = state.allTransactions.length > 0;
-        
+
         if (!hasFilters) {
           if (shouldMerge) {
             state.allTransactions = mergeIncrementalData(
@@ -257,8 +304,14 @@ const transactionsSlice = createSlice({
           }
           state.isInitialized = true;
           state.lastFetched = Date.now();
-          // Don't update transactions array - let filterTransactions handle it
-          // This prevents showing all transactions before filter is applied
+          // Re-apply the current filters so background/realtime syncs update
+          // the visible list too (not just the allTransactions cache)
+          if (state.activeFilters) {
+            state.transactions = applyTransactionFilters(
+              state.allTransactions,
+              state.activeFilters
+            );
+          }
         } else {
           // Filtered fetch - update allTransactions and transactions
           if (shouldMerge) {
@@ -447,13 +500,14 @@ const transactionsSlice = createSlice({
         }
         
         // Remove all deleted transaction IDs from both filtered and all transactions
+        addDeletionTombstones(state, deletedIds);
         state.transactions = state.transactions.filter(
           (txn) => !deletedIds.includes(txn.transaction_id)
         );
         state.allTransactions = state.allTransactions.filter(
           (txn) => !deletedIds.includes(txn.transaction_id)
         );
-        
+
         // Clear current transaction if it was deleted
         if (mainTransactionId && state.currentTransaction?.transaction_id === mainTransactionId) {
           state.currentTransaction = null;
@@ -473,8 +527,9 @@ const transactionsSlice = createSlice({
         // Track local mutation to prevent realtime sync from overwriting
         state.lastLocalMutation = Date.now();
         const { deletedTransactionIds } = action.payload;
-        
+
         // Remove all deleted transaction IDs from both filtered and all transactions
+        addDeletionTombstones(state, deletedTransactionIds);
         state.transactions = state.transactions.filter(
           (txn) => !deletedTransactionIds.includes(txn.transaction_id)
         );

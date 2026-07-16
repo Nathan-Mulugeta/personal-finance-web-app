@@ -1,30 +1,32 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
 import * as budgetsApi from '../../lib/api/budgets'
-import { mergeIncrementalData, getIdField } from '../../utils/dataMerge'
+import { mergeIncrementalData, getIdField, getLatestSyncTimestamp } from '../../utils/dataMerge'
 import { updateLastSync } from './syncSlice'
 
 // Async thunks
 export const fetchBudgets = createAsyncThunk(
   'budgets/fetchBudgets',
-  async (filters, { rejectWithValue, getState, dispatch }) => {
+  async (filters = {}, { rejectWithValue, getState, dispatch }) => {
     try {
       // Get last sync timestamp for incremental fetch
       const syncState = getState().sync;
       const lastSync = syncState.lastSyncBudgets;
       const isIncremental = !!lastSync && !filters.forceFull;
-      
+
       // Add since parameter if we have a last sync timestamp
-      const fetchFilters = isIncremental 
+      const fetchFilters = isIncremental
         ? { ...filters, since: lastSync }
         : filters;
-      
+
       const data = await budgetsApi.getBudgets(fetchFilters);
-      
-      // Update sync timestamp after successful fetch
-      if (data && data.length >= 0) {
-        dispatch(updateLastSync({ entity: 'budgets', timestamp: new Date().toISOString() }));
+
+      // Advance the sync timestamp using server-side record timestamps,
+      // not the client clock (which may be skewed relative to the server)
+      const nextSync = getLatestSyncTimestamp(data, lastSync);
+      if (nextSync) {
+        dispatch(updateLastSync({ entity: 'budgets', timestamp: nextSync }));
       }
-      
+
       return { data, isIncremental };
     } catch (error) {
       return rejectWithValue(error.message)

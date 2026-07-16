@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import { supabase, setCachedUser, clearUserCache } from '../../lib/supabase'
@@ -83,9 +83,17 @@ function ProtectedRoute({ children }) {
     }
   }, [dispatch])
 
-  // Initialize app data when user is authenticated but app is not initialized
+  // Initialize app data when the user is authenticated.
+  // isInitialized is rehydrated from persisted storage, so on a warm app open
+  // it is already true and the old `!isInitialized` guard alone would skip
+  // fetching entirely, leaving the app on stale cached data. Track whether
+  // this page load has fetched yet so a warm open still refreshes in the
+  // background (cached data keeps rendering; no loading gate is shown).
+  const hasFetchedThisLoad = useRef(false)
   useEffect(() => {
-    if (user && !isInitialized && !isInitializing) {
+    if (!user || isInitializing) return
+    if (!isInitialized || !hasFetchedThisLoad.current) {
+      hasFetchedThisLoad.current = true
       dispatch(initializeApp())
     }
   }, [user, isInitialized, isInitializing, dispatch])

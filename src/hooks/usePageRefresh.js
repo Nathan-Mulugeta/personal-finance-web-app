@@ -42,17 +42,15 @@ export function usePageRefresh(config = {}) {
 
     // Debounce: Don't refresh if we just refreshed this data type recently (within 1 second)
     const now = Date.now()
-    const shouldRefresh = dataTypes.some(type => {
+    const typesToRefresh = dataTypes.filter(type => {
       const lastRefresh = lastRefreshRef.current[type] || 0
       return (now - lastRefresh) > 1000 // 1 second debounce
     })
 
-    if (!shouldRefresh && dataTypes.length > 0) return
-
     // Refresh data based on dataTypes
-    dataTypes.forEach(type => {
+    typesToRefresh.forEach(type => {
       lastRefreshRef.current[type] = now
-      
+
       switch (type) {
         case 'accounts':
           dispatch(fetchAccounts({ status: 'Active', ...filters.accounts }))

@@ -8,7 +8,8 @@ export async function createBudget(budgetData) {
   const user = await getCurrentUser()
   if (!user) throw new Error('User not authenticated')
 
-  const {
+  // let (not const): startMonth may be defaulted below for recurring budgets
+  let {
     categoryId,
     currency,
     amount,
