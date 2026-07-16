@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback, memo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import {
   selectAccountNameGetter,
   selectCategoryNameGetter,
@@ -14,7 +15,6 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  Fab,
   FormControlLabel,
   IconButton,
   InputAdornment,
@@ -40,6 +40,7 @@ import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import CameraAltIcon from '@mui/icons-material/CameraAlt';
 import ChatIcon from '@mui/icons-material/Chat';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import AddTransactionDialog from '../components/common/AddTransactionDialog';
 import EditTransactionDialog from '../components/common/EditTransactionDialog';
 import BatchTransactionDialog from '../components/common/BatchTransactionDialog';
@@ -57,6 +58,7 @@ const HOME_SHORTCUTS_SETTING_KEY = 'HomeCategoryShortcuts';
 
 function Home({ quickAddExpense = false }) {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [searchQuery, setSearchQuery] = useState('');
@@ -209,7 +211,7 @@ function Home({ quickAddExpense = false }) {
     });
   }, [debouncedSearchQuery, allTransactions, categoryMap]);
 
-  // Recent transactions (10 most recent, excluding deleted/cancelled)
+  // Recent transactions (5 most recent, excluding deleted/cancelled)
   const recentTransactions = useMemo(() => {
     if (!allTransactions || allTransactions.length === 0) {
       return [];
@@ -223,7 +225,7 @@ function Home({ quickAddExpense = false }) {
         const dateB = new Date(b.created_at || b.date);
         return dateB - dateA;
       })
-      .slice(0, 10);
+      .slice(0, 5);
   }, [allTransactions]);
 
   // Get date display with time (Today shows time only, Yesterday shows "Yesterday, time", older dates show "Dec 25, time")
@@ -669,6 +671,46 @@ function Home({ quickAddExpense = false }) {
         </Typography>
         <Box sx={{ display: 'flex', gap: 1 }}>
           <IconButton
+            onClick={() => setReceiptCaptureOpen(true)}
+            aria-label="Scan receipt"
+            sx={{
+              backgroundColor: 'primary.main',
+              color: 'white',
+              width: 36,
+              height: 36,
+              '&:hover': {
+                backgroundColor: 'primary.dark',
+                cursor: 'pointer',
+              },
+            }}
+          >
+            <CameraAltIcon
+              sx={{
+                fontSize: 20,
+              }}
+            />
+          </IconButton>
+          <IconButton
+            onClick={() => setNaturalLanguageOpen(true)}
+            aria-label="Add transactions with text"
+            sx={{
+              backgroundColor: 'primary.main',
+              color: 'white',
+              width: 36,
+              height: 36,
+              '&:hover': {
+                backgroundColor: 'primary.dark',
+                cursor: 'pointer',
+              },
+            }}
+          >
+            <ChatIcon
+              sx={{
+                fontSize: 20,
+              }}
+            />
+          </IconButton>
+          <IconButton
             onClick={() => setTransferDialogOpen(true)}
             sx={{
               backgroundColor: 'primary.main',
@@ -891,27 +933,48 @@ function Home({ quickAddExpense = false }) {
       {/* Recent Transactions (shown when no search query) */}
       {!debouncedSearchQuery && (
         <Box>
-          <Typography
-            variant="h6"
+          <Box
             sx={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
               mb: 1.5,
-              fontSize: { xs: '1rem', sm: '1.125rem' },
-              fontWeight: 500,
             }}
           >
-            Recent Transactions
-          </Typography>
+            <Typography
+              variant="h6"
+              sx={{
+                fontSize: { xs: '1rem', sm: '1.125rem' },
+                fontWeight: 500,
+              }}
+            >
+              Recent Transactions
+            </Typography>
+            {/* Fallback entry point for shortcut management while the Category
+                Shortcuts section is hidden (no shortcuts configured yet) */}
+            {shortcutCategories.length === 0 && (
+              <Button
+                size="small"
+                color="inherit"
+                onClick={handleOpenManageShortcuts}
+                sx={{ color: 'text.secondary', textTransform: 'none' }}
+              >
+                Manage shortcuts
+              </Button>
+            )}
+          </Box>
           {renderTransactions(recentTransactions, 'Recent Transactions')}
-        </Box>
-      )}
-
-      {/* Fallback entry point for shortcut management while the Category
-          Shortcuts section is hidden (no shortcuts configured yet) */}
-      {!debouncedSearchQuery && shortcutCategories.length === 0 && (
-        <Box sx={{ mt: 1.5, display: 'flex', justifyContent: 'center' }}>
-          <Button size="small" color="inherit" onClick={handleOpenManageShortcuts} sx={{ color: 'text.secondary', textTransform: 'none' }}>
-            Manage category shortcuts
-          </Button>
+          {recentTransactions.length > 0 && (
+            <Button
+              fullWidth
+              size="small"
+              onClick={() => navigate('/transactions')}
+              endIcon={<ArrowForwardIcon sx={{ fontSize: 16 }} />}
+              sx={{ mt: 1, textTransform: 'none', color: 'text.secondary' }}
+            >
+              View all transactions
+            </Button>
+          )}
         </Box>
       )}
 
@@ -990,50 +1053,6 @@ function Home({ quickAddExpense = false }) {
         </DialogActions>
       </Dialog>
 
-      {/* Floating Action Buttons for AI Features */}
-      <Box
-        sx={{
-          position: 'fixed',
-          bottom: { xs: 16, sm: 24 },
-          right: { xs: 16, sm: 24 },
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 1.5,
-          zIndex: 1000,
-        }}
-      >
-        {/* Natural Language Input FAB */}
-        <Fab
-          color="secondary"
-          size="medium"
-          onClick={() => setNaturalLanguageOpen(true)}
-          sx={{
-            boxShadow: 3,
-            '&:hover': {
-              boxShadow: 6,
-            },
-          }}
-          aria-label="Add transactions with text"
-        >
-          <ChatIcon />
-        </Fab>
-
-        {/* Receipt Scan FAB */}
-        <Fab
-          color="primary"
-          size="large"
-          onClick={() => setReceiptCaptureOpen(true)}
-          sx={{
-            boxShadow: 4,
-            '&:hover': {
-              boxShadow: 8,
-            },
-          }}
-          aria-label="Scan receipt"
-        >
-          <CameraAltIcon />
-        </Fab>
-      </Box>
     </Box>
   );
 }

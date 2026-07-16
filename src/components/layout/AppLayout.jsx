@@ -140,7 +140,9 @@ function AppLayout() {
           flexGrow: 1,
           p: { xs: 1.5, sm: 2, md: 3 },
           width: { md: `calc(100% - ${DRAWER_WIDTH}px)` },
-          minHeight: '100vh',
+          // Subtract the fixed AppBar height so the page doesn't always
+          // overflow the viewport by the height of the AppBar
+          minHeight: { xs: 'calc(100vh - 56px)', sm: 'calc(100vh - 64px)' },
           backgroundColor: theme.palette.background.default,
           mt: { xs: '56px', sm: '64px' }, // Account for fixed AppBar height (56px on mobile, 64px on desktop)
         }}
