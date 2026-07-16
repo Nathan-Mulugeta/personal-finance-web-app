@@ -1,9 +1,8 @@
-import { useState, useEffect, useMemo, useRef, useCallback, memo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import {
   selectAccountNameGetter,
-  selectCategoryNameGetter,
   selectCategoryDisplayNameGetter,
   selectCategoryMap,
 } from '../store/selectors';
@@ -29,8 +28,6 @@ import {
   TableRow,
   TextField,
   Typography,
-  useMediaQuery,
-  useTheme,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
@@ -59,8 +56,6 @@ const HOME_SHORTCUTS_SETTING_KEY = 'HomeCategoryShortcuts';
 function Home({ quickAddExpense = false }) {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -84,12 +79,10 @@ function Home({ quickAddExpense = false }) {
   // Get data from Redux
   const { allTransactions, error } = useSelector((state) => state.transactions);
   const { categories } = useSelector((state) => state.categories);
-  const { accounts } = useSelector((state) => state.accounts);
   const { settings } = useSelector((state) => state.settings);
-  
+
   // Memoized O(1) lookup functions from selectors
   const getAccountName = useSelector(selectAccountNameGetter);
-  const getCategoryName = useSelector(selectCategoryNameGetter);
   const getCategoryDisplayName = useSelector(selectCategoryDisplayNameGetter);
   const categoryMap = useSelector(selectCategoryMap);
 
@@ -548,7 +541,7 @@ function Home({ quickAddExpense = false }) {
   };
 
   // Render transactions list/table
-  const renderTransactions = (transactions, title) => {
+  const renderTransactions = (transactions) => {
     if (transactions.length === 0) {
       return (
         <Box
@@ -927,7 +920,7 @@ function Home({ quickAddExpense = false }) {
 
       {/* Search Results */}
       {debouncedSearchQuery && (
-        <Box>{renderTransactions(searchResults, 'Search Results')}</Box>
+        <Box>{renderTransactions(searchResults)}</Box>
       )}
 
       {/* Recent Transactions (shown when no search query) */}
@@ -963,7 +956,7 @@ function Home({ quickAddExpense = false }) {
               </Button>
             )}
           </Box>
-          {renderTransactions(recentTransactions, 'Recent Transactions')}
+          {renderTransactions(recentTransactions)}
           {recentTransactions.length > 0 && (
             <Button
               fullWidth
