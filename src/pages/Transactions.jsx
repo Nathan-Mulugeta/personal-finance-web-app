@@ -1,19 +1,13 @@
-import React, { useEffect, useState, useMemo, useCallback, memo } from 'react';
+import { useEffect, useState, useMemo, useCallback, memo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   selectAccountNameGetter,
   selectAccountCurrencyGetter,
-  selectCategoryNameGetter,
   selectCategoryDisplayNameGetter,
-  selectAccountMap,
 } from '../store/selectors';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
 import {
   Box,
   Button,
-  Card,
-  CardContent,
   Checkbox,
   Chip,
   CircularProgress,
@@ -22,7 +16,6 @@ import {
   DialogContent,
   DialogActions,
   FormControl,
-  FormHelperText,
   Grid,
   IconButton,
   InputLabel,
@@ -37,7 +30,6 @@ import {
   TableRow,
   TextField,
   Typography,
-  Tooltip,
   Alert,
   Collapse,
   useMediaQuery,
@@ -52,31 +44,20 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import TodayIcon from '@mui/icons-material/Today';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import {
-  fetchTransactions,
   bulkDeleteTransactions as bulkDeleteTransactionsThunk,
   removeDeletedTransactions,
   filterTransactions,
 } from '../store/slices/transactionsSlice';
-import { fetchAccounts } from '../store/slices/accountsSlice';
-import { fetchCategories } from '../store/slices/categoriesSlice';
-import {
-  fetchTransfers,
-  createTransfer,
-  deleteTransfer,
-} from '../store/slices/transfersSlice';
-import { transferSchema } from '../schemas/transferSchema';
+import { deleteTransfer } from '../store/slices/transfersSlice';
 import {
   TRANSACTION_TYPES,
   TRANSACTION_STATUSES,
 } from '../lib/api/transactions';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
-import CategoryAutocomplete from '../components/common/CategoryAutocomplete';
-import AccountAutocomplete from '../components/common/AccountAutocomplete';
 import AddTransactionDialog from '../components/common/AddTransactionDialog';
 import EditTransactionDialog from '../components/common/EditTransactionDialog';
 import AddTransferDialog from '../components/common/AddTransferDialog';
-import { useKeyboardAwareHeight } from '../hooks/useKeyboardAwareHeight';
 import { formatCurrency } from '../utils/currencyConversion';
 import {
   format,
@@ -102,7 +83,6 @@ const MobileTransactionRow = memo(function MobileTransactionRow({
   isSelected,
   selectionMode,
   isBulkDeleting,
-  getCategoryName,
   getCategoryDisplayName,
   getAccountName,
   onLongPressStart,
@@ -422,360 +402,14 @@ const MobileTransferRow = memo(function MobileTransferRow({
   );
 });
 
-/**
- * Memoized Desktop Transaction Row Component
- */
-const DesktopTransactionRow = memo(function DesktopTransactionRow({
-  transaction,
-  isSelected,
-  selectionMode,
-  isBulkDeleting,
-  getCategoryName,
-  getCategoryDisplayName,
-  getAccountName,
-  getTypeChipSx,
-  getStatusChipSx,
-  onLongPressStart,
-  onLongPressEnd,
-  onSelect,
-  onEdit,
-}) {
-  const dateDisplay = (() => {
-    try {
-      return format(parseISO(transaction.date), 'MMM dd, yyyy');
-    } catch {
-      return transaction.date;
-    }
-  })();
-
-  return (
-    <TableRow
-      hover
-      selected={isSelected}
-      onMouseDown={() => onLongPressStart(transaction.transaction_id)}
-      onMouseUp={onLongPressEnd}
-      onMouseLeave={onLongPressEnd}
-      onClick={() => {
-        if (selectionMode) {
-          onSelect(transaction.transaction_id, !isSelected);
-        } else if (!isBulkDeleting) {
-          onEdit(transaction);
-        }
-      }}
-      sx={{
-        backgroundColor: isSelected ? 'action.selected' : 'transparent',
-        cursor: isBulkDeleting ? 'default' : 'pointer',
-        userSelect: 'none',
-        '&:hover': {
-          backgroundColor: isSelected ? 'action.selected' : 'action.hover',
-        },
-        '& td': {
-          borderBottom: '1px solid',
-          borderColor: 'divider',
-          py: 0.5,
-          fontSize: '0.8125rem',
-        },
-      }}
-    >
-      {selectionMode && (
-        <TableCell padding="checkbox">
-          <Checkbox
-            checked={isSelected}
-            onChange={(e) => {
-              e.stopPropagation();
-              onSelect(transaction.transaction_id, e.target.checked);
-            }}
-            onClick={(e) => e.stopPropagation()}
-            size="small"
-          />
-        </TableCell>
-      )}
-      <TableCell>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Typography
-            variant="body2"
-            fontWeight={500}
-            sx={{ fontSize: '0.875rem' }}
-          >
-            {getCategoryDisplayName(transaction.category_id)}
-          </Typography>
-          <Chip
-            label={transaction.type}
-            size="small"
-            sx={{
-              ...getTypeChipSx(transaction.type),
-              height: 20,
-              fontSize: '0.6875rem',
-            }}
-          />
-        </Box>
-      </TableCell>
-      <TableCell>
-        <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
-          {getAccountName(transaction.account_id)}
-        </Typography>
-      </TableCell>
-      <TableCell>
-        <Typography
-          variant="body2"
-          sx={{
-            fontSize: '0.875rem',
-            color: 'text.secondary',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            maxWidth: 300,
-          }}
-          title={transaction.description || ''}
-        >
-          {transaction.description || '-'}
-        </Typography>
-      </TableCell>
-      <TableCell sx={{ whiteSpace: 'nowrap' }}>
-        <Typography
-          variant="body2"
-          sx={{ fontSize: '0.875rem', color: 'text.secondary' }}
-        >
-          {dateDisplay}
-        </Typography>
-      </TableCell>
-      <TableCell align="right">
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'flex-end',
-            gap: 0.5,
-          }}
-        >
-          <Chip
-            label={transaction.status}
-            size="small"
-            sx={{
-              ...getStatusChipSx(transaction.status),
-              height: 20,
-              fontSize: '0.6875rem',
-            }}
-          />
-          <Typography
-            variant="body2"
-            sx={{ fontSize: '0.75rem', color: 'text.secondary' }}
-          >
-            {transaction.currency}
-          </Typography>
-          <Typography
-            variant="body2"
-            fontWeight={600}
-            sx={{
-              fontSize: '0.875rem',
-              color:
-                transaction.type === 'Income' ||
-                transaction.type === 'Transfer In'
-                  ? 'google.green'
-                  : transaction.type === 'Expense' ||
-                    transaction.type === 'Transfer Out'
-                  ? 'google.red'
-                  : 'text.primary',
-            }}
-          >
-            {new Intl.NumberFormat('en-US', {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            }).format(Math.abs(transaction.amount))}
-          </Typography>
-        </Box>
-      </TableCell>
-    </TableRow>
-  );
-});
-
-/**
- * Memoized Desktop Transfer Row Component
- */
-const DesktopTransferRow = memo(function DesktopTransferRow({
-  transfer,
-  transferId,
-  isSelected,
-  selectionMode,
-  getAccountName,
-  getAccountCurrency,
-  onLongPressStart,
-  onLongPressEnd,
-  onSelect,
-}) {
-  const transferOut = transfer.transferOut;
-  const transferIn = transfer.transferIn;
-  const transferDate = transfer.date || transferOut?.date || transferIn?.date;
-
-  return (
-    <TableRow
-      hover
-      selected={isSelected}
-      onMouseDown={() => onLongPressStart(transferId)}
-      onMouseUp={onLongPressEnd}
-      onMouseLeave={onLongPressEnd}
-      onClick={() => {
-        if (selectionMode) {
-          onSelect(transferId, !isSelected);
-        }
-      }}
-      sx={{
-        backgroundColor: isSelected ? 'action.selected' : 'transparent',
-        cursor: selectionMode ? 'pointer' : 'default',
-        userSelect: 'none',
-        '&:hover': {
-          backgroundColor: isSelected ? 'action.selected' : 'action.hover',
-        },
-        '& td': {
-          borderBottom: '1px solid',
-          borderColor: 'divider',
-          py: 0.5,
-          fontSize: '0.8125rem',
-        },
-      }}
-    >
-      {selectionMode && (
-        <TableCell padding="checkbox">
-          <Checkbox
-            checked={isSelected}
-            onChange={(e) => {
-              e.stopPropagation();
-              onSelect(transferId, e.target.checked);
-            }}
-            onClick={(e) => e.stopPropagation()}
-            size="small"
-          />
-        </TableCell>
-      )}
-      <TableCell>
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 0.75,
-            flexWrap: 'wrap',
-          }}
-        >
-          <SwapHorizIcon sx={{ fontSize: 18, color: 'primary.main' }} />
-          <Typography
-            variant="body2"
-            fontWeight={600}
-            sx={{ fontSize: '0.875rem' }}
-          >
-            Transfer
-          </Typography>
-          <Chip
-            label={transfer.exchangeRate ? 'Multi-Currency' : 'Same Currency'}
-            size="small"
-            sx={{
-              height: 20,
-              fontSize: '0.6875rem',
-              '& .MuiChip-label': { px: 0.75 },
-            }}
-          />
-        </Box>
-      </TableCell>
-      <TableCell>
-        <Typography
-          variant="body2"
-          sx={{ fontSize: '0.875rem', color: 'text.secondary' }}
-        >
-          {getAccountName(transferOut?.account_id)} →{' '}
-          {getAccountName(transferIn?.account_id)}
-        </Typography>
-      </TableCell>
-      <TableCell>
-        <Typography
-          variant="body2"
-          sx={{
-            fontSize: '0.875rem',
-            color: 'text.secondary',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            maxWidth: 300,
-          }}
-          title={transferOut?.description || ''}
-        >
-          {transferOut?.description || '-'}
-        </Typography>
-      </TableCell>
-      <TableCell sx={{ whiteSpace: 'nowrap' }}>
-        <Typography
-          variant="body2"
-          sx={{ fontSize: '0.875rem', color: 'text.secondary' }}
-        >
-          {transferDate ? format(parseISO(transferDate), 'MMM dd, yyyy') : '-'}
-        </Typography>
-      </TableCell>
-      <TableCell align="right">
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'flex-end',
-            gap: 0.5,
-            flexWrap: 'wrap',
-          }}
-        >
-          <Typography
-            variant="body2"
-            sx={{ fontSize: '0.75rem', color: 'text.secondary' }}
-          >
-            {getAccountCurrency(transferOut?.account_id)}
-          </Typography>
-          <Typography
-            variant="body2"
-            fontWeight={600}
-            sx={{ fontSize: '0.875rem', color: 'google.red' }}
-          >
-            {new Intl.NumberFormat('en-US', {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            }).format(Math.abs(transferOut?.amount || 0))}
-          </Typography>
-          {transfer.exchangeRate && (
-            <>
-              <Typography
-                variant="body2"
-                sx={{ fontSize: '0.75rem', color: 'text.secondary' }}
-              >
-                →
-              </Typography>
-              <Typography
-                variant="body2"
-                sx={{ fontSize: '0.75rem', color: 'text.secondary' }}
-              >
-                {getAccountCurrency(transferIn?.account_id)}
-              </Typography>
-              <Typography
-                variant="body2"
-                fontWeight={600}
-                sx={{ fontSize: '0.875rem', color: 'google.green' }}
-              >
-                {new Intl.NumberFormat('en-US', {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                }).format(Math.abs(transferIn?.amount || 0))}
-              </Typography>
-            </>
-          )}
-        </Box>
-      </TableCell>
-    </TableRow>
-  );
-});
-
 function Transactions() {
   const dispatch = useDispatch();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const { keyboardVisible, keyboardHeight } = useKeyboardAwareHeight();
   const {
     transactions,
     allTransactions,
     loading,
-    backgroundLoading,
     isInitialized,
     error,
   } = useSelector((state) => state.transactions);
@@ -786,9 +420,7 @@ function Transactions() {
   // Memoized O(1) lookup functions from selectors
   const getAccountName = useSelector(selectAccountNameGetter);
   const getAccountCurrency = useSelector(selectAccountCurrencyGetter);
-  const getCategoryName = useSelector(selectCategoryNameGetter);
   const getCategoryDisplayName = useSelector(selectCategoryDisplayNameGetter);
-  const accountMap = useSelector(selectAccountMap);
   const [openTransferDialog, setOpenTransferDialog] = useState(false);
   const [addTransactionOpen, setAddTransactionOpen] = useState(false);
   const [showTransfers, setShowTransfers] = useState(true);
@@ -822,21 +454,7 @@ function Transactions() {
     },
   });
 
-  // Apply filter immediately when data is first loaded
-  useEffect(() => {
-    if (isInitialized && allTransactions.length > 0) {
-      // Apply current filters immediately when data loads
-      dispatch(filterTransactions(filters));
-    }
-  }, [
-    dispatch,
-    isInitialized,
-    allTransactions.length,
-    filters.startDate,
-    filters.endDate,
-  ]);
-
-  // Apply client-side filtering instantly when filters change
+  // Apply client-side filtering instantly when filters change or data loads
   useEffect(() => {
     // Only filter if we have cached data
     if (isInitialized && allTransactions.length > 0) {
@@ -938,9 +556,7 @@ function Transactions() {
 
       // Delete transactions in bulk
       if (transactionIds.length > 0) {
-        const result = await dispatch(
-          bulkDeleteTransactionsThunk(transactionIds)
-        ).unwrap();
+        await dispatch(bulkDeleteTransactionsThunk(transactionIds)).unwrap();
 
         // Update Redux state (already handled by thunk, but ensure filters are reapplied)
         dispatch(filterTransactions(filters));
@@ -960,7 +576,7 @@ function Transactions() {
 
             // Remove transactions from transactions Redux state
             if (result?.transactionIds && result.transactionIds.length > 0) {
-              dispatch(bulkDeleteTransactionsAction(result.transactionIds));
+              dispatch(removeDeletedTransactions(result.transactionIds));
             }
           }
         } catch (err) {
@@ -1059,82 +675,6 @@ function Transactions() {
     });
   }, []);
 
-  // Google-style chip styling for status badges
-  const getStatusChipSx = (status) => {
-    switch (status) {
-      case 'Cleared':
-        return {
-          backgroundColor: 'google.greenBg',
-          color: 'google.green',
-          fontWeight: 500,
-        };
-      case 'Pending':
-        return {
-          backgroundColor: 'google.yellowBg',
-          color: 'google.yellow',
-          fontWeight: 500,
-        };
-      case 'Reconciled':
-        return {
-          backgroundColor: 'google.blueBg',
-          color: 'google.blue',
-          fontWeight: 500,
-        };
-      case 'Cancelled':
-        return {
-          backgroundColor: 'google.grayBg',
-          color: 'google.gray',
-          fontWeight: 500,
-        };
-      default:
-        return {
-          backgroundColor: 'google.grayBg',
-          color: 'google.gray',
-          fontWeight: 500,
-        };
-    }
-  };
-
-  // Google-style chip styling for type badges
-  const getTypeChipSx = (type) => {
-    switch (type) {
-      case 'Income':
-        return {
-          backgroundColor: 'google.greenBg',
-          color: 'google.green',
-          fontWeight: 500,
-        };
-      case 'Expense':
-        return {
-          backgroundColor: 'google.redBg',
-          color: 'google.red',
-          fontWeight: 500,
-        };
-      case 'Transfer':
-      case 'Transfer In':
-      case 'Transfer Out':
-        return {
-          backgroundColor: 'google.blueBg',
-          color: 'google.blue',
-          fontWeight: 500,
-        };
-      default:
-        return {
-          backgroundColor: 'google.grayBg',
-          color: 'google.gray',
-          fontWeight: 500,
-        };
-    }
-  };
-
-  // Determine if same currency or multi-currency for transfers
-  const isSameCurrency = () => {
-    if (!watchedFromAccountId || !watchedToAccountId) return true;
-    const fromAccount = accountMap.get(watchedFromAccountId);
-    const toAccount = accountMap.get(watchedToAccountId);
-    return fromAccount?.currency === toAccount?.currency;
-  };
-
   // Calculate expense aggregation by currency for selected date
   const calculateExpensesByCurrency = () => {
     const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
@@ -1165,28 +705,6 @@ function Transactions() {
 
     return expensesByCurrency;
   };
-
-  // Filter categories by type and flatten with hierarchy
-  const getFilteredCategories = () => {
-    if (!watchedType) return flattenCategoryTree(categories);
-    // For Income transactions, show Income categories
-    // For Expense transactions, show Expense categories
-    // For Transfer, show both
-    let filtered;
-    if (watchedType === 'Income') {
-      filtered = categories.filter((cat) => cat.type === 'Income');
-    } else if (watchedType === 'Expense') {
-      filtered = categories.filter((cat) => cat.type === 'Expense');
-    } else {
-      filtered = categories;
-    }
-    return flattenCategoryTree(filtered);
-  };
-
-  // Only show loading spinner on initial load
-  if (loading && !isInitialized && transactions.length === 0) {
-    return <LoadingSpinner />;
-  }
 
   // Combine transactions and transfers for display
   const combinedItems = useMemo(() => {
@@ -1337,6 +855,11 @@ function Transactions() {
   const isIndeterminate =
     combinedItems.some((item) => selectedItems.has(getItemId(item))) &&
     !isAllSelected;
+
+  // Only show loading spinner on initial load
+  if (loading && !isInitialized && transactions.length === 0) {
+    return <LoadingSpinner />;
+  }
 
   return (
     <Box
@@ -1942,7 +1465,6 @@ function Transactions() {
                     isSelected={isSelected}
                     selectionMode={selectionMode}
                     isBulkDeleting={isBulkDeleting}
-                    getCategoryName={getCategoryName}
                     getCategoryDisplayName={getCategoryDisplayName}
                     getAccountName={getAccountName}
                     onLongPressStart={handleLongPressStart}
