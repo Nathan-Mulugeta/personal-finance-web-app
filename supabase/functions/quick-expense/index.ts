@@ -601,8 +601,7 @@ Deno.serve(async (req: Request) => {
       const currency = data[0]?.currency ?? Currency.toUpperCase();
       const roundedTotal = Math.round(totalAmount * 100) / 100;
 
-      // Build readable multi-line message for Tasker layout display (Idea A)
-      // Primary line: leaf category — amount; memo line: ↳ "description"
+      // Build a clean, scannable message for Tasker flash display
       const itemLines = txns.map((txn: any, i: number) => {
         const desc = txn.description || data[i]?.description || '';
         const amt = Math.round(Number(txn.amount) * 100) / 100;
@@ -610,15 +609,13 @@ Deno.serve(async (req: Request) => {
         const leafCat = fullCat.includes('>')
           ? fullCat.split('>').pop()!.trim()
           : fullCat;
-        const primary = `• ${leafCat} — ${amt} ${currency}`;
-        const memo = desc ? `  ↳ "${desc}"` : '';
-        return memo ? `${primary}\n${memo}` : primary;
+        const detail = desc ? ` (${desc})` : '';
+        return `✅ ${leafCat} ${amt}${detail}`;
       });
 
       const message = [
-        `${data.length} transaction(s) = ${roundedTotal} ${currency}`,
-        '---',
         ...itemLines,
+        `Total: ${roundedTotal} ${currency}`,
       ].join('\n');
 
       return jsonResponse({
