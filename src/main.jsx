@@ -1,63 +1,64 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { Provider } from 'react-redux';
 import { PersistGate } from 'redux-persist/integration/react';
 import { BrowserRouter } from 'react-router-dom';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { ThemeProvider } from '@mui/material/styles';
+import useMediaQuery from '@mui/material/useMediaQuery';
 import CssBaseline from '@mui/material/CssBaseline';
 import App from './App.jsx';
 import store, { persistor } from './store';
 import LoadingSpinner from './components/common/LoadingSpinner';
+import {
+  getTheme,
+  ColorModeContext,
+  THEME_COLOR,
+  THEME_MODE_STORAGE_KEY,
+} from './theme';
 import './index.css';
 
-const theme = createTheme({
-  palette: {
-    mode: 'light',
-    primary: {
-      main: '#1a73e8', // Google Blue
-    },
-    secondary: {
-      main: '#5f6368', // Google Gray
-    },
-    success: {
-      main: '#1e8e3e', // Google Green
-      light: '#e6f4ea', // Google Green background
-    },
-    error: {
-      main: '#d93025', // Google Red
-      light: '#fce8e6', // Google Red background
-    },
-    warning: {
-      main: '#e37400', // Google Yellow/Amber
-      light: '#fef7e0', // Google Yellow background
-    },
-    info: {
-      main: '#1a73e8', // Google Blue
-      light: '#e8f0fe', // Google Blue background
-    },
-    // Custom Google-style colors for the app
-    google: {
-      green: '#1e8e3e',
-      greenBg: '#e6f4ea',
-      red: '#d93025',
-      redBg: '#fce8e6',
-      yellow: '#e37400',
-      yellowBg: '#fef7e0',
-      blue: '#1a73e8',
-      blueBg: '#e8f0fe',
-      gray: '#5f6368',
-      grayBg: '#f1f3f4',
-      grayLight: '#f8f9fa',
-    },
-    // Legacy aliases for backwards compatibility
-    softRed: {
-      main: '#d93025', // Google Red
-    },
-    softGreen: {
-      main: '#1e8e3e', // Google Green
-    },
-  },
-});
+function ThemedApp() {
+  const [mode, setMode] = useState(() => {
+    const saved = localStorage.getItem(THEME_MODE_STORAGE_KEY);
+    return saved === 'light' || saved === 'dark' ? saved : 'system';
+  });
+  const systemPrefersDark = useMediaQuery('(prefers-color-scheme: dark)', {
+    noSsr: true,
+  });
+
+  const resolvedMode =
+    mode === 'system' ? (systemPrefersDark ? 'dark' : 'light') : mode;
+
+  const colorMode = useMemo(
+    () => ({
+      mode,
+      resolvedMode,
+      setMode: (newMode) => {
+        setMode(newMode);
+        localStorage.setItem(THEME_MODE_STORAGE_KEY, newMode);
+      },
+    }),
+    [mode, resolvedMode]
+  );
+
+  const theme = useMemo(() => getTheme(resolvedMode), [resolvedMode]);
+
+  // Keep the PWA titlebar / browser chrome color in sync with the theme
+  useEffect(() => {
+    document
+      .querySelector('meta[name="theme-color"]')
+      ?.setAttribute('content', THEME_COLOR[resolvedMode]);
+  }, [resolvedMode]);
+
+  return (
+    <ColorModeContext.Provider value={colorMode}>
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <App />
+      </ThemeProvider>
+    </ColorModeContext.Provider>
+  );
+}
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
@@ -72,10 +73,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             v7_relativeSplatPath: true,
           }}
         >
-          <ThemeProvider theme={theme}>
-            <CssBaseline />
-            <App />
-          </ThemeProvider>
+          <ThemedApp />
         </BrowserRouter>
       </PersistGate>
     </Provider>

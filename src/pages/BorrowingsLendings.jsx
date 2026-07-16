@@ -522,26 +522,26 @@ function BorrowingsLendings() {
     switch (status) {
       case 'Active':
         return {
-          backgroundColor: '#fef7e0',
-          color: '#e37400',
+          backgroundColor: 'google.yellowBg',
+          color: 'google.yellow',
           fontWeight: 500,
         };
       case 'FullyPaid':
         return {
-          backgroundColor: '#e6f4ea',
-          color: '#1e8e3e',
+          backgroundColor: 'google.greenBg',
+          color: 'google.green',
           fontWeight: 500,
         };
       case 'Cancelled':
         return {
-          backgroundColor: '#f1f3f4',
-          color: '#5f6368',
+          backgroundColor: 'google.grayBg',
+          color: 'google.gray',
           fontWeight: 500,
         };
       default:
         return {
-          backgroundColor: '#f1f3f4',
-          color: '#5f6368',
+          backgroundColor: 'google.grayBg',
+          color: 'google.gray',
           fontWeight: 500,
         };
     }
@@ -551,21 +551,21 @@ function BorrowingsLendings() {
   const getTypeChipSx = (type) => {
     if (type === 'Borrowing') {
       return {
-        backgroundColor: '#fce8e6',
-        color: '#d93025',
+        backgroundColor: 'google.redBg',
+        color: 'google.red',
         fontWeight: 500,
       };
     }
     if (type === 'Lending') {
       return {
-        backgroundColor: '#e6f4ea',
-        color: '#1e8e3e',
+        backgroundColor: 'google.greenBg',
+        color: 'google.green',
         fontWeight: 500,
       };
     }
     return {
-      backgroundColor: '#f1f3f4',
-      color: '#5f6368',
+      backgroundColor: 'google.grayBg',
+      color: 'google.gray',
       fontWeight: 500,
     };
   };
@@ -915,10 +915,10 @@ function BorrowingsLendings() {
                           </IconButton>
                         </span>
                       </Tooltip>
-                      <IconButton size="small" onClick={() => handleOpenEditDialog(record)} sx={{ color: '#5f6368', '&:hover': { color: '#1a73e8' }, p: 0.5 }}>
+                      <IconButton size="small" onClick={() => handleOpenEditDialog(record)} sx={{ color: 'google.gray', '&:hover': { color: 'google.blue' }, p: 0.5 }}>
                         <EditIcon sx={{ fontSize: 18 }} />
                       </IconButton>
-                      <IconButton size="small" onClick={() => setDeleteConfirm(record)} sx={{ color: '#5f6368', '&:hover': { color: '#d93025' }, p: 0.5 }}>
+                      <IconButton size="small" onClick={() => setDeleteConfirm(record)} sx={{ color: 'google.gray', '&:hover': { color: 'google.red' }, p: 0.5 }}>
                         <DeleteIcon sx={{ fontSize: 18 }} />
                       </IconButton>
                     </Box>
@@ -1095,7 +1095,7 @@ function BorrowingsLendings() {
                           <IconButton
                             size="small"
                             onClick={() => handleOpenEditDialog(record)}
-                            sx={{ color: '#5f6368', '&:hover': { color: '#1a73e8' } }}
+                            sx={{ color: 'google.gray', '&:hover': { color: 'google.blue' } }}
                           >
                             <EditIcon fontSize="small" />
                           </IconButton>
@@ -1104,7 +1104,7 @@ function BorrowingsLendings() {
                           <IconButton
                             size="small"
                             onClick={() => setDeleteConfirm(record)}
-                            sx={{ color: '#5f6368', '&:hover': { color: '#d93025' } }}
+                            sx={{ color: 'google.gray', '&:hover': { color: 'google.red' } }}
                           >
                             <DeleteIcon fontSize="small" />
                           </IconButton>

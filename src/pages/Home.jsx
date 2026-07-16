@@ -382,10 +382,10 @@ function Home({ quickAddExpense = false }) {
                 color:
                   transaction.type === 'Income' ||
                   transaction.type === 'Transfer In'
-                    ? '#1e8e3e'
+                    ? 'google.green'
                     : transaction.type === 'Expense' ||
                       transaction.type === 'Transfer Out'
-                    ? '#d93025'
+                    ? 'google.red'
                     : 'text.primary',
                 flexShrink: 0,
               }}
@@ -529,10 +529,10 @@ function Home({ quickAddExpense = false }) {
                 color:
                   transaction.type === 'Income' ||
                   transaction.type === 'Transfer In'
-                    ? '#1e8e3e'
+                    ? 'google.green'
                     : transaction.type === 'Expense' ||
                       transaction.type === 'Transfer Out'
-                    ? '#d93025'
+                    ? 'google.red'
                     : 'text.primary',
               }}
             >
@@ -675,7 +675,7 @@ function Home({ quickAddExpense = false }) {
             aria-label="Scan receipt"
             sx={{
               backgroundColor: 'primary.main',
-              color: 'white',
+              color: 'primary.contrastText',
               width: 36,
               height: 36,
               '&:hover': {
@@ -695,7 +695,7 @@ function Home({ quickAddExpense = false }) {
             aria-label="Add transactions with text"
             sx={{
               backgroundColor: 'primary.main',
-              color: 'white',
+              color: 'primary.contrastText',
               width: 36,
               height: 36,
               '&:hover': {
@@ -714,7 +714,7 @@ function Home({ quickAddExpense = false }) {
             onClick={() => setTransferDialogOpen(true)}
             sx={{
               backgroundColor: 'primary.main',
-              color: 'white',
+              color: 'primary.contrastText',
               width: 36,
               height: 36,
               '&:hover': {
@@ -733,7 +733,7 @@ function Home({ quickAddExpense = false }) {
             onClick={() => setBatchTransactionOpen(true)}
             sx={{
               backgroundColor: 'info.main',
-              color: 'white',
+              color: 'info.contrastText',
               width: 36,
               height: 36,
               '&:hover': {
@@ -752,7 +752,7 @@ function Home({ quickAddExpense = false }) {
             onClick={() => setAddTransactionOpen(true)}
             sx={{
               backgroundColor: 'primary.main',
-              color: 'white',
+              color: 'primary.contrastText',
               width: 36,
               height: 36,
               '&:hover': {

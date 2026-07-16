@@ -6,6 +6,8 @@ import {
   Toolbar,
   Typography,
   IconButton,
+  ListItemIcon,
+  ListItemText,
   Menu,
   MenuItem,
   Avatar,
@@ -13,14 +15,30 @@ import {
   Fade,
 } from '@mui/material'
 import MenuIcon from '@mui/icons-material/Menu'
+import LightModeIcon from '@mui/icons-material/LightMode'
+import DarkModeIcon from '@mui/icons-material/DarkMode'
+import SettingsBrightnessIcon from '@mui/icons-material/SettingsBrightness'
 import { supabase } from '../../lib/supabase'
 import { clearAuth } from '../../store/slices/authSlice'
+import { useColorMode } from '../../theme'
+
+const APPEARANCE_OPTIONS = [
+  { value: 'light', label: 'Light', icon: <LightModeIcon fontSize="small" /> },
+  { value: 'dark', label: 'Dark', icon: <DarkModeIcon fontSize="small" /> },
+  {
+    value: 'system',
+    label: 'System',
+    icon: <SettingsBrightnessIcon fontSize="small" />,
+  },
+]
 
 function Header({ onMenuClick }) {
   const dispatch = useDispatch()
   const navigate = useNavigate()
   const user = useSelector((state) => state.auth.user)
   const [anchorEl, setAnchorEl] = useState(null)
+  const [appearanceAnchorEl, setAppearanceAnchorEl] = useState(null)
+  const { mode, resolvedMode, setMode } = useColorMode()
   
   // Check if any slice has background loading active
   const backgroundLoading = useSelector((state) => {
@@ -54,9 +72,10 @@ function Header({ onMenuClick }) {
   return (
     <AppBar 
       position="fixed" 
-      sx={{ 
+      sx={{
         zIndex: (theme) => theme.zIndex.drawer + 1,
-        backgroundColor: 'white',
+        backgroundColor: 'background.paper',
+        backgroundImage: 'none',
         color: 'text.primary',
         boxShadow: '0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24)',
       }}
@@ -97,12 +116,42 @@ function Header({ onMenuClick }) {
             {user?.email}
           </Typography>
           <IconButton
+            onClick={(event) => setAppearanceAnchorEl(event.currentTarget)}
+            sx={{ color: 'text.secondary' }}
+            aria-label="Appearance"
+          >
+            {resolvedMode === 'dark' ? (
+              <DarkModeIcon fontSize="small" />
+            ) : (
+              <LightModeIcon fontSize="small" />
+            )}
+          </IconButton>
+          <Menu
+            anchorEl={appearanceAnchorEl}
+            open={Boolean(appearanceAnchorEl)}
+            onClose={() => setAppearanceAnchorEl(null)}
+          >
+            {APPEARANCE_OPTIONS.map((option) => (
+              <MenuItem
+                key={option.value}
+                selected={mode === option.value}
+                onClick={() => {
+                  setMode(option.value)
+                  setAppearanceAnchorEl(null)
+                }}
+              >
+                <ListItemIcon>{option.icon}</ListItemIcon>
+                <ListItemText>{option.label}</ListItemText>
+              </MenuItem>
+            ))}
+          </Menu>
+          <IconButton
             size="large"
             edge="end"
             onClick={handleMenuOpen}
             sx={{ color: 'text.primary' }}
           >
-            <Avatar sx={{ width: 32, height: 32, bgcolor: 'white', color: 'primary.main', border: '2px solid', borderColor: 'primary.main', fontSize: '0.875rem', fontWeight: 600 }}>
+            <Avatar sx={{ width: 32, height: 32, bgcolor: 'background.paper', color: 'primary.main', border: '2px solid', borderColor: 'primary.main', fontSize: '0.875rem', fontWeight: 600 }}>
               {user?.email?.charAt(0)?.toUpperCase() || '?'}
             </Avatar>
           </IconButton>

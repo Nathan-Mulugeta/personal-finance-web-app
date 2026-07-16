@@ -201,10 +201,10 @@ const MobileTransactionRow = memo(function MobileTransactionRow({
               color:
                 transaction.type === 'Income' ||
                 transaction.type === 'Transfer In'
-                  ? '#1e8e3e'
+                  ? 'google.green'
                   : transaction.type === 'Expense' ||
                     transaction.type === 'Transfer Out'
-                  ? '#d93025'
+                  ? 'google.red'
                   : 'text.primary',
               whiteSpace: 'nowrap',
               flexShrink: 0,
@@ -362,7 +362,7 @@ const MobileTransferRow = memo(function MobileTransferRow({
             fontWeight={600}
             sx={{
               fontSize: '0.8125rem',
-              color: '#d93025',
+              color: 'google.red',
               whiteSpace: 'nowrap',
               flexShrink: 0,
             }}
@@ -571,10 +571,10 @@ const DesktopTransactionRow = memo(function DesktopTransactionRow({
               color:
                 transaction.type === 'Income' ||
                 transaction.type === 'Transfer In'
-                  ? '#1e8e3e'
+                  ? 'google.green'
                   : transaction.type === 'Expense' ||
                     transaction.type === 'Transfer Out'
-                  ? '#d93025'
+                  ? 'google.red'
                   : 'text.primary',
             }}
           >
@@ -727,7 +727,7 @@ const DesktopTransferRow = memo(function DesktopTransferRow({
           <Typography
             variant="body2"
             fontWeight={600}
-            sx={{ fontSize: '0.875rem', color: '#d93025' }}
+            sx={{ fontSize: '0.875rem', color: 'google.red' }}
           >
             {new Intl.NumberFormat('en-US', {
               minimumFractionDigits: 2,
@@ -751,7 +751,7 @@ const DesktopTransferRow = memo(function DesktopTransferRow({
               <Typography
                 variant="body2"
                 fontWeight={600}
-                sx={{ fontSize: '0.875rem', color: '#1e8e3e' }}
+                sx={{ fontSize: '0.875rem', color: 'google.green' }}
               >
                 {new Intl.NumberFormat('en-US', {
                   minimumFractionDigits: 2,
@@ -1064,32 +1064,32 @@ function Transactions() {
     switch (status) {
       case 'Cleared':
         return {
-          backgroundColor: '#e6f4ea',
-          color: '#1e8e3e',
+          backgroundColor: 'google.greenBg',
+          color: 'google.green',
           fontWeight: 500,
         };
       case 'Pending':
         return {
-          backgroundColor: '#fef7e0',
-          color: '#e37400',
+          backgroundColor: 'google.yellowBg',
+          color: 'google.yellow',
           fontWeight: 500,
         };
       case 'Reconciled':
         return {
-          backgroundColor: '#e8f0fe',
-          color: '#1a73e8',
+          backgroundColor: 'google.blueBg',
+          color: 'google.blue',
           fontWeight: 500,
         };
       case 'Cancelled':
         return {
-          backgroundColor: '#f1f3f4',
-          color: '#5f6368',
+          backgroundColor: 'google.grayBg',
+          color: 'google.gray',
           fontWeight: 500,
         };
       default:
         return {
-          backgroundColor: '#f1f3f4',
-          color: '#5f6368',
+          backgroundColor: 'google.grayBg',
+          color: 'google.gray',
           fontWeight: 500,
         };
     }
@@ -1100,28 +1100,28 @@ function Transactions() {
     switch (type) {
       case 'Income':
         return {
-          backgroundColor: '#e6f4ea',
-          color: '#1e8e3e',
+          backgroundColor: 'google.greenBg',
+          color: 'google.green',
           fontWeight: 500,
         };
       case 'Expense':
         return {
-          backgroundColor: '#fce8e6',
-          color: '#d93025',
+          backgroundColor: 'google.redBg',
+          color: 'google.red',
           fontWeight: 500,
         };
       case 'Transfer':
       case 'Transfer In':
       case 'Transfer Out':
         return {
-          backgroundColor: '#e8f0fe',
-          color: '#1a73e8',
+          backgroundColor: 'google.blueBg',
+          color: 'google.blue',
           fontWeight: 500,
         };
       default:
         return {
-          backgroundColor: '#f1f3f4',
-          color: '#5f6368',
+          backgroundColor: 'google.grayBg',
+          color: 'google.gray',
           fontWeight: 500,
         };
     }
@@ -2158,7 +2158,7 @@ function Transactions() {
                             <Typography
                               variant="body2"
                               fontWeight={600}
-                              sx={{ fontSize: '0.875rem', color: '#d93025' }}
+                              sx={{ fontSize: '0.875rem', color: 'google.red' }}
                             >
                               {new Intl.NumberFormat('en-US', {
                                 minimumFractionDigits: 2,
@@ -2190,7 +2190,7 @@ function Transactions() {
                                   fontWeight={600}
                                   sx={{
                                     fontSize: '0.875rem',
-                                    color: '#1e8e3e',
+                                    color: 'google.green',
                                   }}
                                 >
                                   {new Intl.NumberFormat('en-US', {
@@ -2354,10 +2354,10 @@ function Transactions() {
                                 color:
                                   transaction.type === 'Income' ||
                                   transaction.type === 'Transfer In'
-                                    ? '#1e8e3e'
+                                    ? 'google.green'
                                     : transaction.type === 'Expense' ||
                                       transaction.type === 'Transfer Out'
-                                    ? '#d93025'
+                                    ? 'google.red'
                                     : 'text.primary',
                               }}
                             >

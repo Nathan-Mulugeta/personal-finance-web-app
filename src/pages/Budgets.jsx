@@ -834,20 +834,20 @@ function Budgets() {
     switch (status) {
       case 'Active':
         return {
-          backgroundColor: '#e6f4ea',
-          color: '#1e8e3e',
+          backgroundColor: 'google.greenBg',
+          color: 'google.green',
           fontWeight: 500,
         };
       case 'Archived':
         return {
-          backgroundColor: '#f1f3f4',
-          color: '#5f6368',
+          backgroundColor: 'google.grayBg',
+          color: 'google.gray',
           fontWeight: 500,
         };
       default:
         return {
-          backgroundColor: '#f1f3f4',
-          color: '#5f6368',
+          backgroundColor: 'google.grayBg',
+          color: 'google.gray',
           fontWeight: 500,
         };
     }
@@ -1890,7 +1890,7 @@ function Budgets() {
                         borderBottom: '1px solid',
                         borderColor: 'divider',
                         backgroundColor: 'transparent',
-                        '&:hover': { backgroundColor: '#f8f9fa' },
+                        '&:hover': { backgroundColor: 'google.grayLight' },
                       }}
                       onClick={() => toggleTypeExpansion(typeKey)}
                     >
@@ -1907,7 +1907,7 @@ function Budgets() {
                             e.stopPropagation();
                             toggleTypeExpansion(typeKey);
                           }}
-                          sx={{ p: 0.5, color: '#5f6368' }}
+                          sx={{ p: 0.5, color: 'google.gray' }}
                         >
                           {expandedTypes[typeKey] ? (
                             <ExpandMoreIcon sx={{ fontSize: 20 }} />
@@ -1920,7 +1920,7 @@ function Budgets() {
                           sx={{
                             fontSize: '0.875rem',
                             fontWeight: 500,
-                            color: '#202124',
+                            color: 'text.primary',
                           }}
                         >
                           {label}
@@ -1979,7 +1979,7 @@ function Budgets() {
                         borderBottom: '1px solid',
                         borderColor: 'divider',
                         backgroundColor: 'transparent',
-                        '&:hover': { backgroundColor: '#f8f9fa' },
+                        '&:hover': { backgroundColor: 'google.grayLight' },
                       }}
                       onClick={() => toggleTypeExpansion(categoryType)}
                     >
@@ -1996,7 +1996,7 @@ function Budgets() {
                             e.stopPropagation();
                             toggleTypeExpansion(categoryType);
                           }}
-                          sx={{ p: 0.5, color: '#5f6368' }}
+                          sx={{ p: 0.5, color: 'google.gray' }}
                         >
                           {expandedTypes[categoryType] ? (
                             <ExpandMoreIcon sx={{ fontSize: 20 }} />
@@ -2009,7 +2009,7 @@ function Budgets() {
                           sx={{
                             fontSize: '1rem',
                             fontWeight: 600,
-                            color: '#202124',
+                            color: 'text.primary',
                           }}
                         >
                           {label}
@@ -2346,7 +2346,7 @@ function Budgets() {
                           onClick={() => toggleTypeExpansion(typeKey)}
                           sx={{
                             cursor: 'pointer',
-                            '&:hover': { backgroundColor: '#f8f9fa' },
+                            '&:hover': { backgroundColor: 'google.grayLight' },
                           }}
                         >
                           <TableCell
@@ -2372,7 +2372,7 @@ function Budgets() {
                                   e.stopPropagation();
                                   toggleTypeExpansion(typeKey);
                                 }}
-                                sx={{ color: '#5f6368' }}
+                                sx={{ color: 'google.gray' }}
                               >
                                 {expandedTypes[typeKey] ? (
                                   <ExpandMoreIcon />
@@ -2382,7 +2382,7 @@ function Budgets() {
                               </IconButton>
                               <Typography
                                 variant="body1"
-                                sx={{ fontWeight: 500, color: '#202124' }}
+                                sx={{ fontWeight: 500, color: 'text.primary' }}
                               >
                                 {label}
                               </Typography>
@@ -2447,7 +2447,7 @@ function Budgets() {
                           onClick={() => toggleTypeExpansion(categoryType)}
                           sx={{
                             cursor: 'pointer',
-                            '&:hover': { backgroundColor: '#f8f9fa' },
+                            '&:hover': { backgroundColor: 'google.grayLight' },
                           }}
                         >
                           <TableCell
@@ -2472,7 +2472,7 @@ function Budgets() {
                                   e.stopPropagation();
                                   toggleTypeExpansion(categoryType);
                                 }}
-                                sx={{ color: '#5f6368' }}
+                                sx={{ color: 'google.gray' }}
                               >
                                 {expandedTypes[categoryType] ? (
                                   <ExpandMoreIcon />
@@ -2484,7 +2484,7 @@ function Budgets() {
                                 variant="h6"
                                 sx={{
                                   fontWeight: 600,
-                                  color: '#202124',
+                                  color: 'text.primary',
                                 }}
                               >
                                 {label}

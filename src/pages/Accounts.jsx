@@ -337,29 +337,29 @@ function Accounts() {
       case 'Active':
         return {
           // Muted green text only, outlined style to match other chips
-          color: '#2e7d32', // MUI success.dark - muted green
-          borderColor: '#2e7d32',
+          color: 'google.greenDark', // MUI success.dark - muted green
+          borderColor: 'google.greenDark',
           fontWeight: 500,
           '& .MuiChip-label': { px: 0.75 },
         };
       case 'Closed':
         return {
-          color: '#5f6368',
-          borderColor: '#5f6368',
+          color: 'google.gray',
+          borderColor: 'google.gray',
           fontWeight: 500,
           '& .MuiChip-label': { px: 0.75 },
         };
       case 'Suspended':
         return {
-          color: '#e37400',
-          borderColor: '#e37400',
+          color: 'google.yellow',
+          borderColor: 'google.yellow',
           fontWeight: 500,
           '& .MuiChip-label': { px: 0.75 },
         };
       default:
         return {
-          color: '#5f6368',
-          borderColor: '#5f6368',
+          color: 'google.gray',
+          borderColor: 'google.gray',
           fontWeight: 500,
           '& .MuiChip-label': { px: 0.75 },
         };
@@ -633,8 +633,8 @@ function Accounts() {
                           onClick={() => handleMoveUp(index)}
                           disabled={index === 0 || isReordering}
                           sx={{
-                            color: '#5f6368',
-                            '&:hover': { color: '#1a73e8' },
+                            color: 'google.gray',
+                            '&:hover': { color: 'google.blue' },
                             p: 0.5,
                           }}
                         >
@@ -645,8 +645,8 @@ function Accounts() {
                           onClick={() => handleMoveDown(index)}
                           disabled={index === sortedAccounts.length - 1 || isReordering}
                           sx={{
-                            color: '#5f6368',
-                            '&:hover': { color: '#1a73e8' },
+                            color: 'google.gray',
+                            '&:hover': { color: 'google.blue' },
                             p: 0.5,
                           }}
                         >
@@ -656,8 +656,8 @@ function Accounts() {
                           size="small"
                           onClick={() => handleOpenDialog(account)}
                           sx={{
-                            color: '#5f6368',
-                            '&:hover': { color: '#1a73e8' },
+                            color: 'google.gray',
+                            '&:hover': { color: 'google.blue' },
                             p: 0.5,
                           }}
                         >
@@ -667,8 +667,8 @@ function Accounts() {
                           size="small"
                           onClick={() => setDeleteConfirm(account)}
                           sx={{
-                            color: '#5f6368',
-                            '&:hover': { color: '#d93025' },
+                            color: 'google.gray',
+                            '&:hover': { color: 'google.red' },
                             p: 0.5,
                           }}
                           disabled={account.status === 'Closed'}
@@ -816,8 +816,8 @@ function Accounts() {
                                 onClick={() => handleMoveUp(index)}
                                 disabled={index === 0 || isReordering}
                                 sx={{
-                                  color: '#5f6368',
-                                  '&:hover': { color: '#1a73e8' },
+                                  color: 'google.gray',
+                                  '&:hover': { color: 'google.blue' },
                                   p: 0.25,
                                 }}
                               >
@@ -832,8 +832,8 @@ function Accounts() {
                                 onClick={() => handleMoveDown(index)}
                                 disabled={index === sortedAccounts.length - 1 || isReordering}
                                 sx={{
-                                  color: '#5f6368',
-                                  '&:hover': { color: '#1a73e8' },
+                                  color: 'google.gray',
+                                  '&:hover': { color: 'google.blue' },
                                   p: 0.25,
                                 }}
                               >
@@ -881,8 +881,8 @@ function Accounts() {
                             size="small"
                             onClick={() => handleOpenDialog(account)}
                             sx={{
-                              color: '#5f6368',
-                              '&:hover': { color: '#1a73e8' },
+                              color: 'google.gray',
+                              '&:hover': { color: 'google.blue' },
                             }}
                           >
                             <EditIcon fontSize="small" />
@@ -894,8 +894,8 @@ function Accounts() {
                               size="small"
                               onClick={() => setDeleteConfirm(account)}
                               sx={{
-                                color: '#5f6368',
-                                '&:hover': { color: '#d93025' },
+                                color: 'google.gray',
+                                '&:hover': { color: 'google.red' },
                               }}
                               disabled={account.status === 'Closed'}
                             >

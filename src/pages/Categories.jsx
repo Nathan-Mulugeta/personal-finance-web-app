@@ -228,20 +228,20 @@ function Categories() {
     switch (status) {
       case 'Active':
         return {
-          backgroundColor: '#e6f4ea',
-          color: '#1e8e3e',
+          backgroundColor: 'google.greenBg',
+          color: 'google.green',
           fontWeight: 500,
         };
       case 'Archived':
         return {
-          backgroundColor: '#f1f3f4',
-          color: '#5f6368',
+          backgroundColor: 'google.grayBg',
+          color: 'google.gray',
           fontWeight: 500,
         };
       default:
         return {
-          backgroundColor: '#f1f3f4',
-          color: '#5f6368',
+          backgroundColor: 'google.grayBg',
+          color: 'google.gray',
           fontWeight: 500,
         };
     }
@@ -252,8 +252,8 @@ function Categories() {
     if (type === 'Income') {
       return {
         backgroundColor: 'transparent',
-        borderColor: '#1e8e3e',
-        color: '#1e8e3e',
+        borderColor: 'google.green',
+        color: 'google.green',
         fontWeight: 500,
         border: '1px solid',
       };
@@ -261,15 +261,15 @@ function Categories() {
     if (type === 'Expense') {
       return {
         backgroundColor: 'transparent',
-        borderColor: '#b71c1c',
-        color: '#b71c1c',
+        borderColor: 'google.redDark',
+        color: 'google.redDark',
         fontWeight: 500,
         border: '1px solid',
       };
     }
     return {
       backgroundColor: 'transparent',
-      color: '#5f6368',
+      color: 'google.gray',
       fontWeight: 500,
       border: 'none',
     };
@@ -480,10 +480,10 @@ function Categories() {
                   onClick={() => handleOpenDialog(category)}
                   sx={{
                     p: { xs: 0.5, sm: 0.75 },
-                    color: '#5f6368',
+                    color: 'google.gray',
                     '&:hover': {
                       backgroundColor: 'action.hover',
-                      color: '#1a73e8',
+                      color: 'google.blue',
                     },
                   }}
                 >
@@ -498,10 +498,10 @@ function Categories() {
                     disabled={category.status === 'Archived'}
                     sx={{
                       p: { xs: 0.5, sm: 0.75 },
-                      color: '#5f6368',
+                      color: 'google.gray',
                       '&:hover:not(:disabled)': {
                         backgroundColor: 'action.hover',
-                        color: '#d93025',
+                        color: 'google.red',
                       },
                       '&:disabled': {
                         opacity: 0.3,
