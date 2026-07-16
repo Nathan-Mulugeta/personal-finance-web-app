@@ -28,6 +28,7 @@ import {
   TableRow,
   TextField,
   Typography,
+  useMediaQuery,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
@@ -56,6 +57,8 @@ const HOME_SHORTCUTS_SETTING_KEY = 'HomeCategoryShortcuts';
 function Home({ quickAddExpense = false }) {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  // Matches the md breakpoint previously used for the CSS card/table switch
+  const isDesktopView = useMediaQuery((theme) => theme.breakpoints.up('md'));
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -585,9 +588,9 @@ function Home({ quickAddExpense = false }) {
     return (
       <>
         {/* Mobile View */}
+        {!isDesktopView && (
         <Box
           sx={{
-            display: { xs: 'block', md: 'none' },
             border: '1px solid',
             borderColor: 'divider',
             borderRadius: 1,
@@ -597,13 +600,14 @@ function Home({ quickAddExpense = false }) {
         >
           {transactions.map((txn) => renderMobileTransaction(txn))}
         </Box>
+        )}
 
         {/* Desktop Table View */}
+        {isDesktopView && (
         <TableContainer
           component={Paper}
           elevation={0}
           sx={{
-            display: { xs: 'none', md: 'block' },
             border: '1px solid',
             borderColor: 'divider',
             borderRadius: 1,
@@ -639,6 +643,7 @@ function Home({ quickAddExpense = false }) {
             </TableBody>
           </Table>
         </TableContainer>
+        )}
       </>
     );
   };

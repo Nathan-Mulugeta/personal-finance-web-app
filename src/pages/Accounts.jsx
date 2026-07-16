@@ -61,6 +61,8 @@ function Accounts() {
   const dispatch = useDispatch();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  // Matches the md breakpoint previously used for the CSS card/table switch
+  const isDesktopView = useMediaQuery(theme.breakpoints.up('md'));
   const { accounts, loading, backgroundLoading, error } = useSelector(
     (state) => state.accounts
   );
@@ -592,7 +594,8 @@ function Accounts() {
       ) : (
         <>
           {/* Mobile Card View - Compact layout */}
-          <Box sx={{ display: { xs: 'block', md: 'none' } }}>
+          {!isDesktopView && (
+          <Box>
             {sortedAccounts.map((account, index) => {
               const currentBalance =
                 account.current_balance ?? account.opening_balance ?? 0;
@@ -782,12 +785,11 @@ function Accounts() {
               );
             })}
           </Box>
+          )}
 
           {/* Desktop Table View */}
-          <TableContainer
-            component={Paper}
-            sx={{ display: { xs: 'none', md: 'block' } }}
-          >
+          {isDesktopView && (
+          <TableContainer component={Paper}>
             <Table>
               <TableHead>
                 <TableRow>
@@ -910,6 +912,7 @@ function Accounts() {
               </TableBody>
             </Table>
           </TableContainer>
+          )}
         </>
       )}
 

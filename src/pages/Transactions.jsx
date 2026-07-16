@@ -402,10 +402,15 @@ const MobileTransferRow = memo(function MobileTransferRow({
   );
 });
 
+// How many list rows render initially and per "Show more" click
+const RENDER_CHUNK = 100;
+
 function Transactions() {
   const dispatch = useDispatch();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  // Matches the md breakpoint previously used for the CSS card/table switch
+  const isDesktopView = useMediaQuery(theme.breakpoints.up('md'));
   const {
     transactions,
     allTransactions,
@@ -786,6 +791,20 @@ function Transactions() {
     filters.startDate,
     filters.endDate,
   ]);
+
+  // Render the list in chunks so large filtered sets don't build
+  // thousands of DOM nodes at once
+  const [visibleCount, setVisibleCount] = useState(RENDER_CHUNK);
+
+  useEffect(() => {
+    setVisibleCount(RENDER_CHUNK);
+  }, [combinedItems]);
+
+  const visibleItems = useMemo(
+    () => combinedItems.slice(0, visibleCount),
+    [combinedItems, visibleCount]
+  );
+  const hiddenItemCount = combinedItems.length - visibleItems.length;
 
   const activeFilterCount = Object.values(filters).filter(
     (v) => v !== ''
@@ -1421,14 +1440,14 @@ function Transactions() {
       ) : (
         <>
           {/* Mobile Card View */}
+          {!isDesktopView && (
           <Box
             sx={{
-              display: { xs: 'block', md: 'none' },
               overflow: 'hidden',
               width: '100%',
             }}
           >
-            {combinedItems.map((item) => {
+            {visibleItems.map((item) => {
               if (item.type === 'transfer') {
                 const transfer = item.data;
                 const transferId = `transfer-${
@@ -1476,13 +1495,14 @@ function Transactions() {
               }
             })}
           </Box>
+          )}
 
           {/* Desktop Table View */}
+          {isDesktopView && (
           <TableContainer
             component={Paper}
             elevation={0}
             sx={{
-              display: { xs: 'none', md: 'block' },
               border: '1px solid',
               borderColor: 'divider',
               borderRadius: 1,
@@ -1524,7 +1544,7 @@ function Transactions() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {combinedItems.map((item) => {
+                {visibleItems.map((item) => {
                   if (item.type === 'transfer') {
                     const transfer = item.data;
                     const transferOut = transfer.transferOut;
@@ -1897,6 +1917,19 @@ function Transactions() {
               </TableBody>
             </Table>
           </TableContainer>
+          )}
+
+          {hiddenItemCount > 0 && (
+            <Button
+              fullWidth
+              size="small"
+              onClick={() => setVisibleCount((count) => count + RENDER_CHUNK)}
+              sx={{ mt: 1, textTransform: 'none', color: 'text.secondary' }}
+            >
+              Show {Math.min(RENDER_CHUNK, hiddenItemCount)} more (
+              {hiddenItemCount} remaining)
+            </Button>
+          )}
         </>
       )}
 

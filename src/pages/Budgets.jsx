@@ -80,6 +80,8 @@ function Budgets() {
   const dispatch = useDispatch();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  // Matches the md breakpoint previously used for the CSS card/table switch
+  const isDesktopView = useMediaQuery(theme.breakpoints.up('md'));
   const { budgets, loading, backgroundLoading, isInitialized, error } =
     useSelector((state) => state.budgets);
   const { categories } = useSelector((state) => state.categories);
@@ -1617,7 +1619,8 @@ function Budgets() {
       ) : (
         <Box>
           {/* Mobile Card View */}
-          <Box sx={{ display: { xs: 'block', md: 'none' } }}>
+          {!isDesktopView && (
+          <Box>
             {/* Helper function to render a budget card */}
             {(() => {
               const renderBudgetCard = (budget, indentLevel = 0) => {
@@ -2059,12 +2062,11 @@ function Budgets() {
               );
             })()}
           </Box>
+          )}
 
           {/* Desktop Table View */}
-          <TableContainer
-            component={Paper}
-            sx={{ display: { xs: 'none', md: 'block' } }}
-          >
+          {isDesktopView && (
+          <TableContainer component={Paper}>
             <Table>
               <TableHead>
                 <TableRow>
@@ -2542,6 +2544,7 @@ function Budgets() {
               </TableBody>
             </Table>
           </TableContainer>
+          )}
         </Box>
       )}
 

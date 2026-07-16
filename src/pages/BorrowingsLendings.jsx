@@ -70,6 +70,8 @@ function BorrowingsLendings() {
   const dispatch = useDispatch();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  // Matches the md breakpoint previously used for the CSS card/table switch
+  const isDesktopView = useMediaQuery(theme.breakpoints.up('md'));
   const { records, summary, loading, backgroundLoading, isInitialized, error } =
     useSelector((state) => state.borrowingsLendings);
   const { allTransactions } = useSelector((state) => state.transactions);
@@ -866,7 +868,8 @@ function BorrowingsLendings() {
       ) : (
         <Box>
           {/* Mobile Card View */}
-          <Box sx={{ display: { xs: 'block', md: 'none' } }}>
+          {!isDesktopView && (
+          <Box>
             {filteredRecords.map((record) => {
               const originalAmount = parseFloat(record.original_amount || 0);
               const paidAmount = parseFloat(record.paid_amount || 0);
@@ -984,12 +987,11 @@ function BorrowingsLendings() {
               );
             })}
           </Box>
+          )}
 
           {/* Desktop Table View */}
-          <TableContainer
-            component={Paper}
-            sx={{ display: { xs: 'none', md: 'block' } }}
-          >
+          {isDesktopView && (
+          <TableContainer component={Paper}>
             <Table>
               <TableHead>
                 <TableRow>
@@ -1116,6 +1118,7 @@ function BorrowingsLendings() {
               </TableBody>
             </Table>
           </TableContainer>
+          )}
         </Box>
       )}
 
