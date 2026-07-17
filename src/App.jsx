@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import AppLayout from './components/layout/AppLayout';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import InstallPrompt from './components/common/InstallPrompt';
+import UpdatePrompt from './components/common/UpdatePrompt';
 import PageSkeleton from './components/common/PageSkeleton';
 import ScrollToTop from './components/common/ScrollToTop';
 
@@ -123,6 +124,7 @@ function App() {
         </Route>
       </Routes>
       <InstallPrompt />
+      <UpdatePrompt />
     </>
   );
 }
