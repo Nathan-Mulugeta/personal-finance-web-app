@@ -44,6 +44,7 @@ import { BUDGET_STATUSES } from '../lib/api/budgets';
 import PageSkeleton from '../components/common/PageSkeleton';
 import ErrorMessage from '../components/common/ErrorMessage';
 import BudgetDialog from '../components/common/BudgetDialog';
+import { budgetAppliesToMonth } from '../utils/budgetMatching';
 import { usePageRefresh } from '../hooks/usePageRefresh';
 import {
   formatCurrency,
@@ -221,33 +222,11 @@ function Budgets() {
   const filteredBudgets = useMemo(() => {
     let filtered = [...budgets];
 
-    // Filter by selected month
+    // Filter by selected month (shared matching rules with the Reports page)
     if (selectedMonth) {
-      const [year, monthNum] = selectedMonth.split('-');
-      const monthDate = `${year}-${monthNum}-06`;
-
-      filtered = filtered.filter((budget) => {
-        if (budget.recurring) {
-          // Recurring: check if selected month is within start_month and end_month
-          if (budget.start_month) {
-            const startDate = parseISO(budget.start_month);
-            const selectedDate = parseISO(monthDate);
-            if (selectedDate < startOfMonth(startDate)) {
-              return false;
-            }
-            if (budget.end_month) {
-              const endDate = parseISO(budget.end_month);
-              if (selectedDate > endOfMonth(endDate)) {
-                return false;
-              }
-            }
-          }
-          return true;
-        } else {
-          // Non-recurring: check if month matches
-          return budget.month === monthDate;
-        }
-      });
+      filtered = filtered.filter((budget) =>
+        budgetAppliesToMonth(budget, selectedMonth)
+      );
     }
 
     if (filters.categoryId) {

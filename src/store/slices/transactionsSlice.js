@@ -2,6 +2,7 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import * as transactionsApi from '../../lib/api/transactions';
 import { mergeIncrementalData, getIdField, getLatestSyncTimestamp } from '../../utils/dataMerge';
 import { updateLastSync } from './syncSlice';
+import { fetchAccounts } from './accountsSlice';
 import { deduplicatedRequest } from '../../lib/api/requestDeduplication';
 
 // Apply client-side filters + sort to produce the visible transactions list
@@ -132,9 +133,13 @@ export const fetchTransaction = createAsyncThunk(
 
 export const createTransaction = createAsyncThunk(
   'transactions/createTransaction',
-  async (transactionData, { rejectWithValue }) => {
+  async (transactionData, { rejectWithValue, dispatch }) => {
     try {
-      return await transactionsApi.createTransaction(transactionData);
+      const result = await transactionsApi.createTransaction(transactionData);
+      // Account balances change via a DB trigger; refresh them locally
+      // instead of relying on the realtime echo
+      dispatch(fetchAccounts({ status: 'Active' }));
+      return result;
     } catch (error) {
       return rejectWithValue(error.message);
     }
@@ -143,9 +148,11 @@ export const createTransaction = createAsyncThunk(
 
 export const batchCreateTransactions = createAsyncThunk(
   'transactions/batchCreateTransactions',
-  async (transactionsArray, { rejectWithValue }) => {
+  async (transactionsArray, { rejectWithValue, dispatch }) => {
     try {
-      return await transactionsApi.batchCreateTransactions(transactionsArray);
+      const result = await transactionsApi.batchCreateTransactions(transactionsArray);
+      dispatch(fetchAccounts({ status: 'Active' }));
+      return result;
     } catch (error) {
       return rejectWithValue(error.message);
     }
@@ -154,9 +161,11 @@ export const batchCreateTransactions = createAsyncThunk(
 
 export const updateTransaction = createAsyncThunk(
   'transactions/updateTransaction',
-  async ({ transactionId, updates }, { rejectWithValue }) => {
+  async ({ transactionId, updates }, { rejectWithValue, dispatch }) => {
     try {
-      return await transactionsApi.updateTransaction(transactionId, updates);
+      const result = await transactionsApi.updateTransaction(transactionId, updates);
+      dispatch(fetchAccounts({ status: 'Active' }));
+      return result;
     } catch (error) {
       return rejectWithValue(error.message);
     }
@@ -165,10 +174,11 @@ export const updateTransaction = createAsyncThunk(
 
 export const deleteTransaction = createAsyncThunk(
   'transactions/deleteTransaction',
-  async (transactionId, { rejectWithValue }) => {
+  async (transactionId, { rejectWithValue, dispatch }) => {
     try {
       const result = await transactionsApi.deleteTransaction(transactionId);
       // API now returns { transactionId, linkedTransactionId?, deletedTransactionIds }
+      dispatch(fetchAccounts({ status: 'Active' }));
       return result;
     } catch (error) {
       return rejectWithValue(error.message);
@@ -178,10 +188,11 @@ export const deleteTransaction = createAsyncThunk(
 
 export const bulkDeleteTransactions = createAsyncThunk(
   'transactions/bulkDeleteTransactions',
-  async (transactionIds, { rejectWithValue }) => {
+  async (transactionIds, { rejectWithValue, dispatch }) => {
     try {
       const result = await transactionsApi.bulkDeleteTransactions(transactionIds);
       // API returns { deletedTransactionIds, requestedTransactionIds }
+      dispatch(fetchAccounts({ status: 'Active' }));
       return result;
     } catch (error) {
       return rejectWithValue(error.message);
@@ -545,6 +556,41 @@ const transactionsSlice = createSlice({
       .addCase(bulkDeleteTransactions.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+      })
+      // Cross-slice write-through: a transfer creates/deletes transaction
+      // rows in the database — reflect them here immediately instead of
+      // waiting for realtime or a refetch. (String action types avoid a
+      // circular import with transfersSlice.)
+      .addCase('transfers/createTransfer/fulfilled', (state, action) => {
+        const { transferOut, transferIn } = action.payload || {};
+        [transferOut, transferIn].forEach((txn) => {
+          if (
+            txn &&
+            !state.allTransactions.some(
+              (t) => t.transaction_id === txn.transaction_id
+            )
+          ) {
+            state.allTransactions.unshift(txn);
+          }
+        });
+        state.lastLocalMutation = Date.now();
+        if (state.activeFilters) {
+          state.transactions = applyTransactionFilters(
+            state.allTransactions,
+            state.activeFilters
+          );
+        }
+      })
+      .addCase('transfers/deleteTransfer/fulfilled', (state, action) => {
+        const { transactionIds } = action.payload || {};
+        if (!transactionIds || transactionIds.length === 0) return;
+        state.allTransactions = state.allTransactions.filter(
+          (t) => !transactionIds.includes(t.transaction_id)
+        );
+        state.transactions = state.transactions.filter(
+          (t) => !transactionIds.includes(t.transaction_id)
+        );
+        state.lastLocalMutation = Date.now();
       });
   },
 });

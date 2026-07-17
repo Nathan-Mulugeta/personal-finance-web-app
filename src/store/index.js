@@ -57,12 +57,24 @@ const stripTransientFlags = createTransform(
   resetTransientFlags
 )
 
+// Bump this whenever the persisted shape or sync semantics change: any
+// version mismatch purges the cache and forces a clean full re-sync on the
+// next launch instead of limping along on a stale/corrupted local store
+const PERSIST_VERSION = 2
+
 // Persist config - persist all slices except auth
 const persistConfig = {
   key: 'root',
+  version: PERSIST_VERSION,
   storage: persistStorage,
   whitelist: ['accounts', 'categories', 'transactions', 'budgets', 'transfers', 'borrowingsLendings', 'settings', 'exchangeRates', 'appInit', 'sync'],
   transforms: [stripTransientFlags],
+  migrate: (state) => {
+    if (!state || state._persist?.version !== PERSIST_VERSION) {
+      return Promise.resolve(undefined)
+    }
+    return Promise.resolve(state)
+  },
   // Don't persist auth to prevent stale sessions
 }
 

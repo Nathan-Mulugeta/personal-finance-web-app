@@ -46,6 +46,7 @@ import {
   parseISO,
 } from 'date-fns';
 import { getCategoryDescendants } from '../utils/categoryHierarchy';
+import { findBudgetForCategoryMonth } from '../utils/budgetMatching';
 
 // Tappable mobile row: suppress the browser tap highlight (blue flash on
 // Android/Chrome) and sticky hover on touch; give explicit pressed feedback
@@ -748,30 +749,9 @@ function Reports() {
   };
 
   // Find the budget record that applies to a category in the selected month
-  // (prefer an Active one, mirroring the report's own budget matching)
-  const findBudgetForCategory = (categoryId) => {
-    const monthStart = parseISO(`${selectedMonth}-01`);
-    const matches = budgets.filter((budget) => {
-      if (budget.category_id !== categoryId) return false;
-      if (budget.recurring) {
-        const start = budget.start_month
-          ? parseISO(
-              `${budget.start_month.split('-')[0]}-${budget.start_month.split('-')[1]}-01`
-            )
-          : null;
-        const end = budget.end_month
-          ? parseISO(
-              `${budget.end_month.split('-')[0]}-${budget.end_month.split('-')[1]}-01`
-            )
-          : null;
-        if (start && monthStart < start) return false;
-        if (end && monthStart > end) return false;
-        return true;
-      }
-      return !!budget.month && budget.month.startsWith(selectedMonth);
-    });
-    return matches.find((budget) => budget.status === 'Active') || matches[0] || null;
-  };
+  // (prefer an Active one; shared matching rules with the Budgets page)
+  const findBudgetForCategory = (categoryId) =>
+    findBudgetForCategoryMonth(budgets, categoryId, selectedMonth);
 
   const handleOpenBudgetDialog = (categoryId = null) => {
     const budget = categoryId ? findBudgetForCategory(categoryId) : null;

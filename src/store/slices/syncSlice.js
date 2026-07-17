@@ -9,6 +9,9 @@ const initialState = {
   lastSyncBorrowingsLendings: null,
   lastSyncSettings: null,
   lastSyncExchangeRates: null,
+  // Epoch ms of the last full (non-incremental) sync; used to schedule a
+  // periodic full re-sync that self-heals any drift in incremental data
+  lastFullSyncAt: null,
 }
 
 const syncSlice = createSlice({
@@ -21,6 +24,9 @@ const syncSlice = createSlice({
       if (key in state) {
         state[key] = timestamp
       }
+    },
+    markFullSync: (state, action) => {
+      state.lastFullSyncAt = action.payload || Date.now()
     },
     clearLastSync: (state, action) => {
       const { entity } = action.payload
@@ -41,7 +47,7 @@ const syncSlice = createSlice({
   },
 })
 
-export const { updateLastSync, clearLastSync } = syncSlice.actions
+export const { updateLastSync, markFullSync, clearLastSync } = syncSlice.actions
 export default syncSlice.reducer
 
 

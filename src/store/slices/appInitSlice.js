@@ -7,8 +7,13 @@ import { fetchTransfers } from './transfersSlice'
 import { fetchBorrowingLendingRecords } from './borrowingsLendingsSlice'
 import { fetchSettings } from './settingsSlice'
 import { setExchangeRates } from './exchangeRatesSlice'
+import { markFullSync } from './syncSlice'
 import * as exchangeRatesApi from '../../lib/api/exchangeRates'
 import { clearPersistedStorage, hasPersistedData } from '../../utils/clearPersistedStorage'
+
+// Incremental syncs can drift (missed events, bad cursors); a periodic full
+// re-sync self-heals without the user needing to hit Refresh Data
+const FULL_SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000 // 24 hours
 
 // Initialize app - fetch all data in parallel
 export const initializeApp = createAsyncThunk(
@@ -17,7 +22,13 @@ export const initializeApp = createAsyncThunk(
     try {
       // Check if we have persisted data before fetching
       const hasPersisted = await hasPersistedData()
-      
+
+      // Force a full (non-incremental) sync when the last one is old enough
+      const lastFullSyncAt = getState().sync?.lastFullSyncAt
+      const needsFullSync =
+        !lastFullSyncAt || Date.now() - lastFullSyncAt > FULL_SYNC_INTERVAL_MS
+      const syncFilters = needsFullSync ? { forceFull: true } : {}
+
       // Fetch all data in parallel
       // Note: Account balances are now stored in account.current_balance
       // and updated automatically by database triggers
@@ -31,15 +42,19 @@ export const initializeApp = createAsyncThunk(
         settingsResult,
         exchangeRates,
       ] = await Promise.all([
-        dispatch(fetchAccounts({ status: 'Active' })),
-        dispatch(fetchTransactions({})),
-        dispatch(fetchCategories({})),
-        dispatch(fetchBudgets({})),
-        dispatch(fetchTransfers({})),
-        dispatch(fetchBorrowingLendingRecords({})),
-        dispatch(fetchSettings()),
+        dispatch(fetchAccounts({ status: 'Active', ...syncFilters })),
+        dispatch(fetchTransactions({ ...syncFilters })),
+        dispatch(fetchCategories({ ...syncFilters })),
+        dispatch(fetchBudgets({ ...syncFilters })),
+        dispatch(fetchTransfers({ ...syncFilters })),
+        dispatch(fetchBorrowingLendingRecords({ ...syncFilters })),
+        dispatch(fetchSettings({ ...syncFilters })),
         exchangeRatesApi.getExchangeRates({}),
       ])
+
+      if (needsFullSync) {
+        dispatch(markFullSync(Date.now()))
+      }
 
       // Extract data from fulfilled actions (new format: { data, isIncremental })
       const accounts = (accountsResult.payload?.data || accountsResult.payload) || []

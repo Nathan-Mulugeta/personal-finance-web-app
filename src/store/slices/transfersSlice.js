@@ -2,6 +2,7 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
 import * as transfersApi from '../../lib/api/transfers'
 import { mergeTransfers, getLatestSyncTimestamp } from '../../utils/dataMerge'
 import { updateLastSync } from './syncSlice'
+import { fetchAccounts } from './accountsSlice'
 
 // Async thunks
 export const fetchTransfers = createAsyncThunk(
@@ -52,9 +53,13 @@ export const fetchTransfer = createAsyncThunk(
 
 export const createTransfer = createAsyncThunk(
   'transfers/createTransfer',
-  async (transferData, { rejectWithValue }) => {
+  async (transferData, { rejectWithValue, dispatch }) => {
     try {
-      return await transfersApi.createTransfer(transferData)
+      const result = await transfersApi.createTransfer(transferData)
+      // Account balances change via a DB trigger; refresh them locally
+      // instead of relying on the realtime echo
+      dispatch(fetchAccounts({ status: 'Active' }))
+      return result
     } catch (error) {
       return rejectWithValue(error.message)
     }
@@ -63,10 +68,11 @@ export const createTransfer = createAsyncThunk(
 
 export const deleteTransfer = createAsyncThunk(
   'transfers/deleteTransfer',
-  async (transactionId, { rejectWithValue }) => {
+  async (transactionId, { rejectWithValue, dispatch }) => {
     try {
       const result = await transfersApi.deleteTransfer(transactionId)
       // result is { transferId, transactionIds }
+      dispatch(fetchAccounts({ status: 'Active' }))
       return result
     } catch (error) {
       return rejectWithValue(error.message)
@@ -184,6 +190,32 @@ const transfersSlice = createSlice({
       .addCase(deleteTransfer.rejected, (state, action) => {
         state.loading = false
         state.error = action.payload
+      })
+      // Cross-slice write-through: deleting a transfer-linked transaction
+      // from the transactions UI also deletes its pair — drop the transfer
+      // record here immediately. (String action types avoid a circular
+      // import with transactionsSlice.)
+      .addCase('transactions/deleteTransaction/fulfilled', (state, action) => {
+        const payload = action.payload
+        const deletedIds =
+          typeof payload === 'string'
+            ? [payload]
+            : payload?.deletedTransactionIds || []
+        if (deletedIds.length === 0) return
+        state.transfers = state.transfers.filter((transfer) => {
+          const outId = transfer.transferOut?.transaction_id
+          const inId = transfer.transferIn?.transaction_id
+          return !deletedIds.includes(outId) && !deletedIds.includes(inId)
+        })
+      })
+      .addCase('transactions/bulkDeleteTransactions/fulfilled', (state, action) => {
+        const deletedIds = action.payload?.deletedTransactionIds || []
+        if (deletedIds.length === 0) return
+        state.transfers = state.transfers.filter((transfer) => {
+          const outId = transfer.transferOut?.transaction_id
+          const inId = transfer.transferIn?.transaction_id
+          return !deletedIds.includes(outId) && !deletedIds.includes(inId)
+        })
       })
   },
 })
