@@ -20,9 +20,11 @@ import LightModeIcon from '@mui/icons-material/LightMode'
 import DarkModeIcon from '@mui/icons-material/DarkMode'
 import SettingsBrightnessIcon from '@mui/icons-material/SettingsBrightness'
 import SettingsIcon from '@mui/icons-material/Settings'
+import RefreshIcon from '@mui/icons-material/Refresh'
 import LogoutIcon from '@mui/icons-material/Logout'
 import { supabase } from '../../lib/supabase'
 import { clearAuth } from '../../store/slices/authSlice'
+import { persistor } from '../../store'
 import { useColorMode } from '../../theme'
 
 const APPEARANCE_OPTIONS = [
@@ -70,6 +72,16 @@ function Header({ onMenuClick }) {
     dispatch(clearAuth())
     navigate('/login')
     handleMenuClose()
+  }
+
+  // Same recovery as the Settings page's Refresh Data button: wipe the
+  // persisted store and reload so everything refetches from scratch
+  const handleRefreshData = async () => {
+    try {
+      await persistor.purge()
+    } finally {
+      window.location.reload()
+    }
   }
 
   return (
@@ -167,6 +179,12 @@ function Header({ onMenuClick }) {
                 <SettingsIcon fontSize="small" />
               </ListItemIcon>
               <ListItemText>Settings</ListItemText>
+            </MenuItem>
+            <MenuItem onClick={handleRefreshData}>
+              <ListItemIcon>
+                <RefreshIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Refresh data</ListItemText>
             </MenuItem>
             <MenuItem onClick={handleLogout}>
               <ListItemIcon>

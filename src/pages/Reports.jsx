@@ -27,6 +27,9 @@ import {
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import AddIcon from '@mui/icons-material/Add';
+import EditIcon from '@mui/icons-material/Edit';
+import BudgetDialog from '../components/common/BudgetDialog';
 import { usePageRefresh } from '../hooks/usePageRefresh';
 import PageSkeleton from '../components/common/PageSkeleton';
 import ErrorMessage from '../components/common/ErrorMessage';
@@ -83,6 +86,9 @@ function Reports() {
   const [transactionModalOpen, setTransactionModalOpen] = useState(false);
   const [selectedCategoryForModal, setSelectedCategoryForModal] =
     useState(null);
+  const [budgetDialogOpen, setBudgetDialogOpen] = useState(false);
+  // { budget: record | null, categoryId: string } — null budget means create
+  const [budgetDialogTarget, setBudgetDialogTarget] = useState(null);
 
   // Get base currency
   const baseCurrency =
@@ -741,6 +747,38 @@ function Reports() {
     setTransactionModalOpen(true);
   };
 
+  // Find the budget record that applies to a category in the selected month
+  // (prefer an Active one, mirroring the report's own budget matching)
+  const findBudgetForCategory = (categoryId) => {
+    const monthStart = parseISO(`${selectedMonth}-01`);
+    const matches = budgets.filter((budget) => {
+      if (budget.category_id !== categoryId) return false;
+      if (budget.recurring) {
+        const start = budget.start_month
+          ? parseISO(
+              `${budget.start_month.split('-')[0]}-${budget.start_month.split('-')[1]}-01`
+            )
+          : null;
+        const end = budget.end_month
+          ? parseISO(
+              `${budget.end_month.split('-')[0]}-${budget.end_month.split('-')[1]}-01`
+            )
+          : null;
+        if (start && monthStart < start) return false;
+        if (end && monthStart > end) return false;
+        return true;
+      }
+      return !!budget.month && budget.month.startsWith(selectedMonth);
+    });
+    return matches.find((budget) => budget.status === 'Active') || matches[0] || null;
+  };
+
+  const handleOpenBudgetDialog = (categoryId = null) => {
+    const budget = categoryId ? findBudgetForCategory(categoryId) : null;
+    setBudgetDialogTarget({ budget, categoryId: categoryId || '' });
+    setBudgetDialogOpen(true);
+  };
+
   // Format currency display (amounts are already in base currency)
   const formatCurrencyDisplay = (
     amount,
@@ -1021,12 +1059,26 @@ function Reports() {
             </Box>
           </TableCell>
           <TableCell align="right">
-            {renderCurrencyCell(
-              budget,
-              budgetForeign,
-              budgetOriginalAmounts,
-              true
-            )}
+            <Box
+              onClick={(event) => {
+                event.stopPropagation();
+                handleOpenBudgetDialog(category.category_id);
+              }}
+              role="button"
+              aria-label="Edit budget"
+              sx={{
+                display: 'inline-block',
+                cursor: 'pointer',
+                '&:hover': { textDecoration: 'underline' },
+              }}
+            >
+              {renderCurrencyCell(
+                budget,
+                budgetForeign,
+                budgetOriginalAmounts,
+                true
+              )}
+            </Box>
           </TableCell>
           <TableCell align="right">
             {renderCurrencyCell(
@@ -1340,19 +1392,54 @@ function Reports() {
             >
               {variancePhrase.text}
             </Typography>
-            {budgetCaption && (
-              <Typography
-                variant="caption"
-                noWrap
-                sx={{
-                  fontSize: '0.6875rem',
-                  color: 'text.secondary',
-                  minWidth: 0,
-                }}
-              >
-                {budgetCaption}
-              </Typography>
-            )}
+            <Box
+              onClick={(event) => {
+                event.stopPropagation();
+                handleOpenBudgetDialog(category.category_id);
+              }}
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.25,
+                minWidth: 0,
+                py: 0.25,
+                px: 0.5,
+                mr: -0.5,
+                borderRadius: 0.5,
+                ...tappableRowSx,
+              }}
+            >
+              {budgetCaption ? (
+                <>
+                  <Typography
+                    variant="caption"
+                    noWrap
+                    sx={{
+                      fontSize: '0.6875rem',
+                      color: 'text.secondary',
+                      minWidth: 0,
+                    }}
+                  >
+                    {budgetCaption}
+                  </Typography>
+                  <EditIcon
+                    sx={{
+                      fontSize: 11,
+                      color: 'text.secondary',
+                      flexShrink: 0,
+                    }}
+                  />
+                </>
+              ) : (
+                <Typography
+                  variant="caption"
+                  noWrap
+                  sx={{ fontSize: '0.6875rem', color: 'primary.main' }}
+                >
+                  Set budget
+                </Typography>
+              )}
+            </Box>
           </Box>
           {pctUsed !== null && (
             <LinearProgress
@@ -1594,16 +1681,39 @@ function Reports() {
 
   return (
     <Box>
-      <Typography 
-        variant="h5" 
-        sx={{ 
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
           mb: { xs: 1.5, sm: 2, md: 3 },
-          fontSize: { xs: '1.25rem', sm: '1.5rem' },
-          fontWeight: 500,
         }}
       >
-        Budget vs Actual
-      </Typography>
+        <Typography
+          variant="h5"
+          sx={{
+            fontSize: { xs: '1.25rem', sm: '1.5rem' },
+            fontWeight: 500,
+          }}
+        >
+          Budget vs Actual
+        </Typography>
+        <IconButton
+          onClick={() => handleOpenBudgetDialog()}
+          aria-label="Add budget"
+          sx={{
+            backgroundColor: 'primary.main',
+            color: 'primary.contrastText',
+            width: 36,
+            height: 36,
+            '&:hover': {
+              backgroundColor: 'primary.dark',
+            },
+          }}
+        >
+          <AddIcon sx={{ fontSize: 20 }} />
+        </IconButton>
+      </Box>
 
       {error && <ErrorMessage error={error} />}
 
@@ -2329,10 +2439,31 @@ function Reports() {
           </Box>
           )}
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ justifyContent: 'space-between' }}>
+          <Button
+            startIcon={<EditIcon sx={{ fontSize: 18 }} />}
+            onClick={() =>
+              selectedCategoryForModal &&
+              handleOpenBudgetDialog(selectedCategoryForModal.categoryId)
+            }
+          >
+            {selectedCategoryForModal &&
+            findBudgetForCategory(selectedCategoryForModal.categoryId)
+              ? 'Edit budget'
+              : 'Add budget'}
+          </Button>
           <Button onClick={() => setTransactionModalOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
+
+      {/* Create/Edit Budget Dialog (shared with the Budgets page) */}
+      <BudgetDialog
+        open={budgetDialogOpen}
+        onClose={() => setBudgetDialogOpen(false)}
+        editingBudget={budgetDialogTarget?.budget || null}
+        referenceMonth={selectedMonth}
+        defaultCategoryId={budgetDialogTarget?.categoryId || ''}
+      />
     </Box>
   );
 }

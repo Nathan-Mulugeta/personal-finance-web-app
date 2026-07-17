@@ -1,24 +1,16 @@
-import { useEffect, useState, useMemo, Fragment, useCallback } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import { useState, useMemo, Fragment, useCallback } from 'react';
+import { useSelector } from 'react-redux';
 import {
   selectCategoryMap,
   selectCategoryNameGetter,
 } from '../store/selectors';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
 import {
   Box,
   Button,
   Card,
   CardContent,
   Chip,
-  CircularProgress,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   FormControl,
-  FormHelperText,
   Grid,
   IconButton,
   InputLabel,
@@ -26,7 +18,6 @@ import {
   MenuItem,
   Paper,
   Select,
-  Switch,
   Table,
   TableBody,
   TableCell,
@@ -36,32 +27,23 @@ import {
   TextField,
   Typography,
   Tooltip,
-  Alert,
   Collapse,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
-import DeleteIcon from '@mui/icons-material/Delete';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
-import {
-  fetchBudgets,
-  createBudget,
-  updateBudget,
-  deleteBudget,
-  clearError,
-} from '../store/slices/budgetsSlice';
+import { fetchBudgets } from '../store/slices/budgetsSlice';
 import { fetchCategories } from '../store/slices/categoriesSlice';
-import { budgetSchema } from '../schemas/budgetSchema';
 import { BUDGET_STATUSES } from '../lib/api/budgets';
 import PageSkeleton from '../components/common/PageSkeleton';
 import ErrorMessage from '../components/common/ErrorMessage';
-import CategoryAutocomplete from '../components/common/CategoryAutocomplete';
+import BudgetDialog from '../components/common/BudgetDialog';
 import { usePageRefresh } from '../hooks/usePageRefresh';
 import {
   formatCurrency,
@@ -77,9 +59,7 @@ import {
 } from 'date-fns';
 
 function Budgets() {
-  const dispatch = useDispatch();
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   // Matches the md breakpoint previously used for the CSS card/table switch
   const isDesktopView = useMediaQuery(theme.breakpoints.up('md'));
   const { budgets, loading, backgroundLoading, isInitialized, error } =
@@ -95,11 +75,6 @@ function Budgets() {
   const getCategoryName = useSelector(selectCategoryNameGetter);
   const [openDialog, setOpenDialog] = useState(false);
   const [editingBudget, setEditingBudget] = useState(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [actionError, setActionError] = useState(null);
-  const [deleteConfirm, setDeleteConfirm] = useState(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(
     format(new Date(), 'yyyy-MM')
@@ -119,32 +94,6 @@ function Budgets() {
     expenseRecurring: false,
   });
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-    reset,
-    setValue,
-    watch,
-  } = useForm({
-    resolver: zodResolver(budgetSchema),
-    defaultValues: {
-      categoryId: '',
-      currency: 'USD',
-      amount: '',
-      month: format(new Date(), 'yyyy-MM'),
-      recurring: false,
-      startMonth: format(new Date(), 'yyyy-MM'),
-      endMonth: '',
-      notes: '',
-      status: 'Active',
-    },
-  });
-
-  const watchedRecurring = watch('recurring');
-  const watchedStatus = watch('status');
-  const watchedCategoryId = watch('categoryId');
-
   const categoriesInitialized = useSelector(
     (state) => state.categories.isInitialized
   );
@@ -159,21 +108,6 @@ function Budgets() {
       categories: { status: 'Active' },
     },
   });
-
-  // Auto-set currency from category when category is selected (only for new budgets)
-  useEffect(() => {
-    // Only auto-set currency when creating a new budget, not when editing
-    if (watchedCategoryId && !editingBudget) {
-      const category = categoryMap.get(watchedCategoryId);
-      if (category) {
-        // Try to get currency from settings or default to USD
-        const baseCurrency =
-          settings.find((s) => s.setting_key === 'BaseCurrency')
-            ?.setting_value || 'USD';
-        setValue('currency', baseCurrency);
-      }
-    }
-  }, [watchedCategoryId, categoryMap, settings, setValue, editingBudget]);
 
   // Calculate actual amount for a budget (works for both income and expense)
   // Optional forMonth parameter to calculate for a specific month (used for stats)
@@ -412,47 +346,7 @@ function Budgets() {
   ]);
 
   const handleOpenDialog = (budget = null) => {
-    if (budget) {
-      setEditingBudget(budget);
-      reset({
-        categoryId: budget.category_id,
-        currency: budget.currency,
-        amount: budget.amount,
-        month: budget.month
-          ? `${budget.month.split('-')[0]}-${budget.month.split('-')[1]}`
-          : format(new Date(), 'yyyy-MM'),
-        recurring: budget.recurring,
-        startMonth: budget.start_month
-          ? `${budget.start_month.split('-')[0]}-${
-              budget.start_month.split('-')[1]
-            }`
-          : format(new Date(), 'yyyy-MM'),
-        endMonth: budget.end_month
-          ? `${budget.end_month.split('-')[0]}-${
-              budget.end_month.split('-')[1]
-            }`
-          : '',
-        notes: budget.notes || '',
-        status: budget.status,
-      });
-    } else {
-      setEditingBudget(null);
-      reset({
-        categoryId: '',
-        currency:
-          settings.find((s) => s.setting_key === 'BaseCurrency')
-            ?.setting_value || 'USD',
-        amount: '',
-        month: selectedMonth,
-        recurring: false,
-        startMonth: selectedMonth,
-        endMonth: '',
-        notes: '',
-        status: 'Active',
-      });
-    }
-    setActionError(null);
-    setIsSubmitting(false);
+    setEditingBudget(budget);
     setOpenDialog(true);
   };
 
@@ -476,192 +370,6 @@ function Budgets() {
   const handleCloseDialog = () => {
     setOpenDialog(false);
     setEditingBudget(null);
-    setActionError(null);
-    setIsSubmitting(false);
-    reset();
-    dispatch(clearError());
-  };
-
-  // Helper function to get the month before a given month (YYYY-MM format)
-  const getPreviousMonth = useCallback((monthStr) => {
-    const currentDate = parseISO(`${monthStr}-01`);
-    const previousMonth = subMonths(currentDate, 1);
-    return format(previousMonth, 'yyyy-MM');
-  }, []);
-
-  const onSubmit = async (data) => {
-    setIsSubmitting(true);
-    setActionError(null);
-    try {
-      // Clean up data: convert empty strings to null for optional fields
-      const cleanedData = {
-        ...data,
-        endMonth:
-          data.endMonth && data.endMonth.trim() !== '' ? data.endMonth : null,
-        month: data.month && data.month.trim() !== '' ? data.month : null,
-        startMonth:
-          data.startMonth && data.startMonth.trim() !== ''
-            ? data.startMonth
-            : null,
-        notes: data.notes && data.notes.trim() !== '' ? data.notes : '',
-      };
-
-      const budgetData = {
-        categoryId: cleanedData.categoryId,
-        currency: cleanedData.currency.toUpperCase(),
-        amount: parseFloat(cleanedData.amount),
-        recurring: cleanedData.recurring,
-        notes: cleanedData.notes,
-        status: cleanedData.status,
-      };
-
-      if (cleanedData.recurring) {
-        budgetData.startMonth = cleanedData.startMonth;
-        budgetData.endMonth = cleanedData.endMonth || null; // Allow null for non-ending budgets
-      } else {
-        // For one-time budgets, ensure month is set
-        if (!cleanedData.month) {
-          setActionError('Month is required for one-time budgets');
-          setIsSubmitting(false);
-          return;
-        }
-        budgetData.month = cleanedData.month;
-      }
-
-      if (editingBudget) {
-        // Check if we need to split a recurring budget for a future month
-        if (
-          editingBudget.recurring &&
-          cleanedData.recurring &&
-          editingBudget.start_month &&
-          cleanedData.startMonth
-        ) {
-          // Parse dates for comparison
-          const budgetStartDate = parseISO(
-            `${editingBudget.start_month.split('-')[0]}-${
-              editingBudget.start_month.split('-')[1]
-            }-01`
-          );
-          const selectedDate = parseISO(`${selectedMonth}-01`);
-          const newStartDate = parseISO(`${cleanedData.startMonth}-01`);
-
-          // Check if selectedMonth (the month user is viewing) is after the budget's start_month
-          if (selectedDate > startOfMonth(budgetStartDate)) {
-            // Split the budget: end the old one before selectedMonth and create a new one from selectedMonth
-            const endMonthForOldBudget = getPreviousMonth(selectedMonth);
-
-            // Update the old budget to end at the month before selectedMonth
-            // Keep original amount and other original fields, only update end_month
-            const originalStartMonth = editingBudget.start_month
-              ? `${editingBudget.start_month.split('-')[0]}-${
-                  editingBudget.start_month.split('-')[1]
-                }`
-              : null;
-
-            await dispatch(
-              updateBudget({
-                budgetId: editingBudget.budget_id,
-                updates: {
-                  categoryId: editingBudget.category_id,
-                  currency: editingBudget.currency,
-                  amount: parseFloat(editingBudget.amount), // Keep original amount
-                  recurring: true,
-                  notes: editingBudget.notes || '', // Keep original notes
-                  status: editingBudget.status, // Keep original status
-                  startMonth: originalStartMonth,
-                  endMonth: endMonthForOldBudget,
-                },
-              })
-            ).unwrap();
-
-            // Create a new recurring budget starting from selectedMonth with the new amount and updated fields
-            const originalEndMonth = editingBudget.end_month
-              ? parseISO(
-                  `${editingBudget.end_month.split('-')[0]}-${
-                    editingBudget.end_month.split('-')[1]
-                  }-01`
-                )
-              : null;
-            const newEndMonth =
-              originalEndMonth && originalEndMonth >= selectedDate
-                ? `${editingBudget.end_month.split('-')[0]}-${
-                    editingBudget.end_month.split('-')[1]
-                  }`
-                : cleanedData.endMonth;
-
-            await dispatch(
-              createBudget({
-                ...budgetData,
-                startMonth: selectedMonth,
-                endMonth: newEndMonth,
-              })
-            ).unwrap();
-          } else if (selectedDate < startOfMonth(budgetStartDate)) {
-            // Selected month is before start_month: update start_month to selectedMonth
-            await dispatch(
-              updateBudget({
-                budgetId: editingBudget.budget_id,
-                updates: {
-                  ...budgetData,
-                  startMonth: selectedMonth,
-                },
-              })
-            ).unwrap();
-          } else {
-            // Selected month equals start_month: just update the amount and other fields
-            await dispatch(
-              updateBudget({
-                budgetId: editingBudget.budget_id,
-                updates: budgetData,
-              })
-            ).unwrap();
-          }
-        } else {
-          // Not a recurring budget or not splitting: use normal update
-          await dispatch(
-            updateBudget({
-              budgetId: editingBudget.budget_id,
-              updates: budgetData,
-            })
-          ).unwrap();
-        }
-      } else {
-        await dispatch(createBudget(budgetData)).unwrap();
-      }
-      handleCloseDialog();
-    } catch (err) {
-      console.error('Error saving budget:', err);
-      const errorMessage =
-        err?.message || 'Failed to save budget. Please try again.';
-      setActionError(errorMessage);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!editingBudget) return;
-
-    if (!deleteConfirm) {
-      setDeleteConfirm(true);
-      return;
-    }
-
-    setIsDeleting(true);
-    setDeleteError(null);
-    try {
-      await dispatch(deleteBudget(editingBudget.budget_id)).unwrap();
-      setDeleteConfirm(null);
-      setDeleteError(null);
-      handleCloseDialog();
-    } catch (err) {
-      console.error('Error deleting budget:', err);
-      const errorMessage =
-        err?.message || 'Failed to delete budget. Please try again.';
-      setDeleteError(errorMessage);
-    } finally {
-      setIsDeleting(false);
-    }
   };
 
   const handleFilterChange = (key, value) => {
@@ -2549,265 +2257,13 @@ function Budgets() {
       )}
 
       {/* Create/Edit Dialog */}
-      <Dialog
+      {/* Create/Edit Budget Dialog (shared with Reports) */}
+      <BudgetDialog
         open={openDialog}
         onClose={handleCloseDialog}
-        maxWidth="sm"
-        fullWidth
-        fullScreen={isMobile}
-      >
-        <form onSubmit={handleSubmit(onSubmit)}>
-          <DialogTitle>
-            {editingBudget ? 'Edit Budget' : 'Create New Budget'}
-          </DialogTitle>
-          <DialogContent>
-            {actionError && (
-              <Alert
-                severity="error"
-                sx={{ mb: 2 }}
-                onClose={() => setActionError(null)}
-              >
-                {actionError}
-              </Alert>
-            )}
-            <Grid container spacing={2} sx={{ mt: 1 }}>
-              <Grid item xs={12}>
-                <CategoryAutocomplete
-                  categories={categories}
-                  value={watchedCategoryId || ''}
-                  onChange={(id) => setValue('categoryId', id)}
-                  label="Category *"
-                  error={!!errors.categoryId}
-                  helperText={errors.categoryId?.message}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Currency (ISO Code) *"
-                  {...register('currency')}
-                  error={!!errors.currency}
-                  helperText={errors.currency?.message || 'e.g., USD, EUR, ETB'}
-                  inputProps={{
-                    maxLength: 3,
-                    style: { textTransform: 'uppercase' },
-                  }}
-                  onChange={(e) => {
-                    setValue('currency', e.target.value.toUpperCase());
-                  }}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  type="number"
-                  label="Amount *"
-                  {...register('amount', { valueAsNumber: true })}
-                  error={!!errors.amount}
-                  helperText={errors.amount?.message}
-                  inputProps={{ step: '0.01', min: '0.01' }}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Switch
-                    {...register('recurring')}
-                    checked={watchedRecurring}
-                    onChange={(e) => setValue('recurring', e.target.checked)}
-                  />
-                  <Typography>Recurring Budget</Typography>
-                </Box>
-              </Grid>
-              {watchedRecurring ? (
-                <>
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      type="month"
-                      label="Start Month *"
-                      {...register('startMonth', {
-                        required:
-                          'Start month is required for recurring budgets',
-                      })}
-                      error={!!errors.startMonth}
-                      helperText={errors.startMonth?.message}
-                      InputLabelProps={{ shrink: true }}
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      type="month"
-                      label="End Month (Optional)"
-                      {...register('endMonth')}
-                      error={!!errors.endMonth}
-                      helperText={
-                        errors.endMonth?.message ||
-                        'Leave empty for non-ending budget'
-                      }
-                      InputLabelProps={{ shrink: true }}
-                    />
-                  </Grid>
-                </>
-              ) : (
-                <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    type="month"
-                    label="Month *"
-                    {...register('month', {
-                      required: 'Month is required for one-time budgets',
-                    })}
-                    error={!!errors.month}
-                    helperText={errors.month?.message}
-                    InputLabelProps={{ shrink: true }}
-                  />
-                </Grid>
-              )}
-              <Grid item xs={12} sm={6}>
-                <FormControl fullWidth error={!!errors.status}>
-                  <InputLabel>Status</InputLabel>
-                  <Select
-                    {...register('status')}
-                    label="Status"
-                    value={watchedStatus || ''}
-                    onChange={(e) => setValue('status', e.target.value)}
-                  >
-                    {BUDGET_STATUSES.map((status) => (
-                      <MenuItem key={status} value={status}>
-                        {status}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                  {errors.status && (
-                    <FormHelperText>{errors.status.message}</FormHelperText>
-                  )}
-                </FormControl>
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Notes (Optional)"
-                  {...register('notes')}
-                  error={!!errors.notes}
-                  helperText={errors.notes?.message}
-                  multiline
-                  rows={2}
-                />
-              </Grid>
-            </Grid>
-          </DialogContent>
-          <DialogActions>
-            <Box
-              sx={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                width: '100%',
-              }}
-            >
-              <Box>
-                {editingBudget && (
-                  <Button
-                    onClick={() => handleDelete()}
-                    color="error"
-                    disabled={isSubmitting || isDeleting}
-                    startIcon={
-                      isDeleting ? (
-                        <CircularProgress size={20} color="inherit" />
-                      ) : (
-                        <DeleteIcon />
-                      )
-                    }
-                  >
-                    {isDeleting ? 'Deleting...' : 'Delete'}
-                  </Button>
-                )}
-              </Box>
-              <Box sx={{ display: 'flex', gap: 1 }}>
-                <Button
-                  onClick={handleCloseDialog}
-                  disabled={isSubmitting || isDeleting}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  variant="contained"
-                  disabled={isSubmitting || isDeleting}
-                  startIcon={
-                    isSubmitting ? (
-                      <CircularProgress size={20} color="inherit" />
-                    ) : null
-                  }
-                >
-                  {isSubmitting
-                    ? editingBudget
-                      ? 'Updating...'
-                      : 'Creating...'
-                    : editingBudget
-                    ? 'Update'
-                    : 'Create'}
-                </Button>
-              </Box>
-            </Box>
-          </DialogActions>
-        </form>
-      </Dialog>
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog
-        open={!!deleteConfirm && !!editingBudget}
-        onClose={() => {
-          setDeleteConfirm(null);
-          setDeleteError(null);
-        }}
-        fullScreen={isMobile}
-      >
-        <DialogTitle>Delete Budget</DialogTitle>
-        <DialogContent>
-          <Typography>
-            Are you sure you want to delete the budget for{' '}
-            <strong>
-              {editingBudget && getCategoryName(editingBudget.category_id)}
-            </strong>
-            ?
-          </Typography>
-          {deleteError && (
-            <Alert
-              severity="error"
-              sx={{ mt: 2 }}
-              onClose={() => setDeleteError(null)}
-            >
-              {deleteError}
-            </Alert>
-          )}
-          <Alert severity="warning" sx={{ mt: 2 }}>
-            This action cannot be undone.
-          </Alert>
-        </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={() => {
-              setDeleteConfirm(null);
-              setDeleteError(null);
-            }}
-            disabled={isDeleting}
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleDelete}
-            color="error"
-            variant="contained"
-            disabled={isDeleting}
-            startIcon={
-              isDeleting ? <CircularProgress size={20} color="inherit" /> : null
-            }
-          >
-            {isDeleting ? 'Deleting...' : 'Delete'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        editingBudget={editingBudget}
+        referenceMonth={selectedMonth}
+      />
     </Box>
   );
 }
