@@ -17,7 +17,6 @@ import {
   FormControlLabel,
   IconButton,
   InputAdornment,
-  Paper,
   Checkbox,
   Stack,
   Table,
@@ -47,6 +46,7 @@ import ReceiptCaptureDialog from '../components/common/ReceiptCaptureDialog';
 import NaturalLanguageDialog from '../components/common/NaturalLanguageDialog';
 import AITransactionsReviewModal from '../components/common/AITransactionsReviewModal';
 import ErrorMessage from '../components/common/ErrorMessage';
+import EmptyState from '../components/common/EmptyState';
 import { format, parseISO, isToday, isYesterday } from 'date-fns';
 import { usePageRefresh } from '../hooks/usePageRefresh';
 import { clearError } from '../store/slices/transactionsSlice';
@@ -547,41 +547,17 @@ function Home({ quickAddExpense = false }) {
   const renderTransactions = (transactions) => {
     if (transactions.length === 0) {
       return (
-        <Box
-          sx={{
-            textAlign: 'center',
-            py: { xs: 4, sm: 6 },
-            border: '1px solid',
-            borderColor: 'divider',
-            borderRadius: 1,
-            backgroundColor: 'background.paper',
-          }}
-        >
-          <ReceiptIcon
-            sx={{
-              fontSize: { xs: 48, sm: 64 },
-              color: 'text.secondary',
-              mb: { xs: 1.5, sm: 2 },
-            }}
-          />
-          <Typography
-            variant="h6"
-            color="text.secondary"
-            gutterBottom
-            sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}
-          >
-            {debouncedSearchQuery ? 'No transactions found' : 'No transactions yet'}
-          </Typography>
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{ fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}
-          >
-            {debouncedSearchQuery
+        <EmptyState
+          icon={<ReceiptIcon />}
+          title={
+            debouncedSearchQuery ? 'No transactions found' : 'No transactions yet'
+          }
+          subtitle={
+            debouncedSearchQuery
               ? 'Try searching by category name or transaction description'
-              : 'Add your first transaction to get started'}
-          </Typography>
-        </Box>
+              : 'Add your first transaction to get started'
+          }
+        />
       );
     }
 
@@ -589,31 +565,14 @@ function Home({ quickAddExpense = false }) {
       <>
         {/* Mobile View */}
         {!isDesktopView && (
-        <Box
-          sx={{
-            border: '1px solid',
-            borderColor: 'divider',
-            borderRadius: 1,
-            backgroundColor: 'background.paper',
-            overflow: 'hidden',
-          }}
-        >
+        <Box sx={{ overflow: 'hidden' }}>
           {transactions.map((txn) => renderMobileTransaction(txn))}
         </Box>
         )}
 
         {/* Desktop Table View */}
         {isDesktopView && (
-        <TableContainer
-          component={Paper}
-          elevation={0}
-          sx={{
-            border: '1px solid',
-            borderColor: 'divider',
-            borderRadius: 1,
-            overflow: 'hidden',
-          }}
-        >
+        <TableContainer sx={{ overflow: 'hidden' }}>
           <Table size="small">
             <TableHead>
               <TableRow

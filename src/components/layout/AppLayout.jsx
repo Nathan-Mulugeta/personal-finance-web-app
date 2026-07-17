@@ -5,6 +5,7 @@ import Sidebar from './Sidebar';
 import Header from './Header';
 import BottomNav from './BottomNav';
 import AppSnackbar from '../common/AppSnackbar';
+import AddTransactionDialog from '../common/AddTransactionDialog';
 import { useDataRefresh } from '../../hooks/useDataRefresh';
 
 const DRAWER_WIDTH = 240;
@@ -15,6 +16,7 @@ function AppLayout() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
   const touchStartRef = useRef(null);
   const touchEndRef = useRef(null);
 
@@ -161,7 +163,12 @@ function AppLayout() {
       >
         <Outlet />
       </Box>
-      <BottomNav onMoreClick={handleDrawerToggle} />
+      <BottomNav onQuickAdd={() => setQuickAddOpen(true)} />
+      {/* Global quick-add dialog, reachable from the bottom nav on any page */}
+      <AddTransactionDialog
+        open={quickAddOpen}
+        onClose={() => setQuickAddOpen(false)}
+      />
       <AppSnackbar />
     </Box>
   );

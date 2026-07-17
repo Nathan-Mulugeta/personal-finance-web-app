@@ -2,8 +2,6 @@ import { useState, useMemo, Fragment } from 'react';
 import { useSelector } from 'react-redux';
 import {
   Box,
-  Card,
-  CardContent,
   IconButton,
   Table,
   TableBody,
@@ -46,7 +44,10 @@ import {
   parseISO,
 } from 'date-fns';
 import { getCategoryDescendants } from '../utils/categoryHierarchy';
-import { findBudgetForCategoryMonth } from '../utils/budgetMatching';
+import {
+  findBudgetForCategoryMonth,
+  budgetAppliesToMonth,
+} from '../utils/budgetMatching';
 
 // Tappable mobile row: suppress the browser tap highlight (blue flash on
 // Android/Chrome) and sticky hover on touch; give explicit pressed feedback
@@ -753,6 +754,20 @@ function Reports() {
   const findBudgetForCategory = (categoryId) =>
     findBudgetForCategoryMonth(budgets, categoryId, selectedMonth);
 
+  // True when any descendant category has its own budget for the month —
+  // used to cue aggregated vs own-record budget amounts on parent rows
+  const descendantsHaveBudgets = (categoryId) => {
+    const descendantIds = getCategoryAndDescendantIds(categoryId).filter(
+      (id) => id !== categoryId
+    );
+    if (descendantIds.length === 0) return false;
+    return budgets.some(
+      (budget) =>
+        descendantIds.includes(budget.category_id) &&
+        budgetAppliesToMonth(budget, selectedMonth)
+    );
+  };
+
   const handleOpenBudgetDialog = (categoryId = null) => {
     const budget = categoryId ? findBudgetForCategory(categoryId) : null;
     setBudgetDialogTarget({ budget, categoryId: categoryId || '' });
@@ -938,6 +953,11 @@ function Reports() {
     const hasChildren = category.children && category.children.length > 0;
     const isExpanded = expandedCategories.has(category.category_id);
     const differenceColor = getDifferenceColor(difference, type);
+    const ownBudget = findBudgetForCategory(category.category_id);
+    const childBudgets =
+      budget > 0 && hasChildren && descendantsHaveBudgets(category.category_id);
+    const budgetFromChildrenOnly = childBudgets && !ownBudget;
+    const budgetIncludesChildren = childBudgets && !!ownBudget;
 
     // Get foreign currency displays
     const budgetForeign = getForeignCurrencyDisplay(
@@ -1045,18 +1065,58 @@ function Reports() {
                 handleOpenBudgetDialog(category.category_id);
               }}
               role="button"
-              aria-label="Edit budget"
+              aria-label={budget > 0 ? 'Edit budget' : 'Set budget'}
               sx={{
                 display: 'inline-block',
                 cursor: 'pointer',
                 '&:hover': { textDecoration: 'underline' },
               }}
             >
-              {renderCurrencyCell(
-                budget,
-                budgetForeign,
-                budgetOriginalAmounts,
-                true
+              {budget > 0 ? (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'flex-end',
+                  }}
+                >
+                  <Box
+                    sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
+                  >
+                    {renderCurrencyCell(
+                      budget,
+                      budgetForeign,
+                      budgetOriginalAmounts,
+                      true
+                    )}
+                    {!budgetFromChildrenOnly && (
+                      <EditIcon
+                        sx={{ fontSize: 12, color: 'text.secondary' }}
+                      />
+                    )}
+                  </Box>
+                  {(budgetFromChildrenOnly || budgetIncludesChildren) && (
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        fontSize: '0.65rem',
+                        color: 'text.secondary',
+                        fontStyle: 'italic',
+                      }}
+                    >
+                      {budgetFromChildrenOnly
+                        ? 'from subcategories'
+                        : 'includes subcategories'}
+                    </Typography>
+                  )}
+                </Box>
+              ) : (
+                <Typography
+                  variant="caption"
+                  sx={{ fontSize: '0.75rem', color: 'primary.main' }}
+                >
+                  Set budget
+                </Typography>
               )}
             </Box>
           </TableCell>
@@ -1268,11 +1328,26 @@ function Reports() {
       : 'error';
     const variancePhrase = getVariancePhrase(variance, type);
 
+    // A parent can show a budget aggregated purely from its children
+    // (tapping CREATES its own record) or a mix of its own budget plus
+    // children (tapping edits the own record, smaller than the shown sum)
+    const ownBudget = findBudgetForCategory(category.category_id);
+    const childBudgets =
+      budget > 0 && hasChildren && descendantsHaveBudgets(category.category_id);
+    const budgetFromChildrenOnly = childBudgets && !ownBudget;
+    const budgetIncludesChildren = childBudgets && !!ownBudget;
+
     const budgetCaption =
       budget > 0
         ? `of ${formatCurrency(budget, baseCurrency)}${
             budgetForeign
               ? ` · ${formatCurrency(budgetForeign.amount, budgetForeign.currency)}`
+              : ''
+          }${
+            budgetFromChildrenOnly
+              ? ' (subcategories)'
+              : budgetIncludesChildren
+              ? ' (includes subcategories)'
               : ''
           }`
         : '';
@@ -1402,13 +1477,15 @@ function Reports() {
                   >
                     {budgetCaption}
                   </Typography>
-                  <EditIcon
-                    sx={{
-                      fontSize: 11,
-                      color: 'text.secondary',
-                      flexShrink: 0,
-                    }}
-                  />
+                  {!budgetFromChildrenOnly && (
+                    <EditIcon
+                      sx={{
+                        fontSize: 11,
+                        color: 'text.secondary',
+                        flexShrink: 0,
+                      }}
+                    />
+                  )}
                 </>
               ) : (
                 <Typography
@@ -1698,8 +1775,7 @@ function Reports() {
       {error && <ErrorMessage error={error} />}
 
       {/* Period Navigation */}
-      <Card sx={{ mb: { xs: 2, sm: 3 } }}>
-        <CardContent sx={{ p: { xs: 1.5, sm: 2 }, '&:last-child': { pb: { xs: 1.5, sm: 2 } } }}>
+      <Box sx={{ mb: { xs: 2.5, sm: 3 } }}>
           <Box
             sx={{
               display: 'flex',
@@ -1756,17 +1832,10 @@ function Reports() {
               </IconButton>
             </Box>
           </Box>
-        </CardContent>
-      </Card>
+      </Box>
 
       {/* At-a-glance summary */}
-      <Card sx={{ mb: { xs: 2, sm: 3 } }}>
-          <CardContent
-            sx={{
-              p: { xs: 1.5, sm: 2 },
-              '&:last-child': { pb: { xs: 1.5, sm: 2 } },
-            }}
-          >
+      <Box sx={{ mb: { xs: 2.5, sm: 3 } }}>
             <Box sx={{ display: 'flex', gap: { xs: 1.5, md: 4 } }}>
               {[
                 {
@@ -1828,12 +1897,10 @@ function Reports() {
                 </Fragment>
               ))}
             </Box>
-          </CardContent>
-        </Card>
+      </Box>
 
       {/* Income Budget vs Actual Section */}
-      <Card sx={{ mb: { xs: 2, sm: 3 } }}>
-        <CardContent sx={{ p: { xs: 1.5, sm: 2 }, '&:last-child': { pb: { xs: 1.5, sm: 2 } } }}>
+      <Box sx={{ mb: { xs: 2.5, sm: 3 } }}>
           <Typography variant="h6" sx={{ mb: { xs: 1.5, sm: 2 }, fontWeight: 'bold', fontSize: { xs: '1rem', sm: '1.125rem' } }}>
             {isDesktopView ? 'Income Budget vs Actual' : 'Income'}
           </Typography>
@@ -2054,12 +2121,10 @@ function Reports() {
             </Table>
           </Box>
           )}
-        </CardContent>
-      </Card>
+      </Box>
 
       {/* Expense Budget vs Actual Section */}
-      <Card sx={{ mb: { xs: 2, sm: 3 } }}>
-        <CardContent sx={{ p: { xs: 1.5, sm: 2 }, '&:last-child': { pb: { xs: 1.5, sm: 2 } } }}>
+      <Box sx={{ mb: { xs: 2.5, sm: 3 } }}>
           <Typography variant="h6" sx={{ mb: { xs: 1.5, sm: 2 }, fontWeight: 'bold', fontSize: { xs: '1rem', sm: '1.125rem' } }}>
             {isDesktopView ? 'Expense Budget vs Actual' : 'Expenses'}
           </Typography>
@@ -2277,8 +2342,7 @@ function Reports() {
             </Table>
           </Box>
           )}
-        </CardContent>
-      </Card>
+      </Box>
 
       {/* Transaction Modal */}
       <Dialog

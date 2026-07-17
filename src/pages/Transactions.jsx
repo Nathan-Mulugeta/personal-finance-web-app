@@ -21,7 +21,6 @@ import {
   IconButton,
   InputLabel,
   MenuItem,
-  Paper,
   Select,
   Table,
   TableBody,
@@ -57,6 +56,7 @@ import {
 } from '../lib/api/transactions';
 import PageSkeleton from '../components/common/PageSkeleton';
 import ErrorMessage from '../components/common/ErrorMessage';
+import EmptyState from '../components/common/EmptyState';
 import AddTransactionDialog from '../components/common/AddTransactionDialog';
 import EditTransactionDialog from '../components/common/EditTransactionDialog';
 import AddTransferDialog from '../components/common/AddTransferDialog';
@@ -1386,52 +1386,25 @@ function Transactions() {
       </Collapse>
 
       {combinedItems.length === 0 ? (
-        <Box
-          sx={{
-            textAlign: 'center',
-            py: { xs: 4, sm: 6 },
-            border: '1px solid',
-            borderColor: 'divider',
-            borderRadius: 1,
-            backgroundColor: 'background.paper',
-          }}
-        >
-          <ReceiptIcon
-            sx={{
-              fontSize: { xs: 40, sm: 48 },
-              color: 'text.secondary',
-              mb: 1.5,
-              opacity: 0.5,
-            }}
-          />
-          <Typography
-            variant="h6"
-            color="text.secondary"
-            gutterBottom
-            sx={{ fontSize: { xs: '0.9375rem', sm: '1rem' }, fontWeight: 500 }}
-          >
-            No transactions yet
-          </Typography>
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{ mb: 2, fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}
-          >
-            Create your first transaction to start tracking your finances
-          </Typography>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon sx={{ fontSize: 18 }} />}
-            onClick={() => setAddTransactionOpen(true)}
-            sx={{
-              textTransform: 'none',
-              fontSize: '0.875rem',
-              minHeight: 36,
-            }}
-          >
-            Create Transaction
-          </Button>
-        </Box>
+        <EmptyState
+          icon={<ReceiptIcon />}
+          title="No transactions yet"
+          subtitle="Create your first transaction to start tracking your finances"
+          action={
+            <Button
+              variant="contained"
+              startIcon={<AddIcon sx={{ fontSize: 18 }} />}
+              onClick={() => setAddTransactionOpen(true)}
+              sx={{
+                textTransform: 'none',
+                fontSize: '0.875rem',
+                minHeight: 36,
+              }}
+            >
+              Create Transaction
+            </Button>
+          }
+        />
       ) : (
         <>
           {/* Mobile Card View */}
@@ -1490,16 +1463,7 @@ function Transactions() {
 
           {/* Desktop Table View */}
           {isDesktopView && (
-          <TableContainer
-            component={Paper}
-            elevation={0}
-            sx={{
-              border: '1px solid',
-              borderColor: 'divider',
-              borderRadius: 1,
-              overflow: 'hidden',
-            }}
-          >
+          <TableContainer sx={{ overflow: 'hidden' }}>
             <Table size="small">
               <TableHead>
                 <TableRow

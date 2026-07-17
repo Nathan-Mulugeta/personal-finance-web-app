@@ -3,7 +3,6 @@ import { useDispatch, useSelector } from 'react-redux';
 import {
   Box,
   Button,
-  Paper,
   Table,
   TableBody,
   TableCell,
@@ -17,6 +16,7 @@ import {
 import CurrencyExchangeIcon from '@mui/icons-material/CurrencyExchange';
 import PageSkeleton from '../components/common/PageSkeleton';
 import ErrorMessage from '../components/common/ErrorMessage';
+import EmptyState from '../components/common/EmptyState';
 import { fetchExchangeRates } from '../store/slices/exchangeRatesSlice';
 import { format } from 'date-fns';
 import { usePageRefresh } from '../hooks/usePageRefresh';
@@ -84,40 +84,11 @@ function ExchangeRates() {
       {error && <ErrorMessage error={error} />}
 
       {sortedExchangeRates.length === 0 ? (
-        <Box
-          sx={{
-            textAlign: 'center',
-            py: { xs: 3, sm: 4 },
-            border: '1px solid',
-            borderColor: 'divider',
-            borderRadius: 1,
-            backgroundColor: 'background.paper',
-          }}
-        >
-          <CurrencyExchangeIcon
-            sx={{
-              fontSize: { xs: 48, sm: 64 },
-              color: 'text.secondary',
-              mb: { xs: 1.5, sm: 2 },
-            }}
-          />
-          <Typography
-            variant="h6"
-            color="text.secondary"
-            gutterBottom
-            sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}
-          >
-            No exchange rates yet
-          </Typography>
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{ fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}
-          >
-            Exchange rates are automatically created when you make
-            multi-currency transfers
-          </Typography>
-        </Box>
+        <EmptyState
+          icon={<CurrencyExchangeIcon />}
+          title="No exchange rates yet"
+          subtitle="Exchange rates are automatically created when you make multi-currency transfers"
+        />
       ) : (
         <>
           {/* Show All / Show Less Button */}
@@ -139,41 +110,35 @@ function ExchangeRates() {
             </Box>
           )}
 
-          {/* Mobile Card View */}
+          {/* Mobile dense-row view */}
           <Box sx={{ display: { xs: 'block', md: 'none' } }}>
             {displayedRates.map((rate) => (
               <Box
                 key={rate.exchange_rate_id}
                 sx={{
-                  mb: 1.5,
-                  p: 1.5,
-                  border: '1px solid',
+                  py: 1.25,
+                  borderBottom: '1px solid',
                   borderColor: 'divider',
-                  borderRadius: 1,
-                  backgroundColor: 'background.paper',
                 }}
               >
                 <Box
                   sx={{
                     display: 'flex',
                     justifyContent: 'space-between',
-                    alignItems: 'flex-start',
-                    mb: 1,
+                    alignItems: 'center',
+                    gap: 1,
                   }}
                 >
                   <Typography
                     variant="body2"
-                    color="text.secondary"
-                    sx={{ fontSize: '0.75rem' }}
+                    noWrap
+                    sx={{ fontSize: '0.875rem', fontWeight: 500, minWidth: 0 }}
                   >
-                    {rate.date
-                      ? format(new Date(rate.date), 'MMM dd, yyyy')
-                      : 'N/A'}
+                    {rate.from_currency} → {rate.to_currency}
                   </Typography>
                   <Typography
-                    variant="body1"
-                    fontWeight={600}
-                    sx={{ fontSize: '0.875rem' }}
+                    variant="body2"
+                    sx={{ fontSize: '0.875rem', fontWeight: 600, flexShrink: 0 }}
                   >
                     {rate.rate?.toFixed(4) || 'N/A'}
                   </Typography>
@@ -181,64 +146,42 @@ function ExchangeRates() {
                 <Box
                   sx={{
                     display: 'flex',
-                    alignItems: 'center',
                     justifyContent: 'space-between',
-                    mb: 0.5,
+                    alignItems: 'baseline',
+                    gap: 1,
+                    mt: 0.25,
                   }}
                 >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <Typography
-                      variant="body1"
-                      fontWeight={500}
-                      sx={{ fontSize: '0.9375rem' }}
-                    >
-                      {rate.from_currency}
-                    </Typography>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{ fontSize: '0.75rem' }}
-                    >
-                      →
-                    </Typography>
-                    <Typography
-                      variant="body1"
-                      fontWeight={500}
-                      sx={{ fontSize: '0.9375rem' }}
-                    >
-                      {rate.to_currency}
-                    </Typography>
-                  </Box>
-                  {rate.description?.trim() && (
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{ fontSize: '0.75rem', textAlign: 'right' }}
-                    >
-                      {rate.description.trim()}
-                    </Typography>
-                  )}
-                </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                   <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{ fontSize: '0.75rem' }}
+                    variant="caption"
+                    noWrap
+                    sx={{
+                      fontSize: '0.6875rem',
+                      color: 'text.secondary',
+                      minWidth: 0,
+                    }}
                   >
-                    From:{' '}
+                    {rate.date
+                      ? format(new Date(rate.date), 'MMM dd, yyyy')
+                      : 'N/A'}
+                    {rate.description?.trim() && ` · ${rate.description.trim()}`}
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    noWrap
+                    sx={{
+                      fontSize: '0.6875rem',
+                      color: 'text.secondary',
+                      flexShrink: 0,
+                    }}
+                  >
                     {rate.from_amount !== null && rate.from_amount !== undefined
                       ? rate.from_amount.toLocaleString('en-US', {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 2,
                         })
-                      : 'N/A'}
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{ fontSize: '0.75rem' }}
-                  >
-                    To:{' '}
+                      : 'N/A'}{' '}
+                    →{' '}
                     {rate.to_amount !== null && rate.to_amount !== undefined
                       ? rate.to_amount.toLocaleString('en-US', {
                           minimumFractionDigits: 2,
@@ -252,16 +195,7 @@ function ExchangeRates() {
           </Box>
 
           {/* Desktop Table View */}
-          <TableContainer
-            component={Paper}
-            elevation={0}
-            sx={{
-              display: { xs: 'none', md: 'block' },
-              border: '1px solid',
-              borderColor: 'divider',
-              borderRadius: 1,
-            }}
-          >
+          <TableContainer sx={{ display: { xs: 'none', md: 'block' } }}>
             <Table size="small">
               <TableHead>
                 <TableRow

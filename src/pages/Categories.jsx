@@ -45,6 +45,7 @@ import { CATEGORY_TYPES, CATEGORY_STATUSES } from '../lib/api/categories';
 import PageSkeleton from '../components/common/PageSkeleton';
 import ErrorMessage from '../components/common/ErrorMessage';
 import { usePageRefresh } from '../hooks/usePageRefresh';
+import { getStatusChipSx, getTypeChipSx } from '../utils/chipStyles';
 import { buildCategoryTree } from '../utils/categoryHierarchy';
 
 function Categories() {
@@ -224,57 +225,6 @@ function Categories() {
   };
 
   // Google-style chip styling for status badges
-  const getStatusChipSx = (status) => {
-    switch (status) {
-      case 'Active':
-        return {
-          backgroundColor: 'google.greenBg',
-          color: 'google.green',
-          fontWeight: 500,
-        };
-      case 'Archived':
-        return {
-          backgroundColor: 'google.grayBg',
-          color: 'google.gray',
-          fontWeight: 500,
-        };
-      default:
-        return {
-          backgroundColor: 'google.grayBg',
-          color: 'google.gray',
-          fontWeight: 500,
-        };
-    }
-  };
-
-  // Type chip styling - text color only, no background or border
-  const getTypeChipSx = (type) => {
-    if (type === 'Income') {
-      return {
-        backgroundColor: 'transparent',
-        borderColor: 'google.green',
-        color: 'google.green',
-        fontWeight: 500,
-        border: '1px solid',
-      };
-    }
-    if (type === 'Expense') {
-      return {
-        backgroundColor: 'transparent',
-        borderColor: 'google.redDark',
-        color: 'google.redDark',
-        fontWeight: 500,
-        border: '1px solid',
-      };
-    }
-    return {
-      backgroundColor: 'transparent',
-      color: 'google.gray',
-      fontWeight: 500,
-      border: 'none',
-    };
-  };
-
   // Get available parent categories (excluding self and descendants when editing)
   const getAvailableParents = () => {
     if (!watchedType) return [];

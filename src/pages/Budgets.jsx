@@ -45,6 +45,7 @@ import PageSkeleton from '../components/common/PageSkeleton';
 import ErrorMessage from '../components/common/ErrorMessage';
 import BudgetDialog from '../components/common/BudgetDialog';
 import { budgetAppliesToMonth } from '../utils/budgetMatching';
+import { getStatusChipSx } from '../utils/chipStyles';
 import { usePageRefresh } from '../hooks/usePageRefresh';
 import {
   formatCurrency,
@@ -516,30 +517,6 @@ function Budgets() {
   // Handle row click to edit
   const handleRowClick = (budget) => {
     handleOpenDialog(budget);
-  };
-
-  // Google-style chip styling for status badges
-  const getStatusChipSx = (status) => {
-    switch (status) {
-      case 'Active':
-        return {
-          backgroundColor: 'google.greenBg',
-          color: 'google.green',
-          fontWeight: 500,
-        };
-      case 'Archived':
-        return {
-          backgroundColor: 'google.grayBg',
-          color: 'google.gray',
-          fontWeight: 500,
-        };
-      default:
-        return {
-          backgroundColor: 'google.grayBg',
-          color: 'google.gray',
-          fontWeight: 500,
-        };
-    }
   };
 
   if (loading && budgets.length === 0) {
@@ -1305,12 +1282,43 @@ function Budgets() {
         </Box>
       ) : (
         <Box>
-          {/* Mobile Card View */}
+          {/* Mobile dense-row view (matches the Reports page language) */}
           {!isDesktopView && (
-          <Box>
-            {/* Helper function to render a budget card */}
+          <Box
+            sx={{
+              border: '1px solid',
+              borderColor: 'divider',
+              borderRadius: 1,
+              backgroundColor: 'background.paper',
+              px: 1.25,
+              overflow: 'hidden',
+            }}
+          >
             {(() => {
-              const renderBudgetCard = (budget, indentLevel = 0) => {
+              // Tappable rows: no browser tap highlight, no sticky hover
+              const pressableSx = {
+                cursor: 'pointer',
+                WebkitTapHighlightColor: 'transparent',
+                userSelect: 'none',
+                '&:active': { backgroundColor: 'action.hover' },
+                '@media (hover: hover)': {
+                  '&:hover': { backgroundColor: 'action.hover' },
+                },
+              };
+
+              const expandChevron = (expanded, size = 18) => (
+                <ExpandMoreIcon
+                  sx={{
+                    fontSize: size,
+                    color: 'text.secondary',
+                    flexShrink: 0,
+                    transform: expanded ? 'none' : 'rotate(-90deg)',
+                    transition: 'transform 0.15s ease-in-out',
+                  }}
+                />
+              );
+
+              const renderBudgetRow = (budget, indentLevel = 0) => {
                 const category = categoryMap.get(budget.category_id);
                 const isIncome = category?.type === 'Income';
                 const actualAmount = calculateActualAmount(
@@ -1340,11 +1348,9 @@ function Budgets() {
 
                 const getRemainingColor = () => {
                   if (isIncome) {
-                    // For income: exceeded = green, remaining = needs more = neutral
-                    return remaining <= 0 ? 'success.main' : 'text.secondary';
+                    return remaining <= 0 ? 'google.green' : 'text.secondary';
                   }
-                  // For expense: remaining = green, over = red
-                  return remaining >= 0 ? 'softGreen.main' : 'softRed.main';
+                  return remaining >= 0 ? 'google.green' : 'google.red';
                 };
 
                 const getRemainingLabel = () => {
@@ -1357,111 +1363,121 @@ function Budgets() {
                 return (
                   <Box
                     key={budget.budget_id}
-                    sx={{
-                      mb: 1.5,
-                      p: 1.5,
-                      ml: indentLevel * 2,
-                      cursor: 'pointer',
-                      border: '1px solid',
-                      borderColor: 'divider',
-                      borderRadius: 1,
-                      backgroundColor: 'background.paper',
-                      '&:hover': { backgroundColor: 'action.hover' },
-                    }}
                     onClick={() => handleRowClick(budget)}
+                    sx={{
+                      py: 1.25,
+                      pl: indentLevel * 2,
+                      borderBottom: '1px solid',
+                      borderColor: 'divider',
+                      ...pressableSx,
+                    }}
                   >
-                    <Box sx={{ mb: 1 }}>
-                      <Typography
-                        variant="body1"
-                        fontWeight="medium"
-                        sx={{ fontSize: '0.875rem', mb: 0.5 }}
-                      >
-                        {getCategoryName(budget.category_id)}
-                      </Typography>
-                      <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                        <Chip
-                          label={budget.currency}
-                          size="small"
-                          variant="outlined"
-                          sx={{ height: 20, fontSize: '0.6875rem' }}
-                        />
-                        <Chip
-                          label={budget.status}
-                          size="small"
-                          sx={{
-                            height: 20,
-                            fontSize: '0.6875rem',
-                            ...getStatusChipSx(budget.status),
-                          }}
-                        />
-                      </Box>
-                    </Box>
-
-                    {/* Progress Bar */}
-                    <Box sx={{ mb: 1 }}>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        gap: 1,
+                      }}
+                    >
                       <Box
                         sx={{
                           display: 'flex',
-                          justifyContent: 'space-between',
-                          mb: 0.25,
+                          alignItems: 'center',
+                          gap: 0.75,
+                          minWidth: 0,
+                          flex: 1,
                         }}
                       >
                         <Typography
                           variant="body2"
-                          color="text.secondary"
-                          sx={{ fontSize: '0.75rem' }}
-                        >
-                          {isIncome ? 'Earned' : 'Spent'}:{' '}
-                          {formatCurrency(actualAmount, budget.currency)}
-                        </Typography>
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          sx={{ fontSize: '0.75rem' }}
-                        >
-                          {isIncome ? 'Goal' : 'Budget'}:{' '}
-                          {formatCurrency(budgetAmount, budget.currency)}
-                        </Typography>
-                      </Box>
-                      <LinearProgress
-                        variant="determinate"
-                        value={Math.min(percentage, 100)}
-                        color={getProgressColor()}
-                        sx={{ height: 6, borderRadius: 1 }}
-                      />
-                      <Box
-                        sx={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          mt: 0.25,
-                        }}
-                      >
-                        <Typography
-                          variant="caption"
+                          noWrap
                           sx={{
-                            color: getRemainingColor(),
-                            fontSize: '0.6875rem',
+                            fontSize: '0.875rem',
+                            fontWeight: 500,
+                            minWidth: 0,
                           }}
-                          fontWeight="medium"
                         >
-                          {getRemainingLabel()}:{' '}
-                          {formatCurrency(Math.abs(remaining), budget.currency)}
+                          {getCategoryName(budget.category_id)}
                         </Typography>
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          sx={{ fontSize: '0.6875rem' }}
-                        >
-                          {percentage.toFixed(1)}%
-                        </Typography>
+                        {budget.status !== 'Active' && (
+                          <Chip
+                            label={budget.status}
+                            size="small"
+                            sx={{
+                              height: 16,
+                              fontSize: '0.625rem',
+                              flexShrink: 0,
+                              ...getStatusChipSx(budget.status),
+                            }}
+                          />
+                        )}
                       </Box>
-                    </Box>
-
-                    {budget.notes && (
                       <Typography
                         variant="body2"
+                        sx={{
+                          fontSize: '0.875rem',
+                          fontWeight: 600,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {formatCurrency(actualAmount, budget.currency)}
+                      </Typography>
+                    </Box>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'baseline',
+                        justifyContent: 'space-between',
+                        gap: 1,
+                        mt: 0.25,
+                      }}
+                    >
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          fontSize: '0.6875rem',
+                          fontWeight: 500,
+                          color: getRemainingColor(),
+                        }}
+                      >
+                        {getRemainingLabel()}:{' '}
+                        {formatCurrency(Math.abs(remaining), budget.currency)}
+                      </Typography>
+                      <Typography
+                        variant="caption"
+                        noWrap
+                        sx={{
+                          fontSize: '0.6875rem',
+                          color: 'text.secondary',
+                          minWidth: 0,
+                        }}
+                      >
+                        of {formatCurrency(budgetAmount, budget.currency)} ·{' '}
+                        {percentage.toFixed(0)}%
+                      </Typography>
+                    </Box>
+                    <LinearProgress
+                      variant="determinate"
+                      value={Math.min(percentage, 100)}
+                      color={getProgressColor()}
+                      sx={{
+                        mt: 0.75,
+                        height: 4,
+                        borderRadius: 2,
+                        backgroundColor: 'action.hover',
+                      }}
+                    />
+                    {budget.notes && (
+                      <Typography
+                        variant="caption"
                         color="text.secondary"
-                        sx={{ fontSize: '0.75rem' }}
+                        noWrap
+                        sx={{
+                          fontSize: '0.6875rem',
+                          display: 'block',
+                          mt: 0.5,
+                        }}
                       >
                         {budget.notes}
                       </Typography>
@@ -1482,74 +1498,57 @@ function Budgets() {
                 const parentName = group.parent ? group.parent.name : 'Other';
 
                 return (
-                  <Box
-                    key={`${typeLabel}-${parentId}-mobile`}
-                    sx={{ mb: 1.5, ml: indentLevel * 2 }}
-                  >
-                    {/* Parent Category Header */}
+                  <Box key={`${typeLabel}-${parentId}-mobile`}>
                     <Box
-                      sx={{
-                        mb: 1,
-                        p: 1,
-                        cursor: 'pointer',
-                        border: '1px solid',
-                        borderColor: 'divider',
-                        borderRadius: 1,
-                        backgroundColor: 'background.paper',
-                        '&:hover': { bgcolor: 'action.hover' },
-                      }}
                       onClick={() =>
                         toggleParentExpansion(`${typeLabel}-${parentId}`)
                       }
+                      sx={{
+                        py: 1,
+                        pl: indentLevel * 2,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 0.5,
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
+                        ...pressableSx,
+                      }}
                     >
-                      <Box
-                        sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
+                      {expandChevron(isExpanded)}
+                      <Typography
+                        variant="body2"
+                        noWrap
+                        sx={{
+                          fontSize: '0.875rem',
+                          fontWeight: 600,
+                          minWidth: 0,
+                          flex: 1,
+                        }}
                       >
-                        <IconButton
-                          size="small"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleParentExpansion(`${typeLabel}-${parentId}`);
-                          }}
-                          sx={{ p: 0.5 }}
-                        >
-                          {isExpanded ? (
-                            <ExpandMoreIcon sx={{ fontSize: 20 }} />
-                          ) : (
-                            <ChevronRightIcon sx={{ fontSize: 20 }} />
-                          )}
-                        </IconButton>
-                        <Typography
-                          variant="body2"
-                          fontWeight={600}
-                          sx={{ fontSize: '0.875rem' }}
-                        >
-                          {parentName}
-                        </Typography>
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          sx={{ ml: 'auto', fontSize: '0.75rem' }}
-                        >
-                          Total:{' '}
-                          {formatCurrency(
-                            group.totalAmount,
-                            settings.find(
-                              (s) => s.setting_key === 'BaseCurrency'
-                            )?.setting_value || 'USD'
-                          )}
-                        </Typography>
-                      </Box>
+                        {parentName}
+                      </Typography>
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          fontSize: '0.6875rem',
+                          color: 'text.secondary',
+                          flexShrink: 0,
+                        }}
+                      >
+                        {formatCurrency(
+                          group.totalAmount,
+                          settings.find((s) => s.setting_key === 'BaseCurrency')
+                            ?.setting_value || 'USD'
+                        )}
+                      </Typography>
                     </Box>
-                    {/* Subcategory Budgets */}
                     <Collapse in={isExpanded}>
-                      <Box sx={{ pl: 2 }}>
+                      <Box>
                         {Object.entries(group.subcategories).map(
-                          ([subcategoryId, subcategory]) => {
-                            return subcategory.budgets.map((budget) =>
-                              renderBudgetCard(budget, 1)
-                            );
-                          }
+                          ([, subcategory]) =>
+                            subcategory.budgets.map((budget) =>
+                              renderBudgetRow(budget, indentLevel + 1)
+                            )
                         )}
                       </Box>
                     </Collapse>
@@ -1572,66 +1571,50 @@ function Budgets() {
                 return (
                   <>
                     <Box
+                      onClick={() => toggleTypeExpansion(typeKey)}
                       sx={{
-                        mb: 1.5,
-                        p: 1.5,
-                        pl: 1.5 + indentLevel * 2,
-                        cursor: 'pointer',
+                        py: 1,
+                        pl: indentLevel * 2,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 0.5,
                         borderBottom: '1px solid',
                         borderColor: 'divider',
-                        backgroundColor: 'transparent',
-                        '&:hover': { backgroundColor: 'google.grayLight' },
+                        ...pressableSx,
                       }}
-                      onClick={() => toggleTypeExpansion(typeKey)}
                     >
-                      <Box
+                      {expandChevron(expandedTypes[typeKey])}
+                      <Typography
+                        variant="body2"
+                        noWrap
                         sx={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 0.5,
+                          fontSize: '0.8125rem',
+                          fontWeight: 500,
+                          minWidth: 0,
+                          flex: 1,
                         }}
                       >
-                        <IconButton
-                          size="small"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleTypeExpansion(typeKey);
-                          }}
-                          sx={{ p: 0.5, color: 'google.gray' }}
-                        >
-                          {expandedTypes[typeKey] ? (
-                            <ExpandMoreIcon sx={{ fontSize: 20 }} />
-                          ) : (
-                            <ChevronRightIcon sx={{ fontSize: 20 }} />
-                          )}
-                        </IconButton>
-                        <Typography
-                          variant="body1"
-                          sx={{
-                            fontSize: '0.875rem',
-                            fontWeight: 500,
-                            color: 'text.primary',
-                          }}
-                        >
-                          {label}
-                        </Typography>
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          sx={{ ml: 'auto', fontSize: '0.75rem' }}
-                        >
-                          {formatCurrency(total, currency)}
-                        </Typography>
-                      </Box>
+                        {label}
+                      </Typography>
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          fontSize: '0.6875rem',
+                          color: 'text.secondary',
+                          flexShrink: 0,
+                        }}
+                      >
+                        {formatCurrency(total, currency)}
+                      </Typography>
                     </Box>
                     <Collapse in={expandedTypes[typeKey]}>
-                      <Box sx={{ pl: 2 }}>
+                      <Box>
                         {entries.map(([parentId, group]) =>
                           renderParentCategoryGroupMobile(
                             parentId,
                             group,
                             typeKey,
-                            1
+                            indentLevel + 1
                           )
                         )}
                       </Box>
@@ -1662,59 +1645,42 @@ function Budgets() {
                 return (
                   <>
                     <Box
+                      onClick={() => toggleTypeExpansion(categoryType)}
                       sx={{
-                        mb: 1.5,
-                        p: 1.5,
-                        cursor: 'pointer',
+                        py: 1.25,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 0.5,
                         borderBottom: '1px solid',
                         borderColor: 'divider',
-                        backgroundColor: 'transparent',
-                        '&:hover': { backgroundColor: 'google.grayLight' },
+                        ...pressableSx,
                       }}
-                      onClick={() => toggleTypeExpansion(categoryType)}
                     >
-                      <Box
+                      {expandChevron(expandedTypes[categoryType], 20)}
+                      <Typography
+                        noWrap
                         sx={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 0.5,
+                          fontSize: '0.9375rem',
+                          fontWeight: 600,
+                          minWidth: 0,
+                          flex: 1,
                         }}
                       >
-                        <IconButton
-                          size="small"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleTypeExpansion(categoryType);
-                          }}
-                          sx={{ p: 0.5, color: 'google.gray' }}
-                        >
-                          {expandedTypes[categoryType] ? (
-                            <ExpandMoreIcon sx={{ fontSize: 20 }} />
-                          ) : (
-                            <ChevronRightIcon sx={{ fontSize: 20 }} />
-                          )}
-                        </IconButton>
-                        <Typography
-                          variant="body1"
-                          sx={{
-                            fontSize: '1rem',
-                            fontWeight: 600,
-                            color: 'text.primary',
-                          }}
-                        >
-                          {label}
-                        </Typography>
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          sx={{ ml: 'auto', fontSize: '0.75rem' }}
-                        >
-                          {formatCurrency(total, currency)}
-                        </Typography>
-                      </Box>
+                        {label}
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          fontSize: '0.75rem',
+                          color: 'text.secondary',
+                          flexShrink: 0,
+                        }}
+                      >
+                        {formatCurrency(total, currency)}
+                      </Typography>
                     </Box>
                     <Collapse in={expandedTypes[categoryType]}>
-                      <Box sx={{ pl: 2 }}>
+                      <Box>
                         {renderRecurringTypeSectionMobile(
                           data.oneTime,
                           `${categoryType}OneTime`,

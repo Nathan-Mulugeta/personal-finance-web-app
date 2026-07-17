@@ -1,35 +1,53 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { BottomNavigation, BottomNavigationAction, Paper } from '@mui/material';
+import {
+  BottomNavigation,
+  BottomNavigationAction,
+  Box,
+  Paper,
+} from '@mui/material';
 import HomeIcon from '@mui/icons-material/Home';
 import ReceiptIcon from '@mui/icons-material/Receipt';
-import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import AssessmentIcon from '@mui/icons-material/Assessment';
-import MenuIcon from '@mui/icons-material/Menu';
+import AddIcon from '@mui/icons-material/Add';
 
-const NAV_ITEMS = [
+const LEFT_ITEMS = [
   { label: 'Home', icon: <HomeIcon />, path: '/home' },
   { label: 'Transactions', icon: <ReceiptIcon />, path: '/transactions' },
-  { label: 'Budgets', icon: <AccountBalanceWalletIcon />, path: '/budgets' },
+];
+const RIGHT_ITEMS = [
+  { label: 'Accounts', icon: <AccountBalanceIcon />, path: '/accounts' },
   { label: 'Reports', icon: <AssessmentIcon />, path: '/reports' },
 ];
+const NAV_PATHS = [...LEFT_ITEMS, ...RIGHT_ITEMS].map((item) => item.path);
 
-const MORE_VALUE = '__more__';
+const ADD_VALUE = '__add__';
 
-function BottomNav({ onMoreClick }) {
+function BottomNav({ onQuickAdd }) {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const currentValue = NAV_ITEMS.some((item) => item.path === location.pathname)
+  const currentValue = NAV_PATHS.includes(location.pathname)
     ? location.pathname
     : false;
 
   const handleChange = (event, newValue) => {
-    if (newValue === MORE_VALUE) {
-      onMoreClick();
+    if (newValue === ADD_VALUE) {
+      onQuickAdd();
       return;
     }
     navigate(newValue);
   };
+
+  const navAction = (item) => (
+    <BottomNavigationAction
+      key={item.path}
+      label={item.label}
+      value={item.path}
+      icon={item.icon}
+      sx={{ minWidth: 'auto', px: 0.5 }}
+    />
+  );
 
   return (
     <Paper
@@ -46,21 +64,30 @@ function BottomNav({ onMoreClick }) {
       }}
     >
       <BottomNavigation value={currentValue} onChange={handleChange} showLabels={false}>
-        {NAV_ITEMS.map((item) => (
-          <BottomNavigationAction
-            key={item.path}
-            label={item.label}
-            value={item.path}
-            icon={item.icon}
-            sx={{ minWidth: 'auto', px: 0.5 }}
-          />
-        ))}
+        {LEFT_ITEMS.map(navAction)}
+        {/* Global quick-add: one tap to a new transaction from any page */}
         <BottomNavigationAction
-          label="More"
-          value={MORE_VALUE}
-          icon={<MenuIcon />}
+          aria-label="Add transaction"
+          value={ADD_VALUE}
+          icon={
+            <Box
+              sx={{
+                width: 40,
+                height: 40,
+                borderRadius: '50%',
+                backgroundColor: 'primary.main',
+                color: 'primary.contrastText',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <AddIcon sx={{ fontSize: 24 }} />
+            </Box>
+          }
           sx={{ minWidth: 'auto', px: 0.5 }}
         />
+        {RIGHT_ITEMS.map(navAction)}
       </BottomNavigation>
     </Paper>
   );

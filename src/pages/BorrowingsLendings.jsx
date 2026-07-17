@@ -658,94 +658,135 @@ function BorrowingsLendings() {
 
       {error && <ErrorMessage error={error} />}
 
-      {/* Summary Cards */}
+      {/* Summary overview (Reports-style tiles) */}
       {filteredRecords.length > 0 && (
-        <Grid container spacing={{ xs: 1.5, sm: 2 }} sx={{ mb: { xs: 2, sm: 3, md: 4 } }}>
-          <Grid item xs={6} sm={6} md={3}>
-            <Box
-              sx={{
-                p: { xs: 1.5, sm: 2 },
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 1,
-                backgroundColor: 'background.paper',
-              }}
-            >
-              <Typography variant="body2" color="text.secondary" gutterBottom sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+        <Card sx={{ mb: { xs: 2, sm: 3 } }}>
+          <CardContent
+            sx={{
+              p: { xs: 1.5, sm: 2 },
+              '&:last-child': { pb: { xs: 1.5, sm: 2 } },
+            }}
+          >
+            <Grid container spacing={{ xs: 1.5, md: 3 }}>
+            <Grid item xs={6} md={3}>
+              <Typography
+                variant="caption"
+                sx={{ fontSize: { xs: '0.6875rem', md: '0.8125rem' }, color: 'text.secondary' }}
+              >
                 Total Borrowing
               </Typography>
-              <Typography variant="h5" fontWeight="bold" sx={{ color: 'softRed.main', fontSize: { xs: '1.125rem', sm: '1.5rem' } }}>
+              <Typography
+                noWrap
+                sx={{
+                  fontSize: { xs: '0.9375rem', md: '1.375rem' },
+                  fontWeight: 600,
+                  color: 'google.red',
+                }}
+              >
                 {formatCurrency(calculatedSummary.borrowing.total, calculatedSummary.baseCurrency)}
               </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.6875rem', sm: '0.75rem' } }}>
+              <Typography
+                noWrap
+                variant="caption"
+                sx={{
+                  fontSize: { xs: '0.625rem', md: '0.75rem' },
+                  color: 'text.secondary',
+                  display: 'block',
+                }}
+              >
                 {calculatedSummary.borrowing.count} record{calculatedSummary.borrowing.count !== 1 ? 's' : ''}
               </Typography>
-            </Box>
-          </Grid>
-          <Grid item xs={6} sm={6} md={3}>
-            <Box
-              sx={{
-                p: { xs: 1.5, sm: 2 },
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 1,
-                backgroundColor: 'background.paper',
-              }}
-            >
-              <Typography variant="body2" color="text.secondary" gutterBottom sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+            </Grid>
+            <Grid item xs={6} md={3}>
+              <Typography
+                variant="caption"
+                sx={{ fontSize: { xs: '0.6875rem', md: '0.8125rem' }, color: 'text.secondary' }}
+              >
                 Remaining Borrowing
               </Typography>
-              <Typography variant="h5" fontWeight="bold" sx={{ color: 'softRed.main', fontSize: { xs: '1.125rem', sm: '1.5rem' } }}>
+              <Typography
+                noWrap
+                sx={{
+                  fontSize: { xs: '0.9375rem', md: '1.375rem' },
+                  fontWeight: 600,
+                  color: 'google.red',
+                }}
+              >
                 {formatCurrency(calculatedSummary.borrowing.remaining, calculatedSummary.baseCurrency)}
               </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.6875rem', sm: '0.75rem' } }}>
+              <Typography
+                noWrap
+                variant="caption"
+                sx={{
+                  fontSize: { xs: '0.625rem', md: '0.75rem' },
+                  color: 'text.secondary',
+                  display: 'block',
+                }}
+              >
                 {formatCurrency(calculatedSummary.borrowing.paid, calculatedSummary.baseCurrency)} paid
               </Typography>
-            </Box>
-          </Grid>
-          <Grid item xs={6} sm={6} md={3}>
-            <Box
-              sx={{
-                p: { xs: 1.5, sm: 2 },
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 1,
-                backgroundColor: 'background.paper',
-              }}
-            >
-              <Typography variant="body2" color="text.secondary" gutterBottom sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+            </Grid>
+            <Grid item xs={6} md={3}>
+              <Typography
+                variant="caption"
+                sx={{ fontSize: { xs: '0.6875rem', md: '0.8125rem' }, color: 'text.secondary' }}
+              >
                 Total Lending
               </Typography>
-              <Typography variant="h5" fontWeight="bold" sx={{ color: 'softGreen.main', fontSize: { xs: '1.125rem', sm: '1.5rem' } }}>
+              <Typography
+                noWrap
+                sx={{
+                  fontSize: { xs: '0.9375rem', md: '1.375rem' },
+                  fontWeight: 600,
+                  color: 'google.green',
+                }}
+              >
                 {formatCurrency(calculatedSummary.lending.total, calculatedSummary.baseCurrency)}
               </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.6875rem', sm: '0.75rem' } }}>
+              <Typography
+                noWrap
+                variant="caption"
+                sx={{
+                  fontSize: { xs: '0.625rem', md: '0.75rem' },
+                  color: 'text.secondary',
+                  display: 'block',
+                }}
+              >
                 {calculatedSummary.lending.count} record{calculatedSummary.lending.count !== 1 ? 's' : ''}
               </Typography>
-            </Box>
-          </Grid>
-          <Grid item xs={6} sm={6} md={3}>
-            <Box
-              sx={{
-                p: { xs: 1.5, sm: 2 },
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 1,
-                backgroundColor: 'background.paper',
-              }}
-            >
-              <Typography variant="body2" color="text.secondary" gutterBottom sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+            </Grid>
+            <Grid item xs={6} md={3}>
+              <Typography
+                variant="caption"
+                sx={{ fontSize: { xs: '0.6875rem', md: '0.8125rem' }, color: 'text.secondary' }}
+              >
                 Remaining Lending
               </Typography>
-              <Typography variant="h5" fontWeight="bold" sx={{ color: 'softGreen.main', fontSize: { xs: '1.125rem', sm: '1.5rem' } }}>
+              <Typography
+                noWrap
+                sx={{
+                  fontSize: { xs: '0.9375rem', md: '1.375rem' },
+                  fontWeight: 600,
+                  color: 'google.green',
+                }}
+              >
                 {formatCurrency(calculatedSummary.lending.remaining, calculatedSummary.baseCurrency)}
               </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.6875rem', sm: '0.75rem' } }}>
+              <Typography
+                noWrap
+                variant="caption"
+                sx={{
+                  fontSize: { xs: '0.625rem', md: '0.75rem' },
+                  color: 'text.secondary',
+                  display: 'block',
+                }}
+              >
                 {formatCurrency(calculatedSummary.lending.paid, calculatedSummary.baseCurrency)} paid
               </Typography>
-            </Box>
-          </Grid>
-        </Grid>
+            </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
       )}
 
       {/* Filters Section */}

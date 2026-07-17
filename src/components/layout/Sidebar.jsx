@@ -18,27 +18,26 @@ import ReceiptIcon from '@mui/icons-material/Receipt';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import PeopleIcon from '@mui/icons-material/People';
 import AssessmentIcon from '@mui/icons-material/Assessment';
-import SettingsIcon from '@mui/icons-material/Settings';
 import CurrencyExchangeIcon from '@mui/icons-material/CurrencyExchange';
 
+// Settings is intentionally absent: it lives in the header avatar menu
 const menuItems = [
   { text: 'Home', icon: <HomeIcon />, path: '/home' },
   { text: 'Transactions', icon: <ReceiptIcon />, path: '/transactions' },
   { text: 'Accounts', icon: <AccountBalanceIcon />, path: '/accounts' },
-  { text: 'Categories', icon: <CategoryIcon />, path: '/categories' },
-  { text: 'Budgets', icon: <AccountBalanceWalletIcon />, path: '/budgets' },
-  {
-    text: 'Borrowings/Lendings',
-    icon: <PeopleIcon />,
-    path: '/borrowings-lendings',
-  },
   { text: 'Reports', icon: <AssessmentIcon />, path: '/reports' },
   {
     text: 'Exchange Rates',
     icon: <CurrencyExchangeIcon />,
     path: '/exchange-rates',
   },
-  { text: 'Settings', icon: <SettingsIcon />, path: '/settings' },
+  { text: 'Budgets', icon: <AccountBalanceWalletIcon />, path: '/budgets' },
+  { text: 'Categories', icon: <CategoryIcon />, path: '/categories' },
+  {
+    text: 'Borrowings/Lendings',
+    icon: <PeopleIcon />,
+    path: '/borrowings-lendings',
+  },
 ];
 
 function Sidebar({ onClose }) {

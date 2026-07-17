@@ -1,12 +1,10 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, Fragment } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   Box,
   Button,
-  Card,
-  CardContent,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -17,25 +15,18 @@ import {
   IconButton,
   InputLabel,
   MenuItem,
-  Paper,
   Select,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   TextField,
   Typography,
   Chip,
+  Collapse,
   Alert,
-  Tooltip,
   CircularProgress,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
-import EditIcon from '@mui/icons-material/Edit';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
@@ -52,17 +43,17 @@ import { fetchSettings } from '../store/slices/settingsSlice';
 import { accountSchema } from '../schemas/accountSchema';
 import { ACCOUNT_TYPES, ACCOUNT_STATUSES } from '../lib/api/accounts';
 import PageSkeleton from '../components/common/PageSkeleton';
+import EmptyState from '../components/common/EmptyState';
 import ErrorMessage from '../components/common/ErrorMessage';
 import { formatCurrency } from '../utils/currencyConversion';
 import { usePageRefresh } from '../hooks/usePageRefresh';
+import { getOutlinedStatusChipSx } from '../utils/chipStyles';
 import { useAutoDismissError } from '../hooks/useAutoDismissError';
 
 function Accounts() {
   const dispatch = useDispatch();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  // Matches the md breakpoint previously used for the CSS card/table switch
-  const isDesktopView = useMediaQuery(theme.breakpoints.up('md'));
   const { accounts, loading, backgroundLoading, error } = useSelector(
     (state) => state.accounts
   );
@@ -74,6 +65,7 @@ function Accounts() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionError, setActionError] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [showInactive, setShowInactive] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
   const [isReordering, setIsReordering] = useState(false);
@@ -86,6 +78,32 @@ function Accounts() {
   const sortedAccounts = useMemo(() => {
     return [...accounts].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
   }, [accounts]);
+
+  // Active accounts grouped by currency (manual sort order preserved);
+  // section totals are per-currency originals, never conversions
+  const currencyGroups = useMemo(() => {
+    const groups = new Map();
+    sortedAccounts
+      .filter((account) => account.status === 'Active')
+      .forEach((account) => {
+        if (!groups.has(account.currency)) {
+          groups.set(account.currency, {
+            currency: account.currency,
+            accounts: [],
+            total: 0,
+          });
+        }
+        const group = groups.get(account.currency);
+        group.accounts.push(account);
+        group.total += account.current_balance ?? account.opening_balance ?? 0;
+      });
+    return Array.from(groups.values());
+  }, [sortedAccounts]);
+
+  const inactiveAccounts = useMemo(
+    () => sortedAccounts.filter((account) => account.status !== 'Active'),
+    [sortedAccounts]
+  );
 
   const {
     register,
@@ -279,6 +297,7 @@ function Accounts() {
       await dispatch(deleteAccount(deleteConfirm.account_id)).unwrap();
       setDeleteConfirm(null);
       setDeleteError(null);
+      handleCloseDialog();
     } catch (err) {
       console.error('Error deleting account:', err);
       const errorMessage =
@@ -289,82 +308,22 @@ function Accounts() {
     }
   };
 
-  // Handle moving account up in the list
-  const handleMoveUp = async (accountIndex) => {
-    if (accountIndex <= 0 || isReordering) return;
-    
-    const currentAccount = sortedAccounts[accountIndex];
-    const previousAccount = sortedAccounts[accountIndex - 1];
-    
+  // Swap manual sort order of two adjacent accounts (within a currency group)
+  const handleSwapOrder = async (accountA, accountB) => {
+    if (!accountA || !accountB || isReordering) return;
+
     setIsReordering(true);
     try {
       await dispatch(
         swapAccountOrder({
-          accountId1: currentAccount.account_id,
-          accountId2: previousAccount.account_id,
+          accountId1: accountA.account_id,
+          accountId2: accountB.account_id,
         })
       ).unwrap();
     } catch (err) {
       console.error('Error reordering accounts:', err);
     } finally {
       setIsReordering(false);
-    }
-  };
-
-  // Handle moving account down in the list
-  const handleMoveDown = async (accountIndex) => {
-    if (accountIndex >= sortedAccounts.length - 1 || isReordering) return;
-    
-    const currentAccount = sortedAccounts[accountIndex];
-    const nextAccount = sortedAccounts[accountIndex + 1];
-    
-    setIsReordering(true);
-    try {
-      await dispatch(
-        swapAccountOrder({
-          accountId1: currentAccount.account_id,
-          accountId2: nextAccount.account_id,
-        })
-      ).unwrap();
-    } catch (err) {
-      console.error('Error reordering accounts:', err);
-    } finally {
-      setIsReordering(false);
-    }
-  };
-
-  // Status chip styling - muted colors matching other chips
-  const getStatusChipSx = (status) => {
-    switch (status) {
-      case 'Active':
-        return {
-          // Muted green text only, outlined style to match other chips
-          color: 'google.greenDark', // MUI success.dark - muted green
-          borderColor: 'google.greenDark',
-          fontWeight: 500,
-          '& .MuiChip-label': { px: 0.75 },
-        };
-      case 'Closed':
-        return {
-          color: 'google.gray',
-          borderColor: 'google.gray',
-          fontWeight: 500,
-          '& .MuiChip-label': { px: 0.75 },
-        };
-      case 'Suspended':
-        return {
-          color: 'google.yellow',
-          borderColor: 'google.yellow',
-          fontWeight: 500,
-          '& .MuiChip-label': { px: 0.75 },
-        };
-      default:
-        return {
-          color: 'google.gray',
-          borderColor: 'google.gray',
-          fontWeight: 500,
-          '& .MuiChip-label': { px: 0.75 },
-        };
     }
   };
 
@@ -377,543 +336,286 @@ function Accounts() {
       <Box
         sx={{
           display: 'flex',
-          flexDirection: { xs: 'column', sm: 'row' },
           justifyContent: 'space-between',
-          alignItems: { xs: 'flex-start', sm: 'center' },
+          alignItems: 'center',
           mb: { xs: 1.5, sm: 2, md: 3 },
           gap: { xs: 1, sm: 0 },
         }}
       >
-        <Typography
-          variant="h4"
-          sx={{ fontSize: { xs: '1.5rem', sm: '2rem' } }}
-        >
-          Accounts
-        </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
+        <Box>
+          <Typography
+            variant="h4"
+            sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' }, fontWeight: 500 }}
+          >
+            Accounts
+          </Typography>
+          {summaryData && (
+            <Typography
+              variant="caption"
+              sx={{ fontSize: '0.75rem', color: 'text.secondary' }}
+            >
+              Total:{' '}
+              {formatCurrency(
+                summaryData.totalBalance || 0,
+                summaryData.baseCurrency || 'USD'
+              )}
+            </Typography>
+          )}
+        </Box>
+        <IconButton
           onClick={() => handleOpenDialog()}
-          size="small"
-          sx={{ width: { xs: '100%', sm: 'auto' } }}
+          aria-label="Add account"
+          sx={{
+            backgroundColor: 'primary.main',
+            color: 'primary.contrastText',
+            width: 36,
+            height: 36,
+            '&:hover': { backgroundColor: 'primary.dark' },
+          }}
         >
-          Add Account
-        </Button>
+          <AddIcon sx={{ fontSize: 20 }} />
+        </IconButton>
       </Box>
 
       {error && <ErrorMessage error={error} />}
 
-      {/* Summary Section */}
-      {accounts.length > 0 && (
-        <Box sx={{ mb: { xs: 2, sm: 3, md: 4 } }}>
-          {/* Header Row with Overall Balances and Total - Compact layout */}
-          <Box
-            sx={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              mb: { xs: 1, sm: 1.5, md: 2 },
-            }}
-          >
-            <Typography
-              variant="body1"
-              sx={{
-                fontWeight: 600,
-                color: 'text.secondary',
-                fontSize: { xs: '0.875rem', sm: '1rem' },
-              }}
-            >
-              Overall Balances
-            </Typography>
-            {summaryData && (
-              <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5 }}>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ display: { xs: 'none', sm: 'inline' } }}
-                >
-                  Total:
-                </Typography>
-                <Typography
-                  variant="body1"
-                  fontWeight="bold"
-                  color="text.primary"
-                  sx={{ fontSize: { xs: '0.9rem', sm: '1.1rem' } }}
-                >
-                  {formatCurrency(
-                    summaryData.totalBalance || 0,
-                    summaryData.baseCurrency || 'USD'
-                  )}
-                </Typography>
-              </Box>
-            )}
-          </Box>
-
-          {/* Currency Summary Cards */}
-          {!summaryData ? (
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                py: 3,
-              }}
-            >
-              <Typography variant="body2" color="text.secondary">
-                No accounts available
-              </Typography>
-            </Box>
-          ) : (
-            <Grid container spacing={{ xs: 1.5, sm: 2 }}>
-              {(() => {
-                // Group accounts by currency and calculate totals
-                const currencyGroups = {};
-                summaryData.accounts?.forEach((account) => {
-                  const currency =
-                    account.currency || account.account_id?.currency;
-                  const balance = account.current_balance || 0;
-                  if (!currencyGroups[currency]) {
-                    currencyGroups[currency] = {
-                      currency,
-                      total: 0,
-                      count: 0,
-                    };
-                  }
-                  currencyGroups[currency].total += balance;
-                  currencyGroups[currency].count += 1;
-                });
-
-                // If no accounts in summaryData, calculate from local state
-                if (
-                  !summaryData.accounts ||
-                  summaryData.accounts.length === 0
-                ) {
-                  accounts.forEach((account) => {
-                    const currency = account.currency;
-                    if (!currencyGroups[currency]) {
-                      currencyGroups[currency] = {
-                        currency,
-                        total: 0,
-                        count: 0,
-                      };
-                    }
-                    currencyGroups[currency].total +=
-                      account.current_balance || 0;
-                    currencyGroups[currency].count += 1;
-                  });
-                }
-
-                const currencyArray = Object.values(currencyGroups);
-
-                if (currencyArray.length === 0) {
-                  return (
-                    <Grid item xs={12}>
-                      <Typography variant="body2" color="text.secondary">
-                        No balances available
-                      </Typography>
-                    </Grid>
-                  );
-                }
-
-                return currencyArray.map((group) => (
-                  <Grid item xs={12} sm={4} md={3} key={group.currency}>
-                    <Paper
-                      elevation={0}
-                      sx={{
-                        p: { xs: 1, sm: 1.5 },
-                        borderRadius: 1.5,
-                        backgroundColor: 'background.paper',
-                        border: '1px solid',
-                        borderColor: 'divider',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                      }}
-                    >
-                      <Box
-                        sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
-                      >
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          fontWeight="medium"
-                          sx={{ fontSize: { xs: '0.8rem', sm: '0.85rem' } }}
-                        >
-                          {group.currency}
-                        </Typography>
-                        <Typography
-                          variant="caption"
-                          color="text.disabled"
-                          sx={{ fontSize: { xs: '0.7rem', sm: '0.75rem' } }}
-                        >
-                          ({group.count})
-                        </Typography>
-                      </Box>
-                      <Typography
-                        variant="body2"
-                        fontWeight="bold"
-                        color="text.primary"
-                        sx={{
-                          fontSize: { xs: '0.9rem', sm: '1rem' },
-                        }}
-                      >
-                        {formatCurrency(group.total, group.currency)}
-                      </Typography>
-                    </Paper>
-                  </Grid>
-                ));
-              })()}
-            </Grid>
-          )}
-        </Box>
-      )}
-
       {accounts.length === 0 ? (
-        <Card>
-          <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-            <Box sx={{ textAlign: 'center', py: { xs: 3, sm: 4 } }}>
-              <AccountBalanceIcon
-                sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }}
-              />
-              <Typography variant="h6" color="text.secondary" gutterBottom>
-                No accounts yet
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Create your first account to start tracking your finances
-              </Typography>
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={() => handleOpenDialog()}
-              >
-                Create Account
-              </Button>
-            </Box>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={<AccountBalanceIcon />}
+          title="No accounts yet"
+          subtitle="Create your first account to start tracking your finances"
+          action={
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => handleOpenDialog()}
+            >
+              Create Account
+            </Button>
+          }
+        />
       ) : (
-        <>
-          {/* Mobile Card View - Compact layout */}
-          {!isDesktopView && (
-          <Box>
-            {sortedAccounts.map((account, index) => {
-              const currentBalance =
-                account.current_balance ?? account.opening_balance ?? 0;
-              return (
-                <Card key={account.account_id} sx={{ mb: 1 }}>
-                  <CardContent
+        (() => {
+          const pressableSx = {
+            cursor: 'pointer',
+            WebkitTapHighlightColor: 'transparent',
+            userSelect: 'none',
+            '&:active': { backgroundColor: 'action.hover' },
+            '@media (hover: hover)': {
+              '&:hover': { backgroundColor: 'action.hover' },
+            },
+          };
+
+          const renderAccountRow = (
+            account,
+            groupAccounts = null,
+            index = -1,
+            showStatus = false
+          ) => {
+            const currentBalance =
+              account.current_balance ?? account.opening_balance ?? 0;
+            return (
+              <Box
+                key={account.account_id}
+                onClick={() => handleOpenDialog(account)}
+                sx={{
+                  py: 1,
+                  pl: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  borderBottom: '1px solid',
+                  borderColor: 'divider',
+                  ...pressableSx,
+                }}
+              >
+                <Box
+                  sx={{
+                    minWidth: 0,
+                    flex: 1,
+                    display: 'flex',
+                    alignItems: 'baseline',
+                    gap: 0.75,
+                  }}
+                >
+                  <Typography
+                    variant="body2"
+                    noWrap
                     sx={{
-                      p: 1.25,
-                      '&:last-child': { pb: 1.25 },
+                      fontSize: '0.875rem',
+                      fontWeight: 500,
+                      minWidth: 0,
                     }}
                   >
-                    {/* Top row: Name + Actions */}
-                    <Box
+                    {account.name}
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    noWrap
+                    sx={{
+                      fontSize: '0.6875rem',
+                      color: 'text.secondary',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {account.type}
+                  </Typography>
+                  {showStatus && (
+                    <Chip
+                      label={account.status}
+                      size="small"
+                      variant="outlined"
                       sx={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        mb: 0.5,
+                        height: 16,
+                        fontSize: '0.625rem',
+                        flexShrink: 0,
+                        ...getOutlinedStatusChipSx(account.status),
                       }}
+                    />
+                  )}
+                </Box>
+                {groupAccounts && groupAccounts.length > 1 && (
+                  <Box
+                    sx={{ display: 'flex', flexShrink: 0 }}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <IconButton
+                      size="small"
+                      onClick={() =>
+                        handleSwapOrder(account, groupAccounts[index - 1])
+                      }
+                      disabled={index === 0 || isReordering}
+                      sx={{ p: 0.25, color: 'text.disabled' }}
                     >
-                      <Typography
-                        variant="body1"
-                        fontWeight="600"
-                        sx={{
-                          fontSize: '0.9rem',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          flex: 1,
-                          mr: 1,
-                        }}
-                      >
-                        {account.name}
-                      </Typography>
-                      <Box sx={{ display: 'flex', gap: 0.25 }}>
-                        <IconButton
-                          size="small"
-                          onClick={() => handleMoveUp(index)}
-                          disabled={index === 0 || isReordering}
-                          sx={{
-                            color: 'google.gray',
-                            '&:hover': { color: 'google.blue' },
-                            p: 0.5,
-                          }}
-                        >
-                          <KeyboardArrowUpIcon sx={{ fontSize: '1rem' }} />
-                        </IconButton>
-                        <IconButton
-                          size="small"
-                          onClick={() => handleMoveDown(index)}
-                          disabled={index === sortedAccounts.length - 1 || isReordering}
-                          sx={{
-                            color: 'google.gray',
-                            '&:hover': { color: 'google.blue' },
-                            p: 0.5,
-                          }}
-                        >
-                          <KeyboardArrowDownIcon sx={{ fontSize: '1rem' }} />
-                        </IconButton>
-                        <IconButton
-                          size="small"
-                          onClick={() => handleOpenDialog(account)}
-                          sx={{
-                            color: 'google.gray',
-                            '&:hover': { color: 'google.blue' },
-                            p: 0.5,
-                          }}
-                        >
-                          <EditIcon sx={{ fontSize: '1rem' }} />
-                        </IconButton>
-                        <IconButton
-                          size="small"
-                          onClick={() => setDeleteConfirm(account)}
-                          sx={{
-                            color: 'google.gray',
-                            '&:hover': { color: 'google.red' },
-                            p: 0.5,
-                          }}
-                          disabled={account.status === 'Closed'}
-                        >
-                          <DeleteIcon sx={{ fontSize: '1rem' }} />
-                        </IconButton>
-                      </Box>
-                    </Box>
-                    {/* Chips row */}
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        gap: 0.5,
-                        flexWrap: 'wrap',
-                        mb: 0.75,
-                      }}
+                      <KeyboardArrowUpIcon sx={{ fontSize: '0.9rem' }} />
+                    </IconButton>
+                    <IconButton
+                      size="small"
+                      onClick={() =>
+                        handleSwapOrder(account, groupAccounts[index + 1])
+                      }
+                      disabled={
+                        index === groupAccounts.length - 1 || isReordering
+                      }
+                      sx={{ p: 0.25, color: 'text.disabled' }}
                     >
-                      <Chip
-                        label={account.type}
-                        size="small"
-                        variant="outlined"
-                        sx={{
-                          height: 20,
-                          fontSize: '0.65rem',
-                          '& .MuiChip-label': { px: 0.75 },
-                        }}
-                      />
-                      <Chip
-                        label={account.currency}
-                        size="small"
-                        variant="outlined"
-                        sx={{
-                          height: 20,
-                          fontSize: '0.65rem',
-                          '& .MuiChip-label': { px: 0.75 },
-                        }}
-                      />
-                      <Chip
-                        label={account.status}
-                        size="small"
-                        variant="outlined"
-                        sx={{
-                          height: 20,
-                          fontSize: '0.65rem',
-                          ...getStatusChipSx(account.status),
-                        }}
-                      />
-                    </Box>
-                    {/* Balances row - inline */}
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        pt: 0.5,
-                        borderTop: '1px solid',
-                        borderColor: 'divider',
-                      }}
-                    >
-                      <Box
-                        sx={{
-                          display: 'flex',
-                          alignItems: 'baseline',
-                          gap: 0.5,
-                        }}
-                      >
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          sx={{ fontSize: '0.65rem' }}
-                        >
-                          Opening:
-                        </Typography>
-                        <Typography
-                          variant="body2"
-                          fontWeight="medium"
-                          sx={{ fontSize: '0.75rem' }}
-                        >
-                          {formatCurrency(
-                            account.opening_balance,
-                            account.currency
-                          )}
-                        </Typography>
-                      </Box>
-                      <Box
-                        sx={{
-                          display: 'flex',
-                          alignItems: 'baseline',
-                          gap: 0.5,
-                        }}
-                      >
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          sx={{ fontSize: '0.65rem' }}
-                        >
-                          Current:
-                        </Typography>
-                        <Typography
-                          variant="body2"
-                          fontWeight="bold"
-                          color="text.primary"
-                          sx={{ fontSize: '0.8rem' }}
-                        >
-                          {formatCurrency(currentBalance, account.currency)}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </Box>
-          )}
+                      <KeyboardArrowDownIcon sx={{ fontSize: '0.9rem' }} />
+                    </IconButton>
+                  </Box>
+                )}
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontSize: '0.875rem',
+                    fontWeight: 600,
+                    flexShrink: 0,
+                    color: currentBalance < 0 ? 'google.red' : 'text.primary',
+                  }}
+                >
+                  {formatCurrency(currentBalance, account.currency)}
+                </Typography>
+              </Box>
+            );
+          };
 
-          {/* Desktop Table View */}
-          {isDesktopView && (
-          <TableContainer component={Paper}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell align="center" sx={{ width: 80 }}>Order</TableCell>
-                  <TableCell>Name</TableCell>
-                  <TableCell>Type</TableCell>
-                  <TableCell>Currency</TableCell>
-                  <TableCell align="right">Opening Balance</TableCell>
-                  <TableCell align="right">Current Balance</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell align="right">Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {sortedAccounts.map((account, index) => {
-                  const currentBalance =
-                    account.current_balance ?? account.opening_balance ?? 0;
-                  return (
-                    <TableRow key={account.account_id} hover>
-                      <TableCell align="center">
-                        <Box sx={{ display: 'flex', justifyContent: 'center', gap: 0 }}>
-                          <Tooltip title="Move up">
-                            <span>
-                              <IconButton
-                                size="small"
-                                onClick={() => handleMoveUp(index)}
-                                disabled={index === 0 || isReordering}
-                                sx={{
-                                  color: 'google.gray',
-                                  '&:hover': { color: 'google.blue' },
-                                  p: 0.25,
-                                }}
-                              >
-                                <KeyboardArrowUpIcon fontSize="small" />
-                              </IconButton>
-                            </span>
-                          </Tooltip>
-                          <Tooltip title="Move down">
-                            <span>
-                              <IconButton
-                                size="small"
-                                onClick={() => handleMoveDown(index)}
-                                disabled={index === sortedAccounts.length - 1 || isReordering}
-                                sx={{
-                                  color: 'google.gray',
-                                  '&:hover': { color: 'google.blue' },
-                                  p: 0.25,
-                                }}
-                              >
-                                <KeyboardArrowDownIcon fontSize="small" />
-                              </IconButton>
-                            </span>
-                          </Tooltip>
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body1" fontWeight="medium">
-                          {account.name}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>{account.type}</TableCell>
-                      <TableCell>{account.currency}</TableCell>
-                      <TableCell align="right">
-                        {formatCurrency(
-                          account.opening_balance,
-                          account.currency
-                        )}
-                      </TableCell>
-                      <TableCell align="right">
-                        <Typography
-                          variant="body1"
-                          fontWeight="medium"
-                          color={
-                            currentBalance >= 0 ? 'success.main' : 'error.main'
-                          }
-                        >
-                          {formatCurrency(currentBalance, account.currency)}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={account.status}
-                          size="small"
-                          variant="outlined"
-                          sx={getStatusChipSx(account.status)}
-                        />
-                      </TableCell>
-                      <TableCell align="right">
-                        <Tooltip title="Edit">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleOpenDialog(account)}
-                            sx={{
-                              color: 'google.gray',
-                              '&:hover': { color: 'google.blue' },
-                            }}
-                          >
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Delete">
-                          <span>
-                            <IconButton
-                              size="small"
-                              onClick={() => setDeleteConfirm(account)}
-                              sx={{
-                                color: 'google.gray',
-                                '&:hover': { color: 'google.red' },
-                              }}
-                              disabled={account.status === 'Closed'}
-                            >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </span>
-                        </Tooltip>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
-          )}
-        </>
+          return (
+            <Box>
+              {currencyGroups.map((group) => (
+                <Fragment key={group.currency}>
+                  <Box
+                    sx={{
+                      py: 1.25,
+                      display: 'flex',
+                      alignItems: 'baseline',
+                      gap: 0.75,
+                      borderBottom: '1px solid',
+                      borderColor: 'divider',
+                    }}
+                  >
+                    <Typography
+                      sx={{ fontSize: '1.0625rem', fontWeight: 600 }}
+                    >
+                      {group.currency}
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        fontSize: '0.6875rem',
+                        color: 'text.secondary',
+                        flex: 1,
+                        minWidth: 0,
+                      }}
+                    >
+                      · {group.accounts.length} account
+                      {group.accounts.length !== 1 ? 's' : ''}
+                    </Typography>
+                    <Typography
+                      sx={{ fontSize: '1.0625rem', fontWeight: 600, flexShrink: 0 }}
+                    >
+                      {formatCurrency(group.total, group.currency)}
+                    </Typography>
+                  </Box>
+                  {group.accounts.map((account, index) =>
+                    renderAccountRow(account, group.accounts, index)
+                  )}
+                </Fragment>
+              ))}
+              {inactiveAccounts.length > 0 && (
+                <>
+                  <Box
+                    onClick={() => setShowInactive((prev) => !prev)}
+                    sx={{
+                      py: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 0.5,
+                      borderBottom: '1px solid',
+                      borderColor: 'divider',
+                      ...pressableSx,
+                    }}
+                  >
+                    <ExpandMoreIcon
+                      sx={{
+                        fontSize: 18,
+                        color: 'text.secondary',
+                        flexShrink: 0,
+                        transform: showInactive ? 'none' : 'rotate(-90deg)',
+                        transition: 'transform 0.15s ease-in-out',
+                      }}
+                    />
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontSize: '0.8125rem',
+                        fontWeight: 500,
+                        color: 'text.secondary',
+                        flex: 1,
+                        minWidth: 0,
+                      }}
+                    >
+                      Inactive accounts
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        fontSize: '0.6875rem',
+                        color: 'text.secondary',
+                        flexShrink: 0,
+                      }}
+                    >
+                      {inactiveAccounts.length}
+                    </Typography>
+                  </Box>
+                  <Collapse in={showInactive}>
+                    {inactiveAccounts.map((account) =>
+                      renderAccountRow(account, null, -1, true)
+                    )}
+                  </Collapse>
+                </>
+              )}
+            </Box>
+          );
+        })()
       )}
 
       {/* Create/Edit Dialog */}
@@ -1023,6 +725,28 @@ function Accounts() {
             </Grid>
           </DialogContent>
           <DialogActions>
+            <Box
+              sx={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                width: '100%',
+              }}
+            >
+              <Box>
+                {editingAccount && (
+                  <Button
+                    color="error"
+                    startIcon={<DeleteIcon />}
+                    onClick={() => setDeleteConfirm(editingAccount)}
+                    disabled={
+                      isSubmitting || editingAccount.status === 'Closed'
+                    }
+                  >
+                    Delete
+                  </Button>
+                )}
+              </Box>
+              <Box sx={{ display: 'flex', gap: 1 }}>
             <Button onClick={handleCloseDialog} disabled={isSubmitting}>
               Cancel
             </Button>
@@ -1044,6 +768,8 @@ function Accounts() {
                 ? 'Update'
                 : 'Create'}
             </Button>
+              </Box>
+            </Box>
           </DialogActions>
         </form>
       </Dialog>
