@@ -17,6 +17,8 @@ import {
   DialogActions,
   Button,
   Chip,
+  Divider,
+  LinearProgress,
   useMediaQuery,
   useTheme,
   ToggleButtonGroup,
@@ -42,9 +44,23 @@ import {
 } from 'date-fns';
 import { getCategoryDescendants } from '../utils/categoryHierarchy';
 
+// Tappable mobile row: suppress the browser tap highlight (blue flash on
+// Android/Chrome) and sticky hover on touch; give explicit pressed feedback
+const tappableRowSx = {
+  cursor: 'pointer',
+  WebkitTapHighlightColor: 'transparent',
+  userSelect: 'none',
+  '&:active': { backgroundColor: 'action.hover' },
+  '@media (hover: hover)': {
+    '&:hover': { backgroundColor: 'action.hover' },
+  },
+};
+
 function Reports() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  // Matches the md breakpoint previously used for the CSS card/table switch
+  const isDesktopView = useMediaQuery(theme.breakpoints.up('md'));
   const { allTransactions, loading, isInitialized, error } = useSelector(
     (state) => state.transactions
   );
@@ -725,37 +741,6 @@ function Reports() {
     setTransactionModalOpen(true);
   };
 
-  // Format variance based on type
-  const formatVariance = (variance, type) => {
-    if (variance === null || variance === undefined) return 'N/A';
-
-    if (type === 'Income') {
-      // Income: negative = short (show as negative), positive = exceeded (show with +)
-      if (variance < 0) {
-        return `${variance.toFixed(0)}%`;
-      } else {
-        return `+${variance.toFixed(0)}%`;
-      }
-    } else {
-      // Expense: negative = under budget (show as positive), positive = over budget (show as positive)
-      // Always show as positive percentage
-      return `${Math.abs(variance).toFixed(0)}%`;
-    }
-  };
-
-  // Get variance color based on type
-  const getVarianceColor = (variance, type) => {
-    if (variance === null || variance === undefined) return 'text.primary';
-
-    if (type === 'Income') {
-      // Income: negative = short = red, positive = exceeded = normal
-      return variance < 0 ? 'error.main' : 'text.primary';
-    } else {
-      // Expense: negative = under budget = normal, positive = over budget = red
-      return variance > 0 ? 'error.main' : 'text.primary';
-    }
-  };
-
   // Format currency display (amounts are already in base currency)
   const formatCurrencyDisplay = (
     amount,
@@ -790,9 +775,10 @@ function Reports() {
   const getForeignCurrencyDisplay = (currencies, originalAmountsByCurrency) => {
     if (!originalAmountsByCurrency) return null;
 
-    // Get all currencies that have amounts
+    // Get all currencies that have amounts (differences can be negative,
+    // e.g. an exceeded income budget, so compare against zero)
     const currenciesWithAmounts = Object.keys(originalAmountsByCurrency).filter(
-      (currency) => originalAmountsByCurrency[currency] > 0
+      (currency) => originalAmountsByCurrency[currency] !== 0
     );
 
     // If only base currency, no foreign display
@@ -821,6 +807,11 @@ function Reports() {
 
     return null;
   };
+
+  // Income exceeding its budget is a win, not a deficit — never show the
+  // difference with a minus sign there; expenses keep their sign
+  const getDisplayDifference = (amount, type) =>
+    type === 'Income' ? Math.abs(amount) : amount;
 
   // Get difference color based on type
   const getDifferenceColor = (difference, type) => {
@@ -999,8 +990,12 @@ function Reports() {
       <Fragment key={category.category_id}>
         <TableRow
           hover
-          onClick={() => handleRowClick(category.category_id, type)}
-          sx={{ cursor: 'pointer' }}
+          onClick={() =>
+            hasChildren
+              ? toggleCategoryExpansion(category.category_id)
+              : handleRowClick(category.category_id, type)
+          }
+          sx={{ cursor: 'pointer', userSelect: 'none' }}
         >
           <TableCell>
             <Box sx={{ display: 'flex', alignItems: 'center', pl: level * 2 }}>
@@ -1071,7 +1066,7 @@ function Reports() {
                   sx={{ color: differenceColor, fontWeight: 'medium' }}
                 >
                   {formatCurrencyDisplay(
-                    difference,
+                    getDisplayDifference(difference, type),
                     currencies,
                     isMixed,
                     differenceOriginalAmounts
@@ -1084,7 +1079,7 @@ function Reports() {
                   sx={{ fontSize: '0.7rem', color: 'text.secondary' }}
                 >
                   {formatCurrency(
-                    differenceForeign.amount,
+                    getDisplayDifference(differenceForeign.amount, type),
                     differenceForeign.currency
                   )}
                 </Typography>
@@ -1092,12 +1087,7 @@ function Reports() {
             </Box>
           </TableCell>
           <TableCell align="right">
-            <Typography
-              variant="body2"
-              sx={{ color: getVarianceColor(variance, type) }}
-            >
-              {formatVariance(variance, type)}
-            </Typography>
+            {renderProgressCell({ budget, actual, difference, variance }, type)}
           </TableCell>
         </TableRow>
         {hasChildren && isExpanded && (
@@ -1112,86 +1102,108 @@ function Reports() {
                 level + 1
               );
             })}
+            <TableRow
+              hover
+              onClick={() => handleRowClick(category.category_id, type)}
+              sx={{ cursor: 'pointer' }}
+            >
+              <TableCell colSpan={5} sx={{ py: 0.75 }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    pl: (level + 1) * 2 + 5,
+                  }}
+                >
+                  <Typography
+                    variant="caption"
+                    sx={{ color: 'primary.main' }}
+                  >
+                    All {category.name} transactions
+                  </Typography>
+                  <ChevronRightIcon
+                    sx={{ fontSize: 14, color: 'primary.main', ml: 0.25 }}
+                  />
+                </Box>
+              </TableCell>
+            </TableRow>
           </>
         )}
       </Fragment>
     );
   };
 
-  // Render a label/amount line for the mobile card view
-  const renderMobileAmountRow = ({
-    label,
-    amount,
-    currencies,
-    isMixed,
-    originalAmounts,
-    foreignInfo,
-    valueColor = 'text.primary',
-    bold = false,
-  }) => (
-    <Box
-      key={label}
-      sx={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'baseline',
-        gap: 1,
-      }}
-    >
-      <Typography
-        variant="body2"
-        color="text.secondary"
-        sx={{ fontSize: '0.75rem', flexShrink: 0 }}
+  // Human phrase for how actuals compare to budget
+  const getVariancePhrase = (variance, type) => {
+    if (variance === null || variance === undefined) {
+      return { text: 'No budget', color: 'text.secondary' };
+    }
+    const pctOfBudget = Math.round(100 + variance);
+    if (type === 'Income') {
+      return {
+        text: `${pctOfBudget}% of plan`,
+        color: variance < 0 ? 'error.main' : 'success.main',
+      };
+    }
+    if (variance > 0) {
+      return {
+        text: `${Math.round(variance)}% over budget`,
+        color: 'error.main',
+      };
+    }
+    return { text: `${pctOfBudget}% used`, color: 'text.secondary' };
+  };
+
+  // Variance phrase + progress bar for desktop table cells
+  const renderProgressCell = (
+    { budget, actual, difference, variance },
+    type,
+    bold = false
+  ) => {
+    const phrase = getVariancePhrase(variance, type);
+    const pctUsed = budget > 0 ? (actual / budget) * 100 : null;
+    const barColor = getDifferenceColor(difference, type).startsWith('success')
+      ? 'success'
+      : 'error';
+    return (
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'flex-end',
+          gap: 0.5,
+        }}
       >
-        {label}
-      </Typography>
-      <Box sx={{ textAlign: 'right', minWidth: 0 }}>
-        <Box
+        <Typography
+          variant="caption"
           sx={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'flex-end',
-            gap: 0.5,
+            fontSize: '0.75rem',
+            fontWeight: bold ? 'bold' : 500,
+            color: phrase.color,
           }}
         >
-          {isMixed && (
-            <Chip
-              label="Mixed currencies"
-              size="small"
-              sx={{ height: 18, fontSize: '0.65rem' }}
-              color="default"
-              variant="outlined"
-            />
-          )}
-          <Typography
-            variant="body2"
+          {phrase.text}
+        </Typography>
+        {pctUsed !== null && (
+          <LinearProgress
+            variant="determinate"
+            value={Math.min(100, pctUsed)}
+            color={barColor}
             sx={{
-              fontSize: '0.8125rem',
-              color: valueColor,
-              fontWeight: bold ? 'bold' : 'medium',
+              height: 4,
+              borderRadius: 2,
+              width: 110,
+              backgroundColor: 'action.hover',
             }}
-          >
-            {formatCurrencyDisplay(amount, currencies, isMixed, originalAmounts)}
-          </Typography>
-        </Box>
-        {foreignInfo && (
-          <Typography
-            variant="caption"
-            sx={{
-              fontSize: '0.7rem',
-              color: 'text.secondary',
-              display: 'block',
-            }}
-          >
-            {formatCurrency(foreignInfo.amount, foreignInfo.currency)}
-          </Typography>
+          />
         )}
       </Box>
-    </Box>
-  );
+    );
+  };
 
-  // Render a category as a card (mobile view)
-  const renderCategoryCard = (item, type, level = 0) => {
+  // Render a category as a dense list row with a progress bar (mobile view).
+  // Parent rows expand/collapse on tap; leaf rows open the transaction modal.
+  const renderMobileCategoryRow = (item, type, level = 0) => {
     const {
       category,
       budget,
@@ -1200,17 +1212,11 @@ function Reports() {
       variance,
       isMixed,
       currencies,
-      budgetOriginalAmounts,
       actualOriginalAmounts,
       differenceOriginalAmounts,
     } = item;
     const hasChildren = category.children && category.children.length > 0;
     const isExpanded = expandedCategories.has(category.category_id);
-
-    const budgetForeign = getForeignCurrencyDisplay(
-      currencies,
-      budgetOriginalAmounts
-    );
     const actualForeign = getForeignCurrencyDisplay(
       currencies,
       actualOriginalAmounts
@@ -1219,206 +1225,353 @@ function Reports() {
       currencies,
       differenceOriginalAmounts
     );
+    const pctUsed = budget > 0 ? (actual / budget) * 100 : null;
+    const barColor = getDifferenceColor(difference, type).startsWith('success')
+      ? 'success'
+      : 'error';
+    const variancePhrase = getVariancePhrase(variance, type);
+
+    const budgetCaption = [
+      budget > 0 ? `of ${formatCurrency(budget, baseCurrency)}` : null,
+      actualForeign
+        ? formatCurrency(actualForeign.amount, actualForeign.currency)
+        : null,
+    ]
+      .filter(Boolean)
+      .join(' · ');
 
     return (
       <Fragment key={category.category_id}>
         <Box
-          onClick={() => handleRowClick(category.category_id, type)}
+          onClick={() =>
+            hasChildren
+              ? toggleCategoryExpansion(category.category_id)
+              : handleRowClick(category.category_id, type)
+          }
           sx={{
-            mb: 1,
-            p: 1.5,
-            ml: level * 2,
-            cursor: 'pointer',
-            border: '1px solid',
+            py: 1.25,
+            pl: level * 2,
+            borderBottom: '1px solid',
             borderColor: 'divider',
-            borderRadius: 1,
-            backgroundColor: 'background.paper',
-            '&:hover': { backgroundColor: 'action.hover' },
+            ...tappableRowSx,
           }}
         >
-          {/* Header: category name + variance */}
           <Box
             sx={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              mb: 1,
               gap: 1,
             }}
           >
             <Box
-              sx={{ display: 'flex', alignItems: 'center', minWidth: 0 }}
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                minWidth: 0,
+                flex: 1,
+              }}
             >
               {hasChildren && (
-                <IconButton
-                  size="small"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleCategoryExpansion(category.category_id);
+                <ExpandMoreIcon
+                  sx={{
+                    fontSize: 18,
+                    mr: 0.5,
+                    color: 'text.secondary',
+                    flexShrink: 0,
+                    transform: isExpanded ? 'none' : 'rotate(-90deg)',
+                    transition: 'transform 0.15s ease-in-out',
                   }}
-                  sx={{ ml: -0.5, mr: 0.5 }}
-                >
-                  {isExpanded ? (
-                    <ExpandMoreIcon fontSize="small" />
-                  ) : (
-                    <ChevronRightIcon fontSize="small" />
-                  )}
-                </IconButton>
+                />
               )}
               <Typography
-                variant="body1"
-                fontWeight="medium"
+                variant="body2"
                 noWrap
-                sx={{ fontSize: '0.875rem' }}
+                sx={{ fontSize: '0.875rem', fontWeight: 500 }}
               >
                 {category.name}
               </Typography>
+              {isMixed && (
+                <Chip
+                  label="Mixed"
+                  size="small"
+                  variant="outlined"
+                  sx={{
+                    ml: 0.75,
+                    height: 16,
+                    fontSize: '0.625rem',
+                    flexShrink: 0,
+                  }}
+                />
+              )}
             </Box>
             <Typography
               variant="body2"
-              sx={{
-                fontSize: '0.8125rem',
-                fontWeight: 'medium',
-                color: getVarianceColor(variance, type),
-                flexShrink: 0,
-              }}
+              sx={{ fontSize: '0.875rem', fontWeight: 600, flexShrink: 0 }}
             >
-              {formatVariance(variance, type)}
+              {formatCurrencyDisplay(
+                actual,
+                currencies,
+                isMixed,
+                actualOriginalAmounts
+              )}
             </Typography>
           </Box>
-
-          {/* Amounts */}
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-            {renderMobileAmountRow({
-              label: 'Budgeted',
-              amount: budget,
-              currencies,
-              isMixed,
-              originalAmounts: budgetOriginalAmounts,
-              foreignInfo: budgetForeign,
-            })}
-            {renderMobileAmountRow({
-              label: type === 'Income' ? 'Actual Income' : 'Actual Spending',
-              amount: actual,
-              currencies,
-              isMixed,
-              originalAmounts: actualOriginalAmounts,
-              foreignInfo: actualForeign,
-            })}
-            {renderMobileAmountRow({
-              label: 'Difference',
-              amount: difference,
-              currencies,
-              isMixed,
-              originalAmounts: differenceOriginalAmounts,
-              foreignInfo: differenceForeign,
-              valueColor: getDifferenceColor(difference, type),
-            })}
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'baseline',
+              justifyContent: 'space-between',
+              gap: 1,
+              mt: 0.25,
+              pl: hasChildren ? 2.875 : 0,
+            }}
+          >
+            <Typography
+              variant="caption"
+              sx={{ fontSize: '0.6875rem', color: variancePhrase.color }}
+            >
+              {variancePhrase.text}
+            </Typography>
+            {budgetCaption && (
+              <Typography
+                variant="caption"
+                noWrap
+                sx={{ fontSize: '0.6875rem', color: 'text.secondary' }}
+              >
+                {budgetCaption}
+              </Typography>
+            )}
           </Box>
+          {pctUsed !== null && (
+            <LinearProgress
+              variant="determinate"
+              value={Math.min(100, pctUsed)}
+              color={barColor}
+              sx={{
+                mt: 0.75,
+                height: 4,
+                borderRadius: 2,
+                ml: hasChildren ? 2.875 : 0,
+                backgroundColor: 'action.hover',
+              }}
+            />
+          )}
+          {budget > 0 && (
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'baseline',
+                justifyContent: 'space-between',
+                gap: 1,
+                mt: 0.5,
+                pl: hasChildren ? 2.875 : 0,
+              }}
+            >
+              <Typography
+                variant="caption"
+                sx={{ fontSize: '0.6875rem', color: 'text.secondary' }}
+              >
+                Difference
+              </Typography>
+              <Typography
+                variant="caption"
+                noWrap
+                sx={{
+                  fontSize: '0.6875rem',
+                  fontWeight: 500,
+                  color: getDifferenceColor(difference, type),
+                }}
+              >
+                {formatCurrency(
+                  getDisplayDifference(difference, type),
+                  baseCurrency
+                )}
+                {differenceForeign &&
+                  ` · ${formatCurrency(
+                    getDisplayDifference(differenceForeign.amount, type),
+                    differenceForeign.currency
+                  )}`}
+              </Typography>
+            </Box>
+          )}
         </Box>
-        {hasChildren &&
-          isExpanded &&
-          category.children.map((child) => {
-            const childData = calculateCategoryData(child, type);
-            const hasChildData = childData.budget > 0 || childData.actual > 0;
-            if (!hasChildData) return null;
-            return renderCategoryCard(
-              { category: child, ...childData },
-              type,
-              level + 1
-            );
-          })}
+        {hasChildren && isExpanded && (
+          <>
+            {category.children.map((child) => {
+              const childData = calculateCategoryData(child, type);
+              const hasChildData =
+                childData.budget > 0 || childData.actual > 0;
+              if (!hasChildData) return null;
+              return renderMobileCategoryRow(
+                { category: child, ...childData },
+                type,
+                level + 1
+              );
+            })}
+            <Box
+              onClick={() => handleRowClick(category.category_id, type)}
+              sx={{
+                py: 0.75,
+                pl: (level + 1) * 2,
+                display: 'flex',
+                alignItems: 'center',
+                borderBottom: '1px solid',
+                borderColor: 'divider',
+                ...tappableRowSx,
+              }}
+            >
+              <Typography
+                variant="caption"
+                sx={{ fontSize: '0.6875rem', color: 'primary.main' }}
+              >
+                All {category.name} transactions
+              </Typography>
+              <ChevronRightIcon
+                sx={{ fontSize: 14, color: 'primary.main', ml: 0.25 }}
+              />
+            </Box>
+          </>
+        )}
       </Fragment>
     );
   };
 
-  // Render a full report section as cards (mobile view)
+  // Render a full report section as a dense list with totals up top (mobile)
   const renderSectionMobile = (reportData, totals, type) => {
-    const budgetForeign = getForeignCurrencyDisplay(
-      totals.currencies,
-      totals.budgetOriginalAmounts
-    );
     const actualForeign = getForeignCurrencyDisplay(
       totals.currencies,
       totals.actualOriginalAmounts
     );
+    const differenceForeign = getForeignCurrencyDisplay(
+      totals.currencies,
+      totals.differenceOriginalAmounts
+    );
+    const pctUsed =
+      totals.budget > 0 ? (totals.actual / totals.budget) * 100 : null;
+    const barColor = getDifferenceColor(totals.difference, type).startsWith(
+      'success'
+    )
+      ? 'success'
+      : 'error';
+    const variancePhrase = getVariancePhrase(totals.variance, type);
 
     return (
-      <Box sx={{ display: { xs: 'block', md: 'none' } }}>
-        {reportData.length === 0 && (
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{ mb: 1.5, fontSize: '0.8125rem' }}
-          >
-            No categories with budget or activity for this period
-          </Typography>
-        )}
-        {reportData.map((item) => renderCategoryCard(item, type))}
-
-        {/* Total card */}
-        <Box
-          sx={{
-            p: 1.5,
-            border: '1px solid',
-            borderColor: 'divider',
-            borderRadius: 1,
-            bgcolor: 'action.hover',
-          }}
-        >
+      <Box>
+        {/* Section totals at a glance */}
+        <Box sx={{ mb: 0.5 }}>
           <Box
             sx={{
               display: 'flex',
-              alignItems: 'center',
+              alignItems: 'baseline',
               justifyContent: 'space-between',
-              mb: 1,
               gap: 1,
             }}
           >
-            <Typography variant="body1" sx={{ fontSize: '0.875rem', fontWeight: 'bold' }}>
-              Total
+            <Typography sx={{ fontSize: '1.125rem', fontWeight: 600 }}>
+              {formatCurrencyDisplay(
+                totals.actual,
+                totals.currencies,
+                totals.isMixed,
+                totals.actualOriginalAmounts
+              )}
+              {totals.budget > 0 && (
+                <Typography
+                  component="span"
+                  sx={{
+                    fontSize: '0.75rem',
+                    color: 'text.secondary',
+                    ml: 0.5,
+                  }}
+                >
+                  of {formatCurrency(totals.budget, baseCurrency)}
+                </Typography>
+              )}
             </Typography>
             <Typography
-              variant="body2"
+              variant="caption"
               sx={{
-                fontSize: '0.8125rem',
-                fontWeight: 'bold',
-                color: getVarianceColor(totals.variance, type),
+                fontSize: '0.75rem',
+                fontWeight: 500,
+                color: variancePhrase.color,
+                flexShrink: 0,
               }}
             >
-              {formatVariance(totals.variance, type)}
+              {variancePhrase.text}
             </Typography>
           </Box>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-            {renderMobileAmountRow({
-              label: 'Budgeted',
-              amount: totals.budget,
-              currencies: totals.currencies,
-              isMixed: totals.isMixed,
-              originalAmounts: totals.budgetOriginalAmounts,
-              foreignInfo: budgetForeign,
-              bold: true,
-            })}
-            {renderMobileAmountRow({
-              label: type === 'Income' ? 'Actual Income' : 'Actual Spending',
-              amount: totals.actual,
-              currencies: totals.currencies,
-              isMixed: totals.isMixed,
-              originalAmounts: totals.actualOriginalAmounts,
-              foreignInfo: actualForeign,
-              bold: true,
-            })}
-            {renderMobileAmountRow({
-              label: 'Difference',
-              amount: totals.difference,
-              currencies: totals.currencies,
-              isMixed: totals.isMixed,
-              originalAmounts: totals.differenceOriginalAmounts,
-              valueColor: getDifferenceColor(totals.difference, type),
-              bold: true,
-            })}
-          </Box>
+          {actualForeign && (
+            <Typography
+              variant="caption"
+              sx={{ fontSize: '0.6875rem', color: 'text.secondary' }}
+            >
+              {formatCurrency(actualForeign.amount, actualForeign.currency)}
+            </Typography>
+          )}
+          {pctUsed !== null && (
+            <LinearProgress
+              variant="determinate"
+              value={Math.min(100, pctUsed)}
+              color={barColor}
+              sx={{
+                mt: 0.75,
+                height: 5,
+                borderRadius: 2.5,
+                backgroundColor: 'action.hover',
+              }}
+            />
+          )}
+          {totals.budget > 0 && (
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'baseline',
+                justifyContent: 'space-between',
+                gap: 1,
+                mt: 0.5,
+              }}
+            >
+              <Typography
+                variant="caption"
+                sx={{ fontSize: '0.6875rem', color: 'text.secondary' }}
+              >
+                Difference
+              </Typography>
+              <Typography
+                variant="caption"
+                noWrap
+                sx={{
+                  fontSize: '0.6875rem',
+                  fontWeight: 500,
+                  color: getDifferenceColor(totals.difference, type),
+                }}
+              >
+                {formatCurrency(
+                  getDisplayDifference(totals.difference, type),
+                  baseCurrency
+                )}
+                {differenceForeign &&
+                  ` · ${formatCurrency(
+                    getDisplayDifference(differenceForeign.amount, type),
+                    differenceForeign.currency
+                  )}`}
+              </Typography>
+            </Box>
+          )}
         </Box>
+        {reportData.length === 0 ? (
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ mt: 1, fontSize: '0.8125rem' }}
+          >
+            No categories with budget or activity for this period
+          </Typography>
+        ) : (
+          <Box>
+            {reportData.map((item) => renderMobileCategoryRow(item, type))}
+          </Box>
+        )}
       </Box>
     );
   };
@@ -1500,18 +1653,91 @@ function Reports() {
         </CardContent>
       </Card>
 
+      {/* At-a-glance summary */}
+      <Card sx={{ mb: { xs: 2, sm: 3 } }}>
+          <CardContent
+            sx={{
+              p: { xs: 1.5, sm: 2 },
+              '&:last-child': { pb: { xs: 1.5, sm: 2 } },
+            }}
+          >
+            <Box sx={{ display: 'flex', gap: { xs: 1.5, md: 4 } }}>
+              {[
+                {
+                  label: 'Income',
+                  value: incomeTotals.actual,
+                  plan: incomeTotals.budget,
+                  color: 'success.main',
+                },
+                {
+                  label: 'Expenses',
+                  value: expenseTotals.actual,
+                  plan: expenseTotals.budget,
+                  color: 'error.main',
+                },
+                {
+                  label: 'Net',
+                  value: netSummary.actualSavings,
+                  plan: netSummary.plannedSavings,
+                  color:
+                    netSummary.actualSavings >= 0
+                      ? 'success.main'
+                      : 'error.main',
+                },
+              ].map((tile, index) => (
+                <Fragment key={tile.label}>
+                  {index > 0 && <Divider orientation="vertical" flexItem />}
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        fontSize: { xs: '0.6875rem', md: '0.8125rem' },
+                        color: 'text.secondary',
+                      }}
+                    >
+                      {tile.label}
+                    </Typography>
+                    <Typography
+                      noWrap
+                      sx={{
+                        fontSize: { xs: '0.9375rem', md: '1.375rem' },
+                        fontWeight: 600,
+                        color: tile.color,
+                      }}
+                    >
+                      {formatCurrency(tile.value, baseCurrency)}
+                    </Typography>
+                    <Typography
+                      noWrap
+                      variant="caption"
+                      sx={{
+                        fontSize: { xs: '0.625rem', md: '0.75rem' },
+                        color: 'text.secondary',
+                        display: 'block',
+                      }}
+                    >
+                      Plan: {formatCurrency(tile.plan, baseCurrency)}
+                    </Typography>
+                  </Box>
+                </Fragment>
+              ))}
+            </Box>
+          </CardContent>
+        </Card>
+
       {/* Income Budget vs Actual Section */}
       <Card sx={{ mb: { xs: 2, sm: 3 } }}>
         <CardContent sx={{ p: { xs: 1.5, sm: 2 }, '&:last-child': { pb: { xs: 1.5, sm: 2 } } }}>
           <Typography variant="h6" sx={{ mb: { xs: 1.5, sm: 2 }, fontWeight: 'bold', fontSize: { xs: '1rem', sm: '1.125rem' } }}>
-            Income Budget vs Actual
+            {isDesktopView ? 'Income Budget vs Actual' : 'Income'}
           </Typography>
-          {/* Mobile card view */}
-          {renderSectionMobile(incomeReportData, incomeTotals, 'Income')}
+          {/* Mobile list view */}
+          {!isDesktopView &&
+            renderSectionMobile(incomeReportData, incomeTotals, 'Income')}
           {/* Desktop table view */}
+          {isDesktopView && (
           <Box
             sx={{
-              display: { xs: 'none', md: 'block' },
               overflowX: 'auto',
             }}
           >
@@ -1522,7 +1748,7 @@ function Reports() {
                   <TableCell align="right" sx={{ minWidth: 100, whiteSpace: 'nowrap' }}>BUDGETED</TableCell>
                   <TableCell align="right" sx={{ minWidth: 110, whiteSpace: 'nowrap' }}>ACTUAL INCOME</TableCell>
                   <TableCell align="right" sx={{ minWidth: 100, whiteSpace: 'nowrap' }}>DIFFERENCE</TableCell>
-                  <TableCell align="right" sx={{ minWidth: 80, whiteSpace: 'nowrap' }}>VARIANCE (%)</TableCell>
+                  <TableCell align="right" sx={{ minWidth: 130, whiteSpace: 'nowrap' }}>PROGRESS</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1687,32 +1913,41 @@ function Reports() {
                         }}
                       >
                         {formatCurrencyDisplay(
-                          incomeTotals.difference,
+                          getDisplayDifference(incomeTotals.difference, 'Income'),
                           incomeTotals.currencies,
                           incomeTotals.isMixed,
                           incomeTotals.differenceOriginalAmounts
                         )}
                       </Typography>
+                      {(() => {
+                        const foreign = getForeignCurrencyDisplay(
+                          incomeTotals.currencies,
+                          incomeTotals.differenceOriginalAmounts
+                        );
+                        return (
+                          foreign && (
+                            <Typography
+                              variant="caption"
+                              sx={{ fontSize: '0.7rem', color: 'text.secondary' }}
+                            >
+                              {formatCurrency(
+                                getDisplayDifference(foreign.amount, 'Income'),
+                                foreign.currency
+                              )}
+                            </Typography>
+                          )
+                        );
+                      })()}
                     </Box>
                   </TableCell>
                   <TableCell align="right">
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        fontWeight: 'bold',
-                        color: getVarianceColor(
-                          incomeTotals.variance,
-                          'Income'
-                        ),
-                      }}
-                    >
-                      {formatVariance(incomeTotals.variance, 'Income')}
-                    </Typography>
+                    {renderProgressCell(incomeTotals, 'Income', true)}
                   </TableCell>
                 </TableRow>
               </TableBody>
             </Table>
           </Box>
+          )}
         </CardContent>
       </Card>
 
@@ -1720,14 +1955,15 @@ function Reports() {
       <Card sx={{ mb: { xs: 2, sm: 3 } }}>
         <CardContent sx={{ p: { xs: 1.5, sm: 2 }, '&:last-child': { pb: { xs: 1.5, sm: 2 } } }}>
           <Typography variant="h6" sx={{ mb: { xs: 1.5, sm: 2 }, fontWeight: 'bold', fontSize: { xs: '1rem', sm: '1.125rem' } }}>
-            Expense Budget vs Actual
+            {isDesktopView ? 'Expense Budget vs Actual' : 'Expenses'}
           </Typography>
-          {/* Mobile card view */}
-          {renderSectionMobile(expenseReportData, expenseTotals, 'Expense')}
+          {/* Mobile list view */}
+          {!isDesktopView &&
+            renderSectionMobile(expenseReportData, expenseTotals, 'Expense')}
           {/* Desktop table view */}
+          {isDesktopView && (
           <Box
             sx={{
-              display: { xs: 'none', md: 'block' },
               overflowX: 'auto',
             }}
           >
@@ -1738,7 +1974,7 @@ function Reports() {
                   <TableCell align="right" sx={{ minWidth: 100, whiteSpace: 'nowrap' }}>BUDGETED</TableCell>
                   <TableCell align="right" sx={{ minWidth: 120, whiteSpace: 'nowrap' }}>ACTUAL SPENDING</TableCell>
                   <TableCell align="right" sx={{ minWidth: 100, whiteSpace: 'nowrap' }}>DIFFERENCE</TableCell>
-                  <TableCell align="right" sx={{ minWidth: 80, whiteSpace: 'nowrap' }}>VARIANCE (%)</TableCell>
+                  <TableCell align="right" sx={{ minWidth: 130, whiteSpace: 'nowrap' }}>PROGRESS</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1909,71 +2145,32 @@ function Reports() {
                           expenseTotals.differenceOriginalAmounts
                         )}
                       </Typography>
+                      {(() => {
+                        const foreign = getForeignCurrencyDisplay(
+                          expenseTotals.currencies,
+                          expenseTotals.differenceOriginalAmounts
+                        );
+                        return (
+                          foreign && (
+                            <Typography
+                              variant="caption"
+                              sx={{ fontSize: '0.7rem', color: 'text.secondary' }}
+                            >
+                              {formatCurrency(foreign.amount, foreign.currency)}
+                            </Typography>
+                          )
+                        );
+                      })()}
                     </Box>
                   </TableCell>
                   <TableCell align="right">
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        fontWeight: 'bold',
-                        color: getVarianceColor(
-                          expenseTotals.variance,
-                          'Expense'
-                        ),
-                      }}
-                    >
-                      {formatVariance(expenseTotals.variance, 'Expense')}
-                    </Typography>
+                    {renderProgressCell(expenseTotals, 'Expense', true)}
                   </TableCell>
                 </TableRow>
               </TableBody>
             </Table>
           </Box>
-        </CardContent>
-      </Card>
-
-      {/* Net Summary Section */}
-      <Card sx={{ mb: { xs: 2, sm: 3 } }}>
-        <CardContent sx={{ p: { xs: 1.5, sm: 2 }, '&:last-child': { pb: { xs: 1.5, sm: 2 } } }}>
-          <Typography variant="h6" sx={{ mb: { xs: 1.5, sm: 2 }, fontWeight: 'bold', fontSize: { xs: '1rem', sm: '1.125rem' } }}>
-            Net Summary
-          </Typography>
-          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: { xs: 1.5, sm: 4 } }}>
-            <Box>
-              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8125rem' }}>
-                Planned Savings
-              </Typography>
-              <Typography
-                variant="h6"
-                sx={{
-                  fontSize: { xs: '1.125rem', sm: '1.25rem' },
-                  color:
-                    netSummary.plannedSavings >= 0
-                      ? 'success.main'
-                      : 'error.main',
-                }}
-              >
-                {formatCurrency(netSummary.plannedSavings, baseCurrency)}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8125rem' }}>
-                Actual Savings
-              </Typography>
-              <Typography
-                variant="h6"
-                sx={{
-                  fontSize: { xs: '1.125rem', sm: '1.25rem' },
-                  color:
-                    netSummary.actualSavings >= 0
-                      ? 'success.main'
-                      : 'error.main',
-                }}
-              >
-                {formatCurrency(netSummary.actualSavings, baseCurrency)}
-              </Typography>
-            </Box>
-          </Box>
+          )}
         </CardContent>
       </Card>
 
