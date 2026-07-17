@@ -301,15 +301,6 @@ function AddTransferDialog({ open, onClose }) {
                 required
               />
             </Grid>
-            {watchedFromAccountId && watchedToAccountId && (
-              <Grid item xs={12}>
-                <Alert severity={isSameCurrency() ? 'info' : 'warning'}>
-                  {isSameCurrency()
-                    ? 'Same currency transfer - enter amount once'
-                    : 'Multi-currency transfer - enter amounts in both currencies'}
-                </Alert>
-              </Grid>
-            )}
             {isSameCurrency() ? (
               <Grid item xs={12} sm={6}>
                 <TextField

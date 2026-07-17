@@ -44,6 +44,7 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import TodayIcon from '@mui/icons-material/Today';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
+import ChecklistIcon from '@mui/icons-material/Checklist';
 import {
   bulkDeleteTransactions as bulkDeleteTransactionsThunk,
   removeDeletedTransactions,
@@ -86,8 +87,6 @@ const MobileTransactionRow = memo(function MobileTransactionRow({
   isBulkDeleting,
   getCategoryDisplayName,
   getAccountName,
-  onLongPressStart,
-  onLongPressEnd,
   onSelect,
   onEdit,
 }) {
@@ -108,12 +107,6 @@ const MobileTransactionRow = memo(function MobileTransactionRow({
 
   return (
     <Box
-      onTouchStart={() => onLongPressStart(transaction.transaction_id)}
-      onTouchEnd={onLongPressEnd}
-      onTouchCancel={onLongPressEnd}
-      onMouseDown={() => onLongPressStart(transaction.transaction_id)}
-      onMouseUp={onLongPressEnd}
-      onMouseLeave={onLongPressEnd}
       onClick={() => {
         if (selectionMode) {
           onSelect(transaction.transaction_id, !isSelected);
@@ -249,8 +242,6 @@ const MobileTransferRow = memo(function MobileTransferRow({
   selectionMode,
   getAccountName,
   getAccountCurrency,
-  onLongPressStart,
-  onLongPressEnd,
   onSelect,
 }) {
   const transferOut = transfer.transferOut;
@@ -259,12 +250,6 @@ const MobileTransferRow = memo(function MobileTransferRow({
 
   return (
     <Box
-      onTouchStart={() => onLongPressStart(transferId)}
-      onTouchEnd={onLongPressEnd}
-      onTouchCancel={onLongPressEnd}
-      onMouseDown={() => onLongPressStart(transferId)}
-      onMouseUp={onLongPressEnd}
-      onMouseLeave={onLongPressEnd}
       onClick={() => {
         if (selectionMode) {
           onSelect(transferId, !isSelected);
@@ -445,7 +430,6 @@ function Transactions() {
   });
   const [selectedItems, setSelectedItems] = useState(new Set());
   const [selectionMode, setSelectionMode] = useState(false);
-  const [longPressTimer, setLongPressTimer] = useState(null);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [bulkDeleteError, setBulkDeleteError] = useState(null);
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
@@ -837,22 +821,6 @@ function Transactions() {
     });
   }, []);
 
-  // Long-press handlers for selection mode
-  const handleLongPressStart = useCallback((itemId) => {
-    const timer = setTimeout(() => {
-      setSelectionMode(true);
-      setSelectedItems(new Set([itemId]));
-    }, 500); // 500ms long press
-    setLongPressTimer(timer);
-  }, []);
-
-  const handleLongPressEnd = useCallback(() => {
-    if (longPressTimer) {
-      clearTimeout(longPressTimer);
-      setLongPressTimer(null);
-    }
-  }, [longPressTimer]);
-
   const exitSelectionMode = useCallback(() => {
     setSelectionMode(false);
     setSelectedItems(new Set());
@@ -1050,11 +1018,35 @@ function Transactions() {
             <ChevronRightIcon sx={{ fontSize: { xs: 18, sm: 20 } }} />
           </IconButton>
         </Box>
+        <Box
+          sx={{
+            alignSelf: { xs: 'flex-end', sm: 'auto' },
+            display: 'flex',
+            alignItems: 'center',
+            gap: 0.75,
+          }}
+        >
+          <IconButton
+            onClick={() =>
+              selectionMode ? exitSelectionMode() : setSelectionMode(true)
+            }
+            size="small"
+            aria-label={selectionMode ? 'Exit selection mode' : 'Select multiple'}
+            sx={{
+              width: 28,
+              height: 28,
+              p: 0.5,
+              color: selectionMode ? 'primary.main' : 'text.secondary',
+              backgroundColor: selectionMode ? 'action.selected' : 'transparent',
+              '&:hover': { backgroundColor: 'action.hover' },
+            }}
+          >
+            <ChecklistIcon sx={{ fontSize: 18 }} />
+          </IconButton>
         <Typography
           variant="body2"
           color="text.secondary"
           sx={{
-            alignSelf: { xs: 'flex-end', sm: 'auto' },
             fontSize: '0.8125rem',
           }}
         >
@@ -1125,6 +1117,7 @@ function Transactions() {
             return `${totalStr} • ${countStr}`;
           })()}
         </Typography>
+        </Box>
       </Box>
 
       {error && <ErrorMessage error={error} />}
@@ -1468,8 +1461,6 @@ function Transactions() {
                     selectionMode={selectionMode}
                     getAccountName={getAccountName}
                     getAccountCurrency={getAccountCurrency}
-                    onLongPressStart={handleLongPressStart}
-                    onLongPressEnd={handleLongPressEnd}
                     onSelect={handleItemSelect}
                   />
                 );
@@ -1488,8 +1479,6 @@ function Transactions() {
                     isBulkDeleting={isBulkDeleting}
                     getCategoryDisplayName={getCategoryDisplayName}
                     getAccountName={getAccountName}
-                    onLongPressStart={handleLongPressStart}
-                    onLongPressEnd={handleLongPressEnd}
                     onSelect={handleItemSelect}
                     onEdit={handleEditTransaction}
                   />
@@ -1565,9 +1554,6 @@ function Transactions() {
                         key={transferId}
                         hover
                         selected={isSelected}
-                        onMouseDown={() => handleLongPressStart(transferId)}
-                        onMouseUp={handleLongPressEnd}
-                        onMouseLeave={handleLongPressEnd}
                         onClick={() => {
                           if (selectionMode) {
                             handleItemSelect(transferId, !isSelected);
@@ -1773,11 +1759,6 @@ function Transactions() {
                         key={transaction.transaction_id}
                         hover
                         selected={isSelected}
-                        onMouseDown={() =>
-                          handleLongPressStart(transaction.transaction_id)
-                        }
-                        onMouseUp={handleLongPressEnd}
-                        onMouseLeave={handleLongPressEnd}
                         onClick={() => {
                           if (selectionMode) {
                             handleItemSelect(
