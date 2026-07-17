@@ -4,6 +4,7 @@ import {
   selectAccountNameGetter,
   selectAccountCurrencyGetter,
   selectCategoryDisplayNameGetter,
+  selectFilteredTransactions,
 } from '../store/selectors';
 import {
   Box,
@@ -412,12 +413,13 @@ function Transactions() {
   // Matches the md breakpoint previously used for the CSS card/table switch
   const isDesktopView = useMediaQuery(theme.breakpoints.up('md'));
   const {
-    transactions,
     allTransactions,
     loading,
     isInitialized,
     error,
   } = useSelector((state) => state.transactions);
+  // Derived from allTransactions + activeFilters (memoized)
+  const transactions = useSelector(selectFilteredTransactions);
   const { accounts } = useSelector((state) => state.accounts);
   const { categories } = useSelector((state) => state.categories);
   const { transfers = [] } = useSelector((state) => state.transfers);

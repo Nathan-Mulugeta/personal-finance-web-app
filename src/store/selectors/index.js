@@ -1,4 +1,5 @@
 import { createSelector } from '@reduxjs/toolkit';
+import { applyTransactionFilters } from '../slices/transactionsSlice';
 
 // ============================================
 // Base Selectors (simple state accessors)
@@ -19,7 +20,7 @@ export const selectCategoriesError = (state) => state.categories.error;
 // Transactions
 export const selectTransactionsState = (state) => state.transactions;
 export const selectAllTransactions = (state) => state.transactions.allTransactions;
-export const selectFilteredTransactions = (state) => state.transactions.transactions;
+// (selectFilteredTransactions is defined below as a memoized derived selector)
 export const selectTransactionsLoading = (state) => state.transactions.loading;
 
 // Settings
@@ -272,3 +273,18 @@ export const selectTotalBalanceInBaseCurrency = createSelector(
   }
 );
 
+
+/**
+ * The visible (filtered) transactions list, derived from the single
+ * allTransactions cache + the active client-side filters. Replaces the
+ * old materialized state.transactions.transactions copy, which every
+ * mutation path had to remember to keep in sync.
+ */
+export const selectFilteredTransactions = createSelector(
+  [
+    (state) => state.transactions.allTransactions,
+    (state) => state.transactions.activeFilters,
+  ],
+  (allTransactions, activeFilters) =>
+    applyTransactionFilters(allTransactions, activeFilters || {})
+);

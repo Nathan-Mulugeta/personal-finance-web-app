@@ -6,7 +6,8 @@ import { fetchAccounts } from './accountsSlice';
 import { deduplicatedRequest } from '../../lib/api/requestDeduplication';
 
 // Apply client-side filters + sort to produce the visible transactions list
-function applyTransactionFilters(allTransactions, filters = {}) {
+// (exported for selectFilteredTransactions in store/selectors)
+export function applyTransactionFilters(allTransactions, filters = {}) {
   let filtered = [...allTransactions];
 
   // Always filter out deleted transactions
@@ -201,9 +202,10 @@ export const bulkDeleteTransactions = createAsyncThunk(
 );
 
 const initialState = {
-  transactions: [],
-  allTransactions: [], // Cache all transactions for client-side filtering
-  activeFilters: null, // Last filters applied via filterTransactions, re-applied after background syncs
+  // The visible (filtered) list is DERIVED via selectFilteredTransactions —
+  // allTransactions is the single copy of transaction data in the store
+  allTransactions: [],
+  activeFilters: null, // Current client-side filters (drives selectFilteredTransactions)
   recentlyDeletedIds: {}, // Tombstones: transaction_id -> deletion time (ms), see filterRecentlyDeleted
   currentTransaction: null,
   loading: false,
@@ -227,15 +229,9 @@ const transactionsSlice = createSlice({
     // Optimistic update for instant UI feedback
     optimisticUpdateTransaction: (state, action) => {
       const { transactionId, updates } = action.payload;
-      const index = state.transactions.findIndex(
-        (txn) => txn.transaction_id === transactionId
-      );
       const allIndex = state.allTransactions.findIndex(
         (txn) => txn.transaction_id === transactionId
       );
-      if (index !== -1) {
-        state.transactions[index] = { ...state.transactions[index], ...updates };
-      }
       if (allIndex !== -1) {
         state.allTransactions[allIndex] = { ...state.allTransactions[allIndex], ...updates };
       }
@@ -244,9 +240,6 @@ const transactionsSlice = createSlice({
     optimisticDeleteTransaction: (state, action) => {
       const transactionId = action.payload;
       addDeletionTombstones(state, [transactionId]);
-      state.transactions = state.transactions.filter(
-        (txn) => txn.transaction_id !== transactionId
-      );
       state.allTransactions = state.allTransactions.filter(
         (txn) => txn.transaction_id !== transactionId
       );
@@ -255,9 +248,6 @@ const transactionsSlice = createSlice({
     removeDeletedTransactions: (state, action) => {
       const transactionIds = Array.isArray(action.payload) ? action.payload : [action.payload];
       addDeletionTombstones(state, transactionIds);
-      state.transactions = state.transactions.filter(
-        (txn) => !transactionIds.includes(txn.transaction_id)
-      );
       state.allTransactions = state.allTransactions.filter(
         (txn) => !transactionIds.includes(txn.transaction_id)
       );
@@ -266,11 +256,10 @@ const transactionsSlice = createSlice({
         state.currentTransaction = null;
       }
     },
-    // Filter transactions client-side
+    // Set the client-side filters; the visible list derives from them
+    // via selectFilteredTransactions
     filterTransactions: (state, action) => {
-      const filters = action.payload || {};
-      state.activeFilters = filters;
-      state.transactions = applyTransactionFilters(state.allTransactions, filters);
+      state.activeFilters = action.payload || {};
     },
   },
   extraReducers: (builder) => {
@@ -315,16 +304,8 @@ const transactionsSlice = createSlice({
           }
           state.isInitialized = true;
           state.lastFetched = Date.now();
-          // Re-apply the current filters so background/realtime syncs update
-          // the visible list too (not just the allTransactions cache)
-          if (state.activeFilters) {
-            state.transactions = applyTransactionFilters(
-              state.allTransactions,
-              state.activeFilters
-            );
-          }
         } else {
-          // Filtered fetch - update allTransactions and transactions
+          // Filtered (server-side) fetch — merge into the single cache
           if (shouldMerge) {
             state.allTransactions = mergeIncrementalData(
               state.allTransactions,
@@ -336,7 +317,6 @@ const transactionsSlice = createSlice({
           } else {
             state.allTransactions = (transactions || []).filter(t => !t.deleted_at);
           }
-          state.transactions = (transactions || []).filter(t => !t.deleted_at);
           state.isInitialized = true;
         }
       })
@@ -372,18 +352,10 @@ const transactionsSlice = createSlice({
         const transactionId = newTransaction.transaction_id;
         
         // Check if transaction already exists to prevent duplicates
-        const existsInTransactions = state.transactions.some(
-          (t) => t.transaction_id === transactionId
-        );
         const existsInAllTransactions = state.allTransactions.some(
           (t) => t.transaction_id === transactionId
         );
-        
-        // Add to filtered transactions if not already present
-        if (!existsInTransactions) {
-          state.transactions.push(newTransaction);
-        }
-        
+
         // Add to all transactions if not already present
         if (!existsInAllTransactions) {
           state.allTransactions.push(newTransaction);
@@ -415,22 +387,12 @@ const transactionsSlice = createSlice({
         const newTransactions = action.payload || [];
         
         // Filter out any transactions that already exist to prevent duplicates
-        const existingTransactionIds = new Set(
-          state.transactions.map((t) => t.transaction_id)
-        );
         const existingAllTransactionIds = new Set(
           state.allTransactions.map((t) => t.transaction_id)
-        );
-        
-        const uniqueForTransactions = newTransactions.filter(
-          (t) => !existingTransactionIds.has(t.transaction_id)
         );
         const uniqueForAllTransactions = newTransactions.filter(
           (t) => !existingAllTransactionIds.has(t.transaction_id)
         );
-        
-        // Add unique transactions
-        state.transactions = [...uniqueForTransactions, ...state.transactions];
         state.allTransactions = [...uniqueForAllTransactions, ...state.allTransactions];
         
         // Sort allTransactions by date and created_at (newest first)
@@ -456,13 +418,6 @@ const transactionsSlice = createSlice({
         state.loading = false;
         // Track local mutation to prevent realtime sync from overwriting
         state.lastLocalMutation = Date.now();
-        // Update in filtered transactions
-        const index = state.transactions.findIndex(
-          (txn) => txn.transaction_id === action.payload.transaction_id
-        );
-        if (index !== -1) {
-          state.transactions[index] = action.payload;
-        }
         // Update in all transactions
         const allIndex = state.allTransactions.findIndex(
           (txn) => txn.transaction_id === action.payload.transaction_id
@@ -510,11 +465,8 @@ const transactionsSlice = createSlice({
           mainTransactionId = payload;
         }
         
-        // Remove all deleted transaction IDs from both filtered and all transactions
+        // Remove all deleted transaction IDs from the cache
         addDeletionTombstones(state, deletedIds);
-        state.transactions = state.transactions.filter(
-          (txn) => !deletedIds.includes(txn.transaction_id)
-        );
         state.allTransactions = state.allTransactions.filter(
           (txn) => !deletedIds.includes(txn.transaction_id)
         );
@@ -539,11 +491,8 @@ const transactionsSlice = createSlice({
         state.lastLocalMutation = Date.now();
         const { deletedTransactionIds } = action.payload;
 
-        // Remove all deleted transaction IDs from both filtered and all transactions
+        // Remove all deleted transaction IDs from the cache
         addDeletionTombstones(state, deletedTransactionIds);
-        state.transactions = state.transactions.filter(
-          (txn) => !deletedTransactionIds.includes(txn.transaction_id)
-        );
         state.allTransactions = state.allTransactions.filter(
           (txn) => !deletedTransactionIds.includes(txn.transaction_id)
         );
@@ -574,20 +523,11 @@ const transactionsSlice = createSlice({
           }
         });
         state.lastLocalMutation = Date.now();
-        if (state.activeFilters) {
-          state.transactions = applyTransactionFilters(
-            state.allTransactions,
-            state.activeFilters
-          );
-        }
       })
       .addCase('transfers/deleteTransfer/fulfilled', (state, action) => {
         const { transactionIds } = action.payload || {};
         if (!transactionIds || transactionIds.length === 0) return;
         state.allTransactions = state.allTransactions.filter(
-          (t) => !transactionIds.includes(t.transaction_id)
-        );
-        state.transactions = state.transactions.filter(
           (t) => !transactionIds.includes(t.transaction_id)
         );
         state.lastLocalMutation = Date.now();

@@ -60,7 +60,7 @@ const stripTransientFlags = createTransform(
 // Bump this whenever the persisted shape or sync semantics change: any
 // version mismatch purges the cache and forces a clean full re-sync on the
 // next launch instead of limping along on a stale/corrupted local store
-const PERSIST_VERSION = 2
+const PERSIST_VERSION = 3
 
 // Persist config - persist all slices except auth
 const persistConfig = {
