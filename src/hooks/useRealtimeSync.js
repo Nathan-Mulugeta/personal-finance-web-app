@@ -68,7 +68,12 @@ export function useRealtimeSync() {
               debouncedRefresh('transactions', LOCAL_MUTATION_WINDOW_MS)
               return
             }
-            dispatch(fetchTransactions({ forceFull: true }))
+            // Incremental, not forceFull: realtime fires on every change
+            // (including our own writes echoed back), and a full refetch of
+            // the whole table here kept the sync indicator lit for the
+            // entire download. Soft deletes are included in incremental
+            // fetches via the deleted_at/updated_at clause.
+            dispatch(fetchTransactions({}))
             break
           case 'categories':
             dispatch(fetchCategories({ forceFull: true }))

@@ -1,5 +1,5 @@
 import { configureStore } from '@reduxjs/toolkit'
-import { persistStore, persistReducer } from 'redux-persist'
+import { persistStore, persistReducer, createTransform } from 'redux-persist'
 import localforage from 'localforage'
 import { combineReducers } from '@reduxjs/toolkit'
 import authReducer from './slices/authSlice'
@@ -37,11 +37,32 @@ if (typeof window !== 'undefined') {
   })
 }
 
+// Never persist transient request flags: a `true` captured mid-flight would
+// be restored on the next launch with no request in flight to clear it,
+// leaving the header sync indicator stuck on. Sanitized in both directions
+// so already-corrupted persisted state heals on rehydrate.
+const TRANSIENT_FLAGS = ['loading', 'backgroundLoading', 'isLoading']
+const resetTransientFlags = (sliceState) => {
+  if (!sliceState || typeof sliceState !== 'object') return sliceState
+  const flags = TRANSIENT_FLAGS.filter((flag) => sliceState[flag] === true)
+  if (flags.length === 0) return sliceState
+  const next = { ...sliceState }
+  flags.forEach((flag) => {
+    next[flag] = false
+  })
+  return next
+}
+const stripTransientFlags = createTransform(
+  resetTransientFlags,
+  resetTransientFlags
+)
+
 // Persist config - persist all slices except auth
 const persistConfig = {
   key: 'root',
   storage: persistStorage,
   whitelist: ['accounts', 'categories', 'transactions', 'budgets', 'transfers', 'borrowingsLendings', 'settings', 'exchangeRates', 'appInit', 'sync'],
+  transforms: [stripTransientFlags],
   // Don't persist auth to prevent stale sessions
 }
 

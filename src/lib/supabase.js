@@ -18,11 +18,25 @@ if (!isConfigured) {
   )
 }
 
+// Abort any request that hangs longer than 90s: flaky mobile networks can
+// leave a fetch pending indefinitely, which keeps loading flags (and the
+// header sync indicator) stuck forever. Long AI calls (receipt parsing)
+// finish well under this. Caller-provided abort signals are respected.
+const fetchWithTimeout = (input, init = {}) => {
+  if (init.signal || typeof AbortSignal.timeout !== 'function') {
+    return fetch(input, init)
+  }
+  return fetch(input, { ...init, signal: AbortSignal.timeout(90000) })
+}
+
 // Create client - Supabase client can be created even with invalid URLs
 // It will just fail on actual API calls, which we handle gracefully
 export const supabase = createClient(
   supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseAnonKey || 'placeholder-anon-key'
+  supabaseAnonKey || 'placeholder-anon-key',
+  {
+    global: { fetch: fetchWithTimeout },
+  }
 )
 
 // Helper function to generate IDs
