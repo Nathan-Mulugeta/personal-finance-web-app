@@ -140,6 +140,10 @@ function AppLayout() {
         data-main-content
         sx={{
           flexGrow: 1,
+          // Flex items default to min-width auto: without this, wide
+          // unshrinkable page content pushes the page past the viewport
+          // (horizontal scroll) even when cards clip it visually
+          minWidth: 0,
           p: { xs: 1.5, sm: 2, md: 3 },
           // Clear the fixed bottom navigation on mobile (56px + iOS safe area)
           pb: {

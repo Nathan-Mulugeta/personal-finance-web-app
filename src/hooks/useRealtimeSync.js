@@ -27,6 +27,7 @@ export function useRealtimeSync() {
   const appInitialized = useSelector((state) => state.appInit.isInitialized)
   const lastLocalMutation = useSelector(selectLastLocalMutation)
   const channelRef = useRef(null)
+  const reconnectTimerRef = useRef(null)
   const debounceTimers = useRef({})
   // Keep a ref to lastLocalMutation so the debounce callback can access the latest value
   const lastLocalMutationRef = useRef(lastLocalMutation)
@@ -128,8 +129,34 @@ export function useRealtimeSync() {
       debouncedRefresh(entity, 500)
     }
 
+    // Reconnection state: the channel does not recover on its own after an
+    // error/timeout, so we rebuild it with exponential backoff and do a
+    // catch-up fetch once resubscribed (events during the gap are lost)
+    let disposed = false
+    let reconnectDelay = 5000
+    let missedEventsPossible = false
+
+    const scheduleReconnect = () => {
+      if (disposed || reconnectTimerRef.current) return
+      console.warn(
+        `Realtime sync dropped, reconnecting in ${reconnectDelay / 1000}s...`
+      )
+      missedEventsPossible = true
+      reconnectTimerRef.current = setTimeout(() => {
+        reconnectTimerRef.current = null
+        if (channelRef.current) {
+          supabase.removeChannel(channelRef.current)
+          channelRef.current = null
+        }
+        reconnectDelay = Math.min(reconnectDelay * 2, 60000)
+        connect()
+      }, reconnectDelay)
+    }
+
     // Create a single channel for all subscriptions
-    const channel = supabase
+    const connect = () => {
+      if (disposed) return
+      const channel = supabase
       .channel(`realtime-sync-${user.id}`)
       // Accounts - direct store updates for instant feedback
       .on(
@@ -175,17 +202,37 @@ export function useRealtimeSync() {
       )
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
+          reconnectDelay = 5000
           console.log('Realtime sync connected')
-        } else if (status === 'CHANNEL_ERROR') {
-          console.warn('Realtime sync error, will retry...')
+          // Catch up on anything that changed while the channel was down
+          if (missedEventsPossible) {
+            missedEventsPossible = false
+            dispatch(fetchTransactions({}))
+            dispatch(fetchAccounts({ status: 'Active' }))
+          }
+        } else if (
+          status === 'CHANNEL_ERROR' ||
+          status === 'TIMED_OUT' ||
+          status === 'CLOSED'
+        ) {
+          scheduleReconnect()
         }
       })
 
-    channelRef.current = channel
+      channelRef.current = channel
+    }
+
+    connect()
 
     // Cleanup on unmount
     return () => {
-      // Clear all debounce timers
+      disposed = true
+
+      // Clear reconnect + debounce timers
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current)
+        reconnectTimerRef.current = null
+      }
       Object.values(debounceTimers.current).forEach(clearTimeout)
       debounceTimers.current = {}
 

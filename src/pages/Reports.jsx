@@ -1212,11 +1212,16 @@ function Reports() {
       variance,
       isMixed,
       currencies,
+      budgetOriginalAmounts,
       actualOriginalAmounts,
       differenceOriginalAmounts,
     } = item;
     const hasChildren = category.children && category.children.length > 0;
     const isExpanded = expandedCategories.has(category.category_id);
+    const budgetForeign = getForeignCurrencyDisplay(
+      currencies,
+      budgetOriginalAmounts
+    );
     const actualForeign = getForeignCurrencyDisplay(
       currencies,
       actualOriginalAmounts
@@ -1231,14 +1236,14 @@ function Reports() {
       : 'error';
     const variancePhrase = getVariancePhrase(variance, type);
 
-    const budgetCaption = [
-      budget > 0 ? `of ${formatCurrency(budget, baseCurrency)}` : null,
-      actualForeign
-        ? formatCurrency(actualForeign.amount, actualForeign.currency)
-        : null,
-    ]
-      .filter(Boolean)
-      .join(' · ');
+    const budgetCaption =
+      budget > 0
+        ? `of ${formatCurrency(budget, baseCurrency)}${
+            budgetForeign
+              ? ` · ${formatCurrency(budgetForeign.amount, budgetForeign.currency)}`
+              : ''
+          }`
+        : '';
 
     return (
       <Fragment key={category.category_id}>
@@ -1250,7 +1255,7 @@ function Reports() {
           }
           sx={{
             py: 1.25,
-            pl: level * 2,
+            pl: level * 3.5,
             borderBottom: '1px solid',
             borderColor: 'divider',
             ...tappableRowSx,
@@ -1287,7 +1292,7 @@ function Reports() {
               <Typography
                 variant="body2"
                 noWrap
-                sx={{ fontSize: '0.875rem', fontWeight: 500 }}
+                sx={{ fontSize: '0.875rem', fontWeight: 500, minWidth: 0 }}
               >
                 {category.name}
               </Typography>
@@ -1315,6 +1320,8 @@ function Reports() {
                 isMixed,
                 actualOriginalAmounts
               )}
+              {actualForeign &&
+                ` · ${formatCurrency(actualForeign.amount, actualForeign.currency)}`}
             </Typography>
           </Box>
           <Box
@@ -1337,7 +1344,11 @@ function Reports() {
               <Typography
                 variant="caption"
                 noWrap
-                sx={{ fontSize: '0.6875rem', color: 'text.secondary' }}
+                sx={{
+                  fontSize: '0.6875rem',
+                  color: 'text.secondary',
+                  minWidth: 0,
+                }}
               >
                 {budgetCaption}
               </Typography>
@@ -1381,6 +1392,7 @@ function Reports() {
                   fontSize: '0.6875rem',
                   fontWeight: 500,
                   color: getDifferenceColor(difference, type),
+                  minWidth: 0,
                 }}
               >
                 {formatCurrency(
@@ -1413,7 +1425,7 @@ function Reports() {
               onClick={() => handleRowClick(category.category_id, type)}
               sx={{
                 py: 0.75,
-                pl: (level + 1) * 2,
+                pl: (level + 1) * 3.5,
                 display: 'flex',
                 alignItems: 'center',
                 borderBottom: '1px solid',
@@ -1443,6 +1455,10 @@ function Reports() {
       totals.currencies,
       totals.actualOriginalAmounts
     );
+    const budgetForeign = getForeignCurrencyDisplay(
+      totals.currencies,
+      totals.budgetOriginalAmounts
+    );
     const differenceForeign = getForeignCurrencyDisplay(
       totals.currencies,
       totals.differenceOriginalAmounts
@@ -1468,23 +1484,30 @@ function Reports() {
               gap: 1,
             }}
           >
-            <Typography sx={{ fontSize: '1.125rem', fontWeight: 600 }}>
+            <Typography
+              sx={{ fontSize: '1.125rem', fontWeight: 600, minWidth: 0 }}
+            >
               {formatCurrencyDisplay(
                 totals.actual,
                 totals.currencies,
                 totals.isMixed,
                 totals.actualOriginalAmounts
               )}
+              {actualForeign &&
+                ` · ${formatCurrency(actualForeign.amount, actualForeign.currency)}`}
               {totals.budget > 0 && (
                 <Typography
                   component="span"
                   sx={{
+                    display: 'block',
                     fontSize: '0.75rem',
+                    fontWeight: 400,
                     color: 'text.secondary',
-                    ml: 0.5,
                   }}
                 >
                   of {formatCurrency(totals.budget, baseCurrency)}
+                  {budgetForeign &&
+                    ` · ${formatCurrency(budgetForeign.amount, budgetForeign.currency)}`}
                 </Typography>
               )}
             </Typography>
@@ -1500,14 +1523,6 @@ function Reports() {
               {variancePhrase.text}
             </Typography>
           </Box>
-          {actualForeign && (
-            <Typography
-              variant="caption"
-              sx={{ fontSize: '0.6875rem', color: 'text.secondary' }}
-            >
-              {formatCurrency(actualForeign.amount, actualForeign.currency)}
-            </Typography>
-          )}
           {pctUsed !== null && (
             <LinearProgress
               variant="determinate"
@@ -1544,6 +1559,7 @@ function Reports() {
                   fontSize: '0.6875rem',
                   fontWeight: 500,
                   color: getDifferenceColor(totals.difference, type),
+                  minWidth: 0,
                 }}
               >
                 {formatCurrency(
