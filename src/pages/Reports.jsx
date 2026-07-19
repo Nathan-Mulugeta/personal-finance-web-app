@@ -28,6 +28,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import BudgetDialog from '../components/common/BudgetDialog';
+import CategoryTransactionsList from '../components/common/CategoryTransactionsList';
 import { usePageRefresh } from '../hooks/usePageRefresh';
 import PageSkeleton from '../components/common/PageSkeleton';
 import ErrorMessage from '../components/common/ErrorMessage';
@@ -956,8 +957,11 @@ function Reports() {
     const ownBudget = findBudgetForCategory(category.category_id);
     const childBudgets =
       budget > 0 && hasChildren && descendantsHaveBudgets(category.category_id);
+    // Aggregated purely from children (the common case): no label needed.
+    // A real parent-level budget is the rare case worth flagging.
     const budgetFromChildrenOnly = childBudgets && !ownBudget;
     const budgetIncludesChildren = childBudgets && !!ownBudget;
+    const budgetParentOnly = !!ownBudget && hasChildren && !childBudgets;
 
     // Get foreign currency displays
     const budgetForeign = getForeignCurrencyDisplay(
@@ -1095,7 +1099,7 @@ function Reports() {
                       />
                     )}
                   </Box>
-                  {(budgetFromChildrenOnly || budgetIncludesChildren) && (
+                  {(budgetParentOnly || budgetIncludesChildren) && (
                     <Typography
                       variant="caption"
                       sx={{
@@ -1104,8 +1108,8 @@ function Reports() {
                         fontStyle: 'italic',
                       }}
                     >
-                      {budgetFromChildrenOnly
-                        ? 'from subcategories'
+                      {budgetParentOnly
+                        ? 'applies to parent only'
                         : 'includes subcategories'}
                     </Typography>
                   )}
@@ -1328,14 +1332,16 @@ function Reports() {
       : 'error';
     const variancePhrase = getVariancePhrase(variance, type);
 
-    // A parent can show a budget aggregated purely from its children
-    // (tapping CREATES its own record) or a mix of its own budget plus
-    // children (tapping edits the own record, smaller than the shown sum)
+    // Budgets aggregated purely from children (the common case) get no
+    // label; a real parent-level budget is the rare case worth flagging.
+    // A parent can also have its own budget plus budgeted children (tapping
+    // edits the own record, smaller than the shown sum) — kept honest.
     const ownBudget = findBudgetForCategory(category.category_id);
     const childBudgets =
       budget > 0 && hasChildren && descendantsHaveBudgets(category.category_id);
     const budgetFromChildrenOnly = childBudgets && !ownBudget;
     const budgetIncludesChildren = childBudgets && !!ownBudget;
+    const budgetParentOnly = !!ownBudget && hasChildren && !childBudgets;
 
     const budgetCaption =
       budget > 0
@@ -1344,8 +1350,8 @@ function Reports() {
               ? ` · ${formatCurrency(budgetForeign.amount, budgetForeign.currency)}`
               : ''
           }${
-            budgetFromChildrenOnly
-              ? ' (subcategories)'
+            budgetParentOnly
+              ? ' (applies to parent only)'
               : budgetIncludesChildren
               ? ' (includes subcategories)'
               : ''
@@ -2365,123 +2371,7 @@ function Reports() {
           )}
         </DialogTitle>
         <DialogContent sx={{ p: { xs: 1, sm: 2 } }}>
-          {/* Mobile list view */}
-          {isMobile ? (
-            modalTransactions.length === 0 ? (
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{ textAlign: 'center', py: 2 }}
-              >
-                No transactions found
-              </Typography>
-            ) : (
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                {modalTransactions.map((txn) => {
-                  const category = categories.find(
-                    (c) => c.category_id === txn.category_id
-                  );
-                  return (
-                    <Box
-                      key={txn.transaction_id}
-                      sx={{
-                        p: 1.5,
-                        border: '1px solid',
-                        borderColor: 'divider',
-                        borderRadius: 1,
-                      }}
-                    >
-                      <Box
-                        sx={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'baseline',
-                          gap: 1,
-                        }}
-                      >
-                        <Typography
-                          variant="body2"
-                          fontWeight="medium"
-                          sx={{ fontSize: '0.875rem', minWidth: 0 }}
-                          noWrap
-                        >
-                          {txn.description || (category ? category.name : '-')}
-                        </Typography>
-                        <Typography
-                          variant="body2"
-                          fontWeight="medium"
-                          sx={{ fontSize: '0.875rem', flexShrink: 0 }}
-                        >
-                          {formatCurrency(
-                            Math.abs(parseFloat(txn.amount || 0)),
-                            txn.currency
-                          )}
-                        </Typography>
-                      </Box>
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ fontSize: '0.75rem' }}
-                      >
-                        {format(parseISO(txn.date), 'MMM dd, yyyy')}
-                        {category ? ` · ${category.name}` : ''}
-                        {` · ${txn.currency}`}
-                      </Typography>
-                    </Box>
-                  );
-                })}
-              </Box>
-            )
-          ) : (
-          <Box sx={{ overflowX: 'auto' }}>
-            <Table size="small" sx={{ minWidth: 500 }}>
-              <TableHead>
-                <TableRow>
-                  <TableCell sx={{ whiteSpace: 'nowrap' }}>Date</TableCell>
-                  <TableCell sx={{ whiteSpace: 'nowrap' }}>Category</TableCell>
-                  <TableCell sx={{ whiteSpace: 'nowrap' }}>Description</TableCell>
-                  <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>Amount</TableCell>
-                  <TableCell sx={{ whiteSpace: 'nowrap' }}>Currency</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {modalTransactions.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} align="center">
-                      <Typography variant="body2" color="text.secondary">
-                        No transactions found
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  modalTransactions.map((txn) => {
-                    const category = categories.find(
-                      (c) => c.category_id === txn.category_id
-                    );
-                    return (
-                      <TableRow key={txn.transaction_id}>
-                        <TableCell>
-                          {format(parseISO(txn.date), 'MMM dd, yyyy')}
-                        </TableCell>
-                        <TableCell>{category ? category.name : '-'}</TableCell>
-                        <TableCell>{txn.description || '-'}</TableCell>
-                        <TableCell align="right">
-                          {formatCurrency(
-                            Math.abs(parseFloat(txn.amount || 0)),
-                            txn.currency
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Chip label={txn.currency} size="small" />
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </Box>
-          )}
+          <CategoryTransactionsList transactions={modalTransactions} />
         </DialogContent>
         <DialogActions sx={{ justifyContent: 'space-between' }}>
           <Button

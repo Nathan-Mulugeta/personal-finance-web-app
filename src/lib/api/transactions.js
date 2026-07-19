@@ -715,3 +715,28 @@ export async function bulkDeleteTransactions(transactionIds) {
     requestedTransactionIds: transactionIds,
   };
 }
+
+// Bulk-update several transactions with the same field changes (e.g. moving
+// many transactions to a new category). Each update runs through the single
+// updateTransaction path (validation + balance triggers). Uses allSettled so
+// one bad row (e.g. a category/currency mismatch) doesn't abort the rest.
+export async function bulkUpdateTransactions(transactionIds, updates) {
+  const results = await Promise.allSettled(
+    (transactionIds || []).map((id) => updateTransaction(id, updates))
+  );
+
+  const updated = [];
+  const failed = [];
+  results.forEach((result, index) => {
+    if (result.status === 'fulfilled') {
+      updated.push(result.value);
+    } else {
+      failed.push({
+        transactionId: transactionIds[index],
+        error: result.reason?.message || 'Update failed',
+      });
+    }
+  });
+
+  return { updated, failed };
+}

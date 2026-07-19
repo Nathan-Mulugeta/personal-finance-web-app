@@ -25,6 +25,12 @@ const SUCCESS_MESSAGES = {
       ? `${plural(count, 'transaction')} deleted`
       : 'Transactions deleted'
   },
+  'transactions/bulkUpdateTransactions/fulfilled': (action) => {
+    const count = action.payload?.updated?.length
+    return count
+      ? `${plural(count, 'transaction')} updated`
+      : 'Transactions updated'
+  },
   'transfers/createTransfer/fulfilled': 'Transfer created',
   'transfers/deleteTransfer/fulfilled': 'Transfer deleted',
   'accounts/createAccount/fulfilled': 'Account created',

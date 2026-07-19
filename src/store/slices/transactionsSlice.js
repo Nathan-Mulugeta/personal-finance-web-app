@@ -201,6 +201,23 @@ export const bulkDeleteTransactions = createAsyncThunk(
   }
 );
 
+export const bulkUpdateTransactions = createAsyncThunk(
+  'transactions/bulkUpdateTransactions',
+  async ({ transactionIds, updates }, { rejectWithValue, dispatch }) => {
+    try {
+      const result = await transactionsApi.bulkUpdateTransactions(
+        transactionIds,
+        updates
+      );
+      // API returns { updated: [...rows], failed: [...] }
+      dispatch(fetchAccounts({ status: 'Active' }));
+      return result;
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
 const initialState = {
   // The visible (filtered) list is DERIVED via selectFilteredTransactions —
   // allTransactions is the single copy of transaction data in the store
@@ -503,6 +520,24 @@ const transactionsSlice = createSlice({
         }
       })
       .addCase(bulkDeleteTransactions.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      // Bulk update transactions (e.g. bulk category move)
+      .addCase(bulkUpdateTransactions.fulfilled, (state, action) => {
+        state.loading = false;
+        state.lastLocalMutation = Date.now();
+        const { updated } = action.payload || { updated: [] };
+        (updated || []).forEach((txn) => {
+          const index = state.allTransactions.findIndex(
+            (t) => t.transaction_id === txn.transaction_id
+          );
+          if (index !== -1) {
+            state.allTransactions[index] = txn;
+          }
+        });
+      })
+      .addCase(bulkUpdateTransactions.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })

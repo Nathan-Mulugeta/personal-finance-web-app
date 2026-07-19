@@ -36,6 +36,7 @@ import {
   useTheme,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import ReceiptIcon from '@mui/icons-material/Receipt';
@@ -60,6 +61,7 @@ import EmptyState from '../components/common/EmptyState';
 import AddTransactionDialog from '../components/common/AddTransactionDialog';
 import EditTransactionDialog from '../components/common/EditTransactionDialog';
 import AddTransferDialog from '../components/common/AddTransferDialog';
+import BulkEditTransactionsDialog from '../components/common/BulkEditTransactionsDialog';
 import { formatCurrency } from '../utils/currencyConversion';
 import {
   format,
@@ -433,6 +435,7 @@ function Transactions() {
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [bulkDeleteError, setBulkDeleteError] = useState(null);
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [deleteTransferConfirm, setDeleteTransferConfirm] = useState(null);
   const [isDeletingTransfer, setIsDeletingTransfer] = useState(false);
 
@@ -845,6 +848,15 @@ function Transactions() {
     combinedItems.some((item) => selectedItems.has(getItemId(item))) &&
     !isAllSelected;
 
+  // Split the selection for bulk edit: only plain transactions are editable;
+  // transfers (transfer-prefixed ids) are skipped
+  const selectedTransactionIds = useMemo(
+    () =>
+      Array.from(selectedItems).filter((id) => !id.startsWith('transfer-')),
+    [selectedItems]
+  );
+  const selectedTransferCount = selectedItems.size - selectedTransactionIds.length;
+
   // Only show loading skeleton on initial load
   if (loading && !isInitialized && transactions.length === 0) {
     return <PageSkeleton />;
@@ -1166,6 +1178,22 @@ function Transactions() {
             >
               Cancel
             </Button>
+            {selectedTransactionIds.length > 0 && (
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<EditIcon sx={{ fontSize: 16 }} />}
+                onClick={() => setBulkEditOpen(true)}
+                disabled={isBulkDeleting}
+                sx={{
+                  textTransform: 'none',
+                  fontSize: '0.875rem',
+                  minHeight: 32,
+                }}
+              >
+                Edit
+              </Button>
+            )}
             {selectedItems.size > 0 && (
               <Button
                 variant="outlined"
@@ -1891,6 +1919,15 @@ function Transactions() {
       <AddTransferDialog
         open={openTransferDialog}
         onClose={handleCloseTransferDialog}
+      />
+
+      {/* Bulk Edit Dialog */}
+      <BulkEditTransactionsDialog
+        open={bulkEditOpen}
+        onClose={() => setBulkEditOpen(false)}
+        onApplied={exitSelectionMode}
+        transactionIds={selectedTransactionIds}
+        transferCount={selectedTransferCount}
       />
 
       {/* Bulk Delete Confirmation Dialog */}
