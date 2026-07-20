@@ -20,6 +20,7 @@ import {
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
+import ChecklistIcon from '@mui/icons-material/Checklist';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 import AddIcon from '@mui/icons-material/Add';
 import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd';
@@ -29,6 +30,7 @@ import ChatIcon from '@mui/icons-material/Chat';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import AddTransactionDialog from '../components/common/AddTransactionDialog';
 import CategoryTransactionsList from '../components/common/CategoryTransactionsList';
+import { getTransactionsTotalLabel } from '../utils/currencyConversion';
 import BatchTransactionDialog from '../components/common/BatchTransactionDialog';
 import AddTransferDialog from '../components/common/AddTransferDialog';
 import ReceiptCaptureDialog from '../components/common/ReceiptCaptureDialog';
@@ -62,6 +64,10 @@ function Home({ quickAddExpense = false }) {
   const [isSavingShortcuts, setIsSavingShortcuts] = useState(false);
   const searchInputRef = useRef(null);
   const hasOpenedQuickAddRef = useRef(false);
+  // Let the section headers host the transaction-list multi-select toggle so
+  // the list itself doesn't render an empty toggle-only row above the rows
+  const recentSelectRef = useRef(null);
+  const searchSelectRef = useRef(null);
 
   // Get data from Redux
   const { allTransactions, error } = useSelector((state) => state.transactions);
@@ -206,6 +212,13 @@ function Home({ quickAddExpense = false }) {
       return false;
     });
   }, [debouncedSearchQuery, allTransactions, categoryMap]);
+
+  // Per-currency total of the current search results (shown under the search
+  // box; the list header's own summary is suppressed to avoid duplication)
+  const searchTotalLabel = useMemo(
+    () => getTransactionsTotalLabel(searchResults),
+    [searchResults]
+  );
 
   // Recent transactions (5 most recent, excluding deleted/cancelled)
   const recentTransactions = useMemo(() => {
@@ -516,14 +529,46 @@ function Home({ quickAddExpense = false }) {
           autoFocus
         />
         {debouncedSearchQuery && (
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{ mt: 1, fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}
+          <Box
+            sx={{
+              mt: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 1,
+            }}
           >
-            {searchResults.length} transaction
-            {searchResults.length !== 1 ? 's' : ''} found
-          </Typography>
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              noWrap
+              sx={{ fontSize: { xs: '0.8125rem', sm: '0.875rem' }, minWidth: 0 }}
+            >
+              {searchResults.length} transaction
+              {searchResults.length !== 1 ? 's' : ''} found
+              {searchTotalLabel && (
+                <>
+                  {' · '}
+                  <Box
+                    component="span"
+                    sx={{ fontWeight: 600, color: 'text.primary' }}
+                  >
+                    {searchTotalLabel}
+                  </Box>
+                </>
+              )}
+            </Typography>
+            {searchResults.length > 0 && (
+              <IconButton
+                size="small"
+                aria-label="Select multiple"
+                onClick={() => searchSelectRef.current?.enterSelection()}
+                sx={{ color: 'text.secondary', flexShrink: 0 }}
+              >
+                <ChecklistIcon sx={{ fontSize: 18 }} />
+              </IconButton>
+            )}
+          </Box>
         )}
       </Box>
 
@@ -575,8 +620,11 @@ function Home({ quickAddExpense = false }) {
       {debouncedSearchQuery && (
         <Box>
           <CategoryTransactionsList
+            ref={searchSelectRef}
             transactions={searchResults}
             pageSize={50}
+            showSummary={false}
+            showRestingHeader={false}
           />
         </Box>
       )}
@@ -601,18 +649,30 @@ function Home({ quickAddExpense = false }) {
             >
               Recent Transactions
             </Typography>
-            {/* Fallback entry point for shortcut management while the Category
-                Shortcuts section is hidden (no shortcuts configured yet) */}
-            {shortcutCategories.length === 0 && (
-              <Button
-                size="small"
-                color="inherit"
-                onClick={handleOpenManageShortcuts}
-                sx={{ color: 'text.secondary', textTransform: 'none' }}
-              >
-                Manage shortcuts
-              </Button>
-            )}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              {/* Fallback entry point for shortcut management while the Category
+                  Shortcuts section is hidden (no shortcuts configured yet) */}
+              {shortcutCategories.length === 0 && (
+                <Button
+                  size="small"
+                  color="inherit"
+                  onClick={handleOpenManageShortcuts}
+                  sx={{ color: 'text.secondary', textTransform: 'none' }}
+                >
+                  Manage shortcuts
+                </Button>
+              )}
+              {recentTransactions.length > 0 && (
+                <IconButton
+                  size="small"
+                  aria-label="Select multiple"
+                  onClick={() => recentSelectRef.current?.enterSelection()}
+                  sx={{ color: 'text.secondary' }}
+                >
+                  <ChecklistIcon sx={{ fontSize: 18 }} />
+                </IconButton>
+              )}
+            </Box>
           </Box>
           {recentTransactions.length === 0 ? (
             <EmptyState
@@ -622,7 +682,12 @@ function Home({ quickAddExpense = false }) {
             />
           ) : (
             <>
-              <CategoryTransactionsList transactions={recentTransactions} />
+              <CategoryTransactionsList
+                ref={recentSelectRef}
+                transactions={recentTransactions}
+                showSummary={false}
+                showRestingHeader={false}
+              />
               <Button
                 fullWidth
                 size="small"

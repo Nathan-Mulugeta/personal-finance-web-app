@@ -1,4 +1,10 @@
-import { useState, useEffect, useMemo } from 'react';
+import {
+  useState,
+  useEffect,
+  useMemo,
+  forwardRef,
+  useImperativeHandle,
+} from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   Alert,
@@ -18,7 +24,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import CloseIcon from '@mui/icons-material/Close';
 import { format, parseISO, isToday } from 'date-fns';
-import { formatCurrency } from '../../utils/currencyConversion';
+import { getTransactionsTotalLabel } from '../../utils/currencyConversion';
 import {
   selectAccountNameGetter,
   selectCategoryDisplayNameGetter,
@@ -62,14 +68,31 @@ const dateDisplay = (dateStr) => {
  * @param {Array} transactions - plain transaction rows to display
  * @param {number} [pageSize] - if set, render in chunks with a "Show more"
  *   button (like the Transactions page); omit to render all rows
+ * @param {boolean} [showSummary=true] - show the "N transactions · Total" line
+ *   in the header. Set false when the count/total is shown elsewhere.
+ * @param {boolean} [showRestingHeader=true] - render the resting header row
+ *   (which hosts the multi-select toggle). Set false when the parent hosts the
+ *   toggle in its own header and calls `enterSelection()` via ref, avoiding an
+ *   empty toggle-only row above the list.
+ * @param {React.Ref} ref - exposes `{ enterSelection() }` so a parent-hosted
+ *   toggle can start multi-select.
  */
-function CategoryTransactionsList({ transactions, pageSize }) {
+function CategoryTransactionsList(
+  { transactions, pageSize, showSummary = true, showRestingHeader = true },
+  ref
+) {
   const dispatch = useDispatch();
   const getAccountName = useSelector(selectAccountNameGetter);
   const getCategoryDisplayName = useSelector(selectCategoryDisplayNameGetter);
 
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
+
+  // Let a parent-hosted toggle start multi-select (used when the resting
+  // header is suppressed via showRestingHeader={false})
+  useImperativeHandle(ref, () => ({
+    enterSelection: () => setSelectionMode(true),
+  }));
   const [editingTransaction, setEditingTransaction] = useState(null);
   const [editOpen, setEditOpen] = useState(false);
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
@@ -82,27 +105,11 @@ function CategoryTransactionsList({ transactions, pageSize }) {
     [transactions]
   );
 
-  // Per-currency total (like the Transactions page): spending (outflow) by
-  // currency, falling back to income for income-only lists
-  const totalLabel = useMemo(() => {
-    const out = {};
-    const inc = {};
-    transactions.forEach((t) => {
-      const bucket =
-        t.type === 'Expense' || t.type === 'Transfer Out'
-          ? out
-          : t.type === 'Income' || t.type === 'Transfer In'
-          ? inc
-          : null;
-      if (!bucket) return;
-      bucket[t.currency] = (bucket[t.currency] || 0) + Math.abs(t.amount || 0);
-    });
-    const source = Object.keys(out).length ? out : inc;
-    const parts = Object.entries(source).map(([currency, amount]) =>
-      formatCurrency(amount, currency)
-    );
-    return parts.length ? `Total: ${parts.join(', ')}` : '';
-  }, [transactions]);
+  // Per-currency total (like the Transactions page)
+  const totalLabel = useMemo(
+    () => (showSummary ? getTransactionsTotalLabel(transactions) : ''),
+    [transactions, showSummary]
+  );
 
   // Optional chunked rendering (search results can be long)
   const [visibleCount, setVisibleCount] = useState(
@@ -187,7 +194,9 @@ function CategoryTransactionsList({ transactions, pageSize }) {
 
   return (
     <Box>
-      {/* Selection toolbar */}
+      {/* Selection toolbar — omitted entirely in resting state when the parent
+          hosts the toggle, so there's no empty row above the list */}
+      {(selectionMode || showRestingHeader) && (
       <Box
         sx={{
           display: 'flex',
@@ -250,33 +259,39 @@ function CategoryTransactionsList({ transactions, pageSize }) {
           </>
         ) : (
           <>
-            <Typography
-              variant="caption"
-              noWrap
-              sx={{ color: 'text.secondary', minWidth: 0 }}
-            >
-              {transactions.length} transaction
-              {transactions.length !== 1 ? 's' : ''}
-              {totalLabel && (
-                <>
-                  {' · '}
-                  <Box component="span" sx={{ fontWeight: 600, color: 'text.primary' }}>
-                    {totalLabel}
-                  </Box>
-                </>
-              )}
-            </Typography>
+            {showSummary && (
+              <Typography
+                variant="caption"
+                noWrap
+                sx={{ color: 'text.secondary', minWidth: 0 }}
+              >
+                {transactions.length} transaction
+                {transactions.length !== 1 ? 's' : ''}
+                {totalLabel && (
+                  <>
+                    {' · '}
+                    <Box
+                      component="span"
+                      sx={{ fontWeight: 600, color: 'text.primary' }}
+                    >
+                      {totalLabel}
+                    </Box>
+                  </>
+                )}
+              </Typography>
+            )}
             <IconButton
               onClick={() => setSelectionMode(true)}
               size="small"
               aria-label="Select multiple"
-              sx={{ color: 'text.secondary', flexShrink: 0 }}
+              sx={{ color: 'text.secondary', flexShrink: 0, ml: 'auto' }}
             >
               <ChecklistIcon sx={{ fontSize: 18 }} />
             </IconButton>
           </>
         )}
       </Box>
+      )}
 
       {/* Rows */}
       <Box>
@@ -450,4 +465,4 @@ function CategoryTransactionsList({ transactions, pageSize }) {
   );
 }
 
-export default CategoryTransactionsList;
+export default forwardRef(CategoryTransactionsList);

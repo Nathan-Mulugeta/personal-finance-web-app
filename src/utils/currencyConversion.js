@@ -9,6 +9,31 @@ export function formatCurrency(amount, currency = 'USD', locale = 'en-US') {
 }
 
 /**
+ * Build a per-currency total label for a list of transactions, mirroring the
+ * Transactions page: sums outgoing money (Expense / Transfer Out) by currency,
+ * falling back to incoming money for income-only lists. Returns '' when empty.
+ */
+export function getTransactionsTotalLabel(transactions) {
+  const out = {};
+  const inc = {};
+  (transactions || []).forEach((t) => {
+    const bucket =
+      t.type === 'Expense' || t.type === 'Transfer Out'
+        ? out
+        : t.type === 'Income' || t.type === 'Transfer In'
+        ? inc
+        : null;
+    if (!bucket) return;
+    bucket[t.currency] = (bucket[t.currency] || 0) + Math.abs(t.amount || 0);
+  });
+  const source = Object.keys(out).length ? out : inc;
+  const parts = Object.entries(source).map(([currency, amount]) =>
+    formatCurrency(amount, currency)
+  );
+  return parts.length ? `Total: ${parts.join(', ')}` : '';
+}
+
+/**
  * Convert amount between currencies using exchange rate
  */
 export function convertAmount(amount, exchangeRate) {

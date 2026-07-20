@@ -17,6 +17,8 @@ import {
   Chip,
   Divider,
   LinearProgress,
+  TextField,
+  InputAdornment,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
@@ -26,6 +28,8 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import TodayIcon from '@mui/icons-material/Today';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
+import SearchIcon from '@mui/icons-material/Search';
+import ClearIcon from '@mui/icons-material/Clear';
 import BudgetDialog from '../components/common/BudgetDialog';
 import CategoryTransactionsList from '../components/common/CategoryTransactionsList';
 import { usePageRefresh } from '../hooks/usePageRefresh';
@@ -67,6 +71,20 @@ const PERIOD_OPTIONS = [
   { value: '1year', label: '1 Year' },
 ];
 
+// Narrow a report section to categories matching a search query. A top-level
+// row is kept when its own name matches or any of its subcategories match, so
+// searching a subcategory still surfaces its parent's row (auto-expanded).
+function filterReportBySearch(reportData, query) {
+  const q = (query || '').trim().toLowerCase();
+  if (!q) return reportData;
+  return reportData.filter((item) => {
+    if (item.category?.name?.toLowerCase().includes(q)) return true;
+    return (item.category?.children || []).some((child) =>
+      child.name?.toLowerCase().includes(q)
+    );
+  });
+}
+
 function Reports() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -91,6 +109,8 @@ function Reports() {
   );
   const [periodType, setPeriodType] = useState('month'); // 'month' | '6months' | '1year'
   const [expandedCategories, setExpandedCategories] = useState(new Set());
+  const [reportSearch, setReportSearch] = useState('');
+  const reportSearchActive = reportSearch.trim().length > 0;
   const [transactionModalOpen, setTransactionModalOpen] = useState(false);
   const [selectedCategoryForModal, setSelectedCategoryForModal] =
     useState(null);
@@ -861,7 +881,7 @@ function Reports() {
 
   // Memoized report data
   const incomeReportData = useMemo(
-    () => buildReportData('Income'),
+    () => filterReportBySearch(buildReportData('Income'), reportSearch),
     [
       categories,
       budgets,
@@ -869,11 +889,12 @@ function Reports() {
       dateRange,
       exchangeRates,
       baseCurrency,
+      reportSearch,
     ]
   );
 
   const expenseReportData = useMemo(
-    () => buildReportData('Expense'),
+    () => filterReportBySearch(buildReportData('Expense'), reportSearch),
     [
       categories,
       budgets,
@@ -881,6 +902,7 @@ function Reports() {
       dateRange,
       exchangeRates,
       baseCurrency,
+      reportSearch,
     ]
   );
 
@@ -952,7 +974,8 @@ function Reports() {
       differenceOriginalAmounts,
     } = item;
     const hasChildren = category.children && category.children.length > 0;
-    const isExpanded = expandedCategories.has(category.category_id);
+    const isExpanded =
+      reportSearchActive || expandedCategories.has(category.category_id);
     const differenceColor = getDifferenceColor(difference, type);
     const ownBudget = findBudgetForCategory(category.category_id);
     const childBudgets =
@@ -1313,7 +1336,8 @@ function Reports() {
       differenceOriginalAmounts,
     } = item;
     const hasChildren = category.children && category.children.length > 0;
-    const isExpanded = expandedCategories.has(category.category_id);
+    const isExpanded =
+      reportSearchActive || expandedCategories.has(category.category_id);
     const budgetForeign = getForeignCurrencyDisplay(
       currencies,
       budgetOriginalAmounts
@@ -1758,7 +1782,9 @@ function Reports() {
             color="text.secondary"
             sx={{ mt: 1.5, fontSize: '0.8125rem' }}
           >
-            No categories with budget or activity for this period
+            {reportSearchActive
+              ? 'No categories match your filter'
+              : 'No categories with budget or activity for this period'}
           </Typography>
         ) : (
           <Box sx={{ mt: 0.5 }}>
@@ -1903,6 +1929,41 @@ function Reports() {
               </Box>
             )}
           </Box>
+      </Box>
+
+      {/* Filter to a specific category */}
+      <Box sx={{ mb: { xs: 2, sm: 2.5 } }}>
+        <TextField
+          fullWidth
+          size="small"
+          placeholder="Filter by category…"
+          value={reportSearch}
+          onChange={(e) => setReportSearch(e.target.value)}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon color="action" sx={{ fontSize: 20 }} />
+              </InputAdornment>
+            ),
+            endAdornment: reportSearch && (
+              <InputAdornment position="end">
+                <IconButton
+                  onClick={() => setReportSearch('')}
+                  edge="end"
+                  size="small"
+                  aria-label="Clear filter"
+                >
+                  <ClearIcon fontSize="small" />
+                </IconButton>
+              </InputAdornment>
+            ),
+          }}
+          sx={{
+            '& .MuiOutlinedInput-root': {
+              fontSize: { xs: '0.875rem', sm: '0.9375rem' },
+            },
+          }}
+        />
       </Box>
 
       {/* At-a-glance summary */}
