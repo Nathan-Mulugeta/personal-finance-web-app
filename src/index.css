@@ -9,6 +9,18 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+/* iOS Safari auto-zooms the page whenever it focuses an input whose font-size
+   is under 16px. Force >=16px on touch devices so focusing any field never
+   triggers that zoom. Scoped to coarse pointers so desktop keeps its designed
+   input sizes; !important is needed to win over MUI's per-field font sizes. */
+@media (pointer: coarse) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
