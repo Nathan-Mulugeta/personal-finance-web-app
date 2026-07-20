@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useForm } from 'react-hook-form';
 import {
   Box,
   Button,
@@ -10,26 +9,20 @@ import {
   DialogContent,
   DialogActions,
   FormControl,
-  FormHelperText,
-  Grid,
+  IconButton,
   InputLabel,
   MenuItem,
   Select,
   TextField,
   Typography,
   Alert,
+  Tooltip,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-import EditIcon from '@mui/icons-material/Edit';
-import SettingsIcon from '@mui/icons-material/Settings';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { AI_PROVIDER_LINKS } from '../lib/api/aiParsing';
-import {
-  fetchSettings,
-  updateSetting,
-  updateSettings,
-  clearError,
-} from '../store/slices/settingsSlice';
+import { updateSettings } from '../store/slices/settingsSlice';
 import { fetchCategories } from '../store/slices/categoriesSlice';
 import { fetchAccounts } from '../store/slices/accountsSlice';
 import PageSkeleton from '../components/common/PageSkeleton';
@@ -50,37 +43,12 @@ function Settings() {
   const categoriesInitialized = useSelector(
     (state) => state.categories.isInitialized
   );
-  const [openDialog, setOpenDialog] = useState(false);
-  const [editingKey, setEditingKey] = useState(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [actionError, setActionError] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-    reset,
-    setValue,
-    watch,
-  } = useForm({
-    defaultValues: {
-      baseCurrency: '',
-      defaultAccountId: '',
-      groqApiKey: '',
-      borrowingCategoryId: '',
-      lendingCategoryId: '',
-      borrowingPaymentCategoryId: '',
-      lendingPaymentCategoryId: '',
-    },
-  });
-
-  const watchedDefaultAccountId = watch('defaultAccountId');
-  const watchedGroqApiKey = watch('groqApiKey');
-  const watchedBorrowingCategoryId = watch('borrowingCategoryId');
-  const watchedLendingCategoryId = watch('lendingCategoryId');
-  const watchedBorrowingPaymentCategoryId = watch('borrowingPaymentCategoryId');
-  const watchedLendingPaymentCategoryId = watch('lendingPaymentCategoryId');
+  // Per-setting focused editing
+  const [editing, setEditing] = useState(null); // active setting config
+  const [editValue, setEditValue] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
 
   // Refresh data on navigation
   usePageRefresh({
@@ -91,129 +59,41 @@ function Settings() {
     },
   });
 
-  // Initialize form with current settings
-  useEffect(() => {
-    if (settings.length > 0) {
-      const baseCurrency =
-        settings.find((s) => s.setting_key === 'BaseCurrency')?.setting_value ||
-        '';
-      const defaultAccountId =
-        settings.find((s) => s.setting_key === 'DefaultAccountID')
-          ?.setting_value || '';
-      const groqApiKey =
-        settings.find((s) => s.setting_key === 'GroqAPIKey')?.setting_value ||
-        settings.find((s) => s.setting_key === 'GeminiAPIKey')?.setting_value ||
-        '';
-      const borrowingCategoryId =
-        settings.find((s) => s.setting_key === 'BorrowingCategoryID')
-          ?.setting_value || '';
-      const lendingCategoryId =
-        settings.find((s) => s.setting_key === 'LendingCategoryID')
-          ?.setting_value || '';
-      const borrowingPaymentCategoryId =
-        settings.find((s) => s.setting_key === 'BorrowingPaymentCategoryID')
-          ?.setting_value || '';
-      const lendingPaymentCategoryId =
-        settings.find((s) => s.setting_key === 'LendingPaymentCategoryID')
-          ?.setting_value || '';
 
-      reset({
-        baseCurrency,
-        defaultAccountId,
-        groqApiKey,
-        borrowingCategoryId,
-        lendingCategoryId,
-        borrowingPaymentCategoryId,
-        lendingPaymentCategoryId,
-      });
+  const openEditor = (setting) => {
+    let initial;
+    if (setting.type === 'apikey') {
+      initial =
+        getSettingValue('GroqAPIKey') || getSettingValue('GeminiAPIKey');
+    } else if (setting.type === 'currency') {
+      initial = getSettingValue('BaseCurrency');
+    } else {
+      initial = getSettingValue(setting.key);
     }
-  }, [settings, reset]);
-
-  const handleOpenDialog = () => {
-    setEditingKey(null);
-    reset({
-      baseCurrency:
-        settings.find((s) => s.setting_key === 'BaseCurrency')?.setting_value ||
-        '',
-      defaultAccountId:
-        settings.find((s) => s.setting_key === 'DefaultAccountID')
-          ?.setting_value || '',
-      groqApiKey:
-        settings.find((s) => s.setting_key === 'GroqAPIKey')?.setting_value ||
-        settings.find((s) => s.setting_key === 'GeminiAPIKey')?.setting_value ||
-        '',
-      borrowingCategoryId:
-        settings.find((s) => s.setting_key === 'BorrowingCategoryID')
-          ?.setting_value || '',
-      lendingCategoryId:
-        settings.find((s) => s.setting_key === 'LendingCategoryID')
-          ?.setting_value || '',
-      borrowingPaymentCategoryId:
-        settings.find((s) => s.setting_key === 'BorrowingPaymentCategoryID')
-          ?.setting_value || '',
-      lendingPaymentCategoryId:
-        settings.find((s) => s.setting_key === 'LendingPaymentCategoryID')
-          ?.setting_value || '',
-    });
-    setActionError(null);
-    setIsSubmitting(false);
-    setOpenDialog(true);
+    setEditValue(initial || '');
+    setSaveError(null);
+    setEditing(setting);
   };
 
-  const handleCloseDialog = () => {
-    setOpenDialog(false);
-    setEditingKey(null);
-    setActionError(null);
-    setIsSubmitting(false);
-    dispatch(clearError());
-  };
-
-  const onSubmit = async (data) => {
-    setIsSubmitting(true);
-    setActionError(null);
+  const saveSetting = async () => {
+    if (!editing) return;
+    setIsSaving(true);
+    setSaveError(null);
     try {
-      const updates = {};
-      if (data.baseCurrency) {
-        updates.BaseCurrency = data.baseCurrency.toUpperCase();
-      }
-      if (data.defaultAccountId) {
-        updates.DefaultAccountID = data.defaultAccountId;
+      let updates;
+      if (editing.type === 'apikey') {
+        updates = { GroqAPIKey: editValue || '', GeminiAPIKey: '' };
+      } else if (editing.type === 'currency') {
+        updates = { BaseCurrency: (editValue || '').toUpperCase() };
       } else {
-        updates.DefaultAccountID = '';
+        updates = { [editing.key]: editValue || '' };
       }
-      // Always save groqApiKey (even if empty to clear it)
-      updates.GroqAPIKey = data.groqApiKey || '';
-      updates.GeminiAPIKey = '';
-      if (data.borrowingCategoryId) {
-        updates.BorrowingCategoryID = data.borrowingCategoryId;
-      } else {
-        updates.BorrowingCategoryID = '';
-      }
-      if (data.lendingCategoryId) {
-        updates.LendingCategoryID = data.lendingCategoryId;
-      } else {
-        updates.LendingCategoryID = '';
-      }
-      if (data.borrowingPaymentCategoryId) {
-        updates.BorrowingPaymentCategoryID = data.borrowingPaymentCategoryId;
-      } else {
-        updates.BorrowingPaymentCategoryID = '';
-      }
-      if (data.lendingPaymentCategoryId) {
-        updates.LendingPaymentCategoryID = data.lendingPaymentCategoryId;
-      } else {
-        updates.LendingPaymentCategoryID = '';
-      }
-
       await dispatch(updateSettings(updates)).unwrap();
-      handleCloseDialog();
+      setEditing(null);
     } catch (err) {
-      console.error('Error updating settings:', err);
-      const errorMessage =
-        err?.message || 'Failed to update settings. Please try again.';
-      setActionError(errorMessage);
+      setSaveError(err?.message || 'Failed to save. Please try again.');
     } finally {
-      setIsSubmitting(false);
+      setIsSaving(false);
     }
   };
 
@@ -253,7 +133,6 @@ function Settings() {
 
   const handleManualRefresh = async () => {
     setIsRefreshing(true);
-    setActionError(null);
     try {
       // Purge persisted storage using redux-persist
       await persistor.purge();
@@ -263,9 +142,6 @@ function Settings() {
       window.location.reload();
     } catch (err) {
       console.error('Error refreshing data:', err);
-      const errorMessage =
-        err?.message || 'Failed to refresh data. Please try again.';
-      setActionError(errorMessage);
       setIsRefreshing(false);
     }
   };
@@ -279,11 +155,10 @@ function Settings() {
       <Box
         sx={{
           display: 'flex',
-          flexDirection: { xs: 'column', sm: 'row' },
+          alignItems: 'center',
           justifyContent: 'space-between',
-          alignItems: { xs: 'flex-start', sm: 'center' },
-          mb: { xs: 1.5, sm: 2, md: 3 },
-          gap: { xs: 1.5, sm: 0 },
+          mb: { xs: 2, sm: 3 },
+          gap: 1,
         }}
       >
         <Typography
@@ -292,512 +167,302 @@ function Settings() {
         >
           Settings
         </Typography>
-        <Box
-          sx={{ display: 'flex', gap: 1, width: { xs: '100%', sm: 'auto' } }}
-        >
-          <Button
-            variant="outlined"
-            startIcon={<RefreshIcon sx={{ fontSize: 18 }} />}
-            onClick={handleManualRefresh}
-            size="small"
-            disabled={isRefreshing}
-            sx={{
-              flex: { xs: '1 1 auto', sm: 'none' },
-              textTransform: 'none',
-              minHeight: 36,
-            }}
-          >
-            {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<EditIcon sx={{ fontSize: 18 }} />}
-            onClick={handleOpenDialog}
-            size="small"
-            sx={{
-              flex: { xs: '1 1 auto', sm: 'none' },
-              textTransform: 'none',
-              minHeight: 36,
-            }}
-          >
-            Edit Settings
-          </Button>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
+          <Tooltip title={isRefreshing ? 'Refreshing…' : 'Refresh data'}>
+            <span>
+              <IconButton
+                onClick={handleManualRefresh}
+                disabled={isRefreshing}
+                aria-label="Refresh data"
+                sx={{ width: 36, height: 36, color: 'text.secondary' }}
+              >
+                {isRefreshing ? (
+                  <CircularProgress size={18} color="inherit" />
+                ) : (
+                  <RefreshIcon sx={{ fontSize: 20 }} />
+                )}
+              </IconButton>
+            </span>
+          </Tooltip>
         </Box>
       </Box>
 
       {error && <ErrorMessage error={error} />}
 
-      <Grid container spacing={{ xs: 2, sm: 3 }}>
-        <Grid item xs={12} md={6}>
-          <Box
-            sx={{
-              border: '1px solid',
-              borderColor: 'divider',
-              borderRadius: 1,
-              backgroundColor: 'background.paper',
-              overflow: 'hidden',
-            }}
-          >
-            <Box
+      {(() => {
+        const apiKey =
+          getSettingValue('GroqAPIKey') || getSettingValue('GeminiAPIKey');
+        const sections = [
+          {
+            label: 'General',
+            rows: [
+              {
+                key: 'BaseCurrency',
+                type: 'currency',
+                label: 'Base Currency',
+                desc: 'Default currency for totals and conversions',
+                value: getSettingValue('BaseCurrency') || 'Not set',
+              },
+              {
+                key: 'DefaultAccountID',
+                type: 'account',
+                label: 'Default Account',
+                desc: 'Auto-selected when creating transactions',
+                value: getAccountName(getSettingValue('DefaultAccountID')),
+              },
+              {
+                key: 'AIAPIKey',
+                type: 'apikey',
+                label: 'AI API Key',
+                desc: 'For receipt scanning and natural-language entry',
+                value: apiKey ? `••••${apiKey.slice(-4)}` : 'Not set',
+              },
+            ],
+          },
+          {
+            label: 'Borrowing & Lending',
+            rows: [
+              {
+                key: 'BorrowingCategoryID',
+                type: 'category',
+                categoryType: 'Income',
+                label: 'Borrowing Category',
+                desc: 'Default category for borrowing transactions',
+                value: getCategoryName(getSettingValue('BorrowingCategoryID')),
+              },
+              {
+                key: 'LendingCategoryID',
+                type: 'category',
+                categoryType: 'Expense',
+                label: 'Lending Category',
+                desc: 'Default category for lending transactions',
+                value: getCategoryName(getSettingValue('LendingCategoryID')),
+              },
+              {
+                key: 'BorrowingPaymentCategoryID',
+                type: 'category',
+                categoryType: 'Expense',
+                label: 'Borrowing Payment Category',
+                desc: 'Used when recording borrowing payments',
+                value: getCategoryName(
+                  getSettingValue('BorrowingPaymentCategoryID')
+                ),
+              },
+              {
+                key: 'LendingPaymentCategoryID',
+                type: 'category',
+                categoryType: 'Income',
+                label: 'Lending Payment Category',
+                desc: 'Used when recording lending payments',
+                value: getCategoryName(
+                  getSettingValue('LendingPaymentCategoryID')
+                ),
+              },
+            ],
+          },
+        ];
+
+        const isUnset = (v) =>
+          !v || v === 'Not set' || v === 'None' || v === 'Not selected';
+
+        return sections.map((section) => (
+          <Box key={section.label} sx={{ mb: 3 }}>
+            <Typography
               sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1,
-                p: { xs: 1.5, sm: 2 },
-                borderBottom: '1px solid',
-                borderColor: 'divider',
-                backgroundColor: 'action.hover',
+                fontSize: '0.6875rem',
+                fontWeight: 600,
+                letterSpacing: 0.6,
+                textTransform: 'uppercase',
+                color: 'text.secondary',
+                mb: 0.5,
               }}
             >
-              <SettingsIcon
-                sx={{ fontSize: { xs: 20, sm: 24 }, color: 'primary.main' }}
-              />
-              <Typography
-                variant="h6"
+              {section.label}
+            </Typography>
+            {section.rows.map((row) => (
+              <Box
+                key={row.key}
+                onClick={() => openEditor(row)}
                 sx={{
-                  fontSize: { xs: '0.9375rem', sm: '1.125rem' },
-                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 2,
+                  py: 1.25,
+                  borderBottom: '1px solid',
+                  borderColor: 'divider',
+                  cursor: 'pointer',
+                  WebkitTapHighlightColor: 'transparent',
+                  '&:active': { backgroundColor: 'action.hover' },
+                  '@media (hover: hover)': {
+                    '&:hover': { backgroundColor: 'action.hover' },
+                  },
                 }}
               >
-                Application Settings
-              </Typography>
-            </Box>
-
-            {/* Base Currency */}
-            <Box
-              sx={{
-                p: { xs: 1.5, sm: 2 },
-                borderBottom: '1px solid',
-                borderColor: 'divider',
-              }}
-            >
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{ fontSize: { xs: '0.75rem', sm: '0.8125rem' }, mb: 0.5 }}
-              >
-                Base Currency
-              </Typography>
-              <Typography
-                variant="body1"
-                fontWeight={500}
-                sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}
-              >
-                {getSettingValue('BaseCurrency') || 'Not set'}
-              </Typography>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ fontSize: { xs: '0.6875rem', sm: '0.75rem' } }}
-              >
-                Default currency for displaying totals and conversions
-              </Typography>
-            </Box>
-
-            {/* Default Account */}
-            <Box
-              sx={{
-                p: { xs: 1.5, sm: 2 },
-                borderBottom: '1px solid',
-                borderColor: 'divider',
-              }}
-            >
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{ fontSize: { xs: '0.75rem', sm: '0.8125rem' }, mb: 0.5 }}
-              >
-                Default Account
-              </Typography>
-              <Typography
-                variant="body1"
-                fontWeight={500}
-                sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}
-              >
-                {getAccountName(getSettingValue('DefaultAccountID'))}
-              </Typography>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ fontSize: { xs: '0.6875rem', sm: '0.75rem' } }}
-              >
-                Account auto-selected when creating new transactions
-              </Typography>
-            </Box>
-
-            {/* AI API Key */}
-            <Box
-              sx={{
-                p: { xs: 1.5, sm: 2 },
-                borderBottom: '1px solid',
-                borderColor: 'divider',
-              }}
-            >
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{ fontSize: { xs: '0.75rem', sm: '0.8125rem' }, mb: 0.5 }}
-              >
-                AI API Key
-              </Typography>
-              <Typography
-                variant="body1"
-                fontWeight={500}
-                sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}
-              >
-                {getSettingValue('GroqAPIKey') || getSettingValue('GeminiAPIKey')
-                  ? '••••••••' +
-                    (getSettingValue('GroqAPIKey') || getSettingValue('GeminiAPIKey')).slice(
-                      -4
-                    )
-                  : 'Not set'}
-              </Typography>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ fontSize: { xs: '0.6875rem', sm: '0.75rem' } }}
-              >
-                Required for AI receipt scanning and natural language parsing
-              </Typography>
-            </Box>
-
-            {/* Borrowing Category */}
-            <Box
-              sx={{
-                p: { xs: 1.5, sm: 2 },
-                borderBottom: '1px solid',
-                borderColor: 'divider',
-              }}
-            >
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{ fontSize: { xs: '0.75rem', sm: '0.8125rem' }, mb: 0.5 }}
-              >
-                Borrowing Category
-              </Typography>
-              <Typography
-                variant="body1"
-                fontWeight={500}
-                sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}
-              >
-                {getCategoryName(getSettingValue('BorrowingCategoryID'))}
-              </Typography>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ fontSize: { xs: '0.6875rem', sm: '0.75rem' } }}
-              >
-                Default category for borrowing transactions
-              </Typography>
-            </Box>
-
-            {/* Lending Category */}
-            <Box
-              sx={{
-                p: { xs: 1.5, sm: 2 },
-                borderBottom: '1px solid',
-                borderColor: 'divider',
-              }}
-            >
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{ fontSize: { xs: '0.75rem', sm: '0.8125rem' }, mb: 0.5 }}
-              >
-                Lending Category
-              </Typography>
-              <Typography
-                variant="body1"
-                fontWeight={500}
-                sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}
-              >
-                {getCategoryName(getSettingValue('LendingCategoryID'))}
-              </Typography>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ fontSize: { xs: '0.6875rem', sm: '0.75rem' } }}
-              >
-                Default category for lending transactions
-              </Typography>
-            </Box>
-
-            {/* Borrowing Payment Category */}
-            <Box
-              sx={{
-                p: { xs: 1.5, sm: 2 },
-                borderBottom: '1px solid',
-                borderColor: 'divider',
-              }}
-            >
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{ fontSize: { xs: '0.75rem', sm: '0.8125rem' }, mb: 0.5 }}
-              >
-                Borrowing Payment Category
-              </Typography>
-              <Typography
-                variant="body1"
-                fontWeight={500}
-                sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}
-              >
-                {getCategoryName(getSettingValue('BorrowingPaymentCategoryID'))}
-              </Typography>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ fontSize: { xs: '0.6875rem', sm: '0.75rem' } }}
-              >
-                Category used when recording payments for borrowing
-              </Typography>
-            </Box>
-
-            {/* Lending Payment Category */}
-            <Box sx={{ p: { xs: 1.5, sm: 2 } }}>
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{ fontSize: { xs: '0.75rem', sm: '0.8125rem' }, mb: 0.5 }}
-              >
-                Lending Payment Category
-              </Typography>
-              <Typography
-                variant="body1"
-                fontWeight={500}
-                sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}
-              >
-                {getCategoryName(getSettingValue('LendingPaymentCategoryID'))}
-              </Typography>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ fontSize: { xs: '0.6875rem', sm: '0.75rem' } }}
-              >
-                Category used when recording payments for lending
-              </Typography>
-            </Box>
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography sx={{ fontSize: '0.875rem', fontWeight: 500 }}>
+                    {row.label}
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontSize: '0.6875rem',
+                      color: 'text.secondary',
+                      display: 'block',
+                    }}
+                  >
+                    {row.desc}
+                  </Typography>
+                </Box>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.25,
+                    minWidth: 0,
+                    maxWidth: '55%',
+                    flexShrink: 0,
+                  }}
+                >
+                  <Typography
+                    noWrap
+                    sx={{
+                      fontSize: '0.875rem',
+                      fontWeight: 500,
+                      textAlign: 'right',
+                      minWidth: 0,
+                      color: isUnset(row.value)
+                        ? 'text.disabled'
+                        : 'text.primary',
+                    }}
+                  >
+                    {row.value}
+                  </Typography>
+                  <ChevronRightIcon
+                    sx={{ fontSize: 18, color: 'text.disabled', flexShrink: 0 }}
+                  />
+                </Box>
+              </Box>
+            ))}
           </Box>
-        </Grid>
+        ));
+      })()}
 
-        <Grid item xs={12} md={6}>
-          <Box
-            sx={{
-              p: { xs: 1.5, sm: 2 },
-              border: '1px solid',
-              borderColor: 'divider',
-              borderRadius: 1,
-              backgroundColor: 'background.paper',
-            }}
-          >
-            <Typography
-              variant="h6"
-              sx={{
-                fontSize: { xs: '0.9375rem', sm: '1.125rem' },
-                fontWeight: 600,
-                mb: 1,
-              }}
-            >
-              About Settings
-            </Typography>
-            <Typography
-              variant="body2"
-              color="text.secondary"
-              sx={{ fontSize: { xs: '0.8125rem', sm: '0.875rem' }, mb: 2 }}
-            >
-              Configure your application preferences here. These settings affect
-              how your financial data is displayed and categorized.
-            </Typography>
-            <Alert
-              severity="info"
-              sx={{
-                '& .MuiAlert-message': {
-                  fontSize: { xs: '0.8125rem', sm: '0.875rem' },
-                },
-              }}
-            >
-              <Typography variant="body2" sx={{ fontSize: 'inherit' }}>
-                <strong>Base Currency:</strong> This is the primary currency
-                used for displaying totals and performing currency conversions
-                across all accounts.
-              </Typography>
-              <Typography variant="body2" sx={{ mt: 1, fontSize: 'inherit' }}>
-                <strong>Borrowing/Lending Categories:</strong> These categories
-                are used as defaults when creating borrowing or lending records
-                from transactions.
-              </Typography>
-              <Typography variant="body2" sx={{ mt: 1, fontSize: 'inherit' }}>
-                <strong>Payment Categories:</strong> These categories are used
-                when recording payments for borrowing (Expense) or lending
-                (Income) records.
-              </Typography>
-            </Alert>
-          </Box>
-        </Grid>
-      </Grid>
-
-      {/* Edit Settings Dialog */}
+      {/* Focused single-setting editor */}
       <Dialog
-        open={openDialog}
-        onClose={handleCloseDialog}
-        maxWidth="sm"
+        open={!!editing}
+        onClose={() => !isSaving && setEditing(null)}
+        maxWidth="xs"
         fullWidth
         fullScreen={isMobile}
       >
-        <form onSubmit={handleSubmit(onSubmit)}>
-          <DialogTitle>Edit Settings</DialogTitle>
-          <DialogContent>
-            {actionError && (
-              <Alert severity="error" sx={{ mb: 2 }} onClose={() => setActionError(null)}>
-                {actionError}
-              </Alert>
-            )}
-            <Grid container spacing={2} sx={{ mt: { xs: 0.5, sm: 1 } }}>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Base Currency (ISO Code) *"
-                  {...register('baseCurrency', {
-                    required: 'Base currency is required',
-                    minLength: {
-                      value: 3,
-                      message: 'Currency must be a 3-letter ISO code',
-                    },
-                    maxLength: {
-                      value: 3,
-                      message: 'Currency must be a 3-letter ISO code',
-                    },
-                  })}
-                  error={!!errors.baseCurrency}
-                  helperText={
-                    errors.baseCurrency?.message || 'e.g., USD, EUR, ETB'
-                  }
-                  inputProps={{
-                    maxLength: 3,
-                    style: { textTransform: 'uppercase' },
-                  }}
-                  onChange={(e) => {
-                    setValue('baseCurrency', e.target.value.toUpperCase());
-                  }}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <FormControl fullWidth>
-                  <InputLabel>Default Account (Optional)</InputLabel>
-                  <Select
-                    value={watchedDefaultAccountId || ''}
-                    label="Default Account (Optional)"
-                    onChange={(e) =>
-                      setValue('defaultAccountId', e.target.value)
-                    }
-                  >
-                    <MenuItem value="">
-                      <em>None</em>
-                    </MenuItem>
-                    {accounts
-                      .filter((acc) => acc.status === 'Active')
-                      .map((account) => (
-                        <MenuItem
-                          key={account.account_id}
-                          value={account.account_id}
-                        >
-                          {account.name} ({account.currency})
-                        </MenuItem>
-                      ))}
-                  </Select>
-                  <FormHelperText>
-                    Account auto-selected when creating new transactions
-                  </FormHelperText>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="AI API Key (Optional)"
-                  type="password"
-                  {...register('groqApiKey')}
-                  helperText={
-                    <span>
-                      Get a key from:{' '}
-                      {AI_PROVIDER_LINKS.map((link, index) => (
-                        <span key={link.url}>
-                          {index > 0 && ' · '}
-                          <a
-                            href={link.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{ color: 'inherit' }}
-                          >
-                            {link.label}
-                          </a>
-                        </span>
-                      ))}
-                      . Required for AI features.
-                    </span>
-                  }
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <CategoryAutocomplete
-                  categories={getIncomeCategories()}
-                  value={watchedBorrowingCategoryId || ''}
-                  onChange={(id) => setValue('borrowingCategoryId', id || '')}
-                  label="Borrowing Category (Optional)"
-                  helperText="Default category for borrowing transactions (Income categories only)"
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <CategoryAutocomplete
-                  categories={getExpenseCategories()}
-                  value={watchedLendingCategoryId || ''}
-                  onChange={(id) => setValue('lendingCategoryId', id || '')}
-                  label="Lending Category (Optional)"
-                  helperText="Default category for lending transactions (Expense categories only)"
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <CategoryAutocomplete
-                  categories={getExpenseCategories()}
-                  value={watchedBorrowingPaymentCategoryId || ''}
-                  onChange={(id) =>
-                    setValue('borrowingPaymentCategoryId', id || '')
-                  }
-                  label="Borrowing Payment Category (Optional)"
-                  helperText="Category used when recording payments for borrowing (Expense categories only)"
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <CategoryAutocomplete
-                  categories={getIncomeCategories()}
-                  value={watchedLendingPaymentCategoryId || ''}
-                  onChange={(id) =>
-                    setValue('lendingPaymentCategoryId', id || '')
-                  }
-                  label="Lending Payment Category (Optional)"
-                  helperText="Category used when recording payments for lending (Income categories only)"
-                />
-              </Grid>
-            </Grid>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleCloseDialog} disabled={isSubmitting}>
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              variant="contained"
-              disabled={isSubmitting}
-              startIcon={
-                isSubmitting ? (
-                  <CircularProgress size={20} color="inherit" />
-                ) : null
-              }
+        <DialogTitle>{editing?.label}</DialogTitle>
+        <DialogContent>
+          {saveError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {saveError}
+            </Alert>
+          )}
+          {editing?.desc && (
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ mb: 2, fontSize: '0.8125rem' }}
             >
-              {isSubmitting ? 'Saving...' : 'Save Settings'}
-            </Button>
-          </DialogActions>
-        </form>
+              {editing.desc}
+            </Typography>
+          )}
+          {editing?.type === 'currency' && (
+            <TextField
+              fullWidth
+              autoFocus
+              label="Currency (ISO code)"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value.toUpperCase())}
+              inputProps={{ maxLength: 3, style: { textTransform: 'uppercase' } }}
+              helperText="e.g. USD, EUR, ETB"
+            />
+          )}
+          {editing?.type === 'account' && (
+            <FormControl fullWidth>
+              <InputLabel>Account</InputLabel>
+              <Select
+                value={editValue}
+                label="Account"
+                onChange={(e) => setEditValue(e.target.value)}
+              >
+                <MenuItem value="">
+                  <em>None</em>
+                </MenuItem>
+                {accounts
+                  .filter((acc) => acc.status === 'Active')
+                  .map((account) => (
+                    <MenuItem
+                      key={account.account_id}
+                      value={account.account_id}
+                    >
+                      {account.name} ({account.currency})
+                    </MenuItem>
+                  ))}
+              </Select>
+            </FormControl>
+          )}
+          {editing?.type === 'apikey' && (
+            <TextField
+              fullWidth
+              autoFocus
+              type="password"
+              label="API key"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              helperText={
+                <span>
+                  Get a key from:{' '}
+                  {AI_PROVIDER_LINKS.map((link, index) => (
+                    <span key={link.url}>
+                      {index > 0 && ' · '}
+                      <a
+                        href={link.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: 'inherit' }}
+                      >
+                        {link.label}
+                      </a>
+                    </span>
+                  ))}
+                </span>
+              }
+            />
+          )}
+          {editing?.type === 'category' && (
+            <CategoryAutocomplete
+              categories={
+                editing.categoryType === 'Income'
+                  ? getIncomeCategories()
+                  : getExpenseCategories()
+              }
+              value={editValue}
+              onChange={(id) => setEditValue(id || '')}
+              label="Category"
+            />
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditing(null)} disabled={isSaving}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={saveSetting}
+            disabled={isSaving}
+            startIcon={
+              isSaving ? <CircularProgress size={20} color="inherit" /> : null
+            }
+          >
+            {isSaving ? 'Saving…' : 'Save'}
+          </Button>
+        </DialogActions>
       </Dialog>
     </Box>
   );

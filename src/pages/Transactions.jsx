@@ -39,6 +39,7 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import CloseIcon from '@mui/icons-material/Close';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
@@ -973,35 +974,35 @@ function Transactions() {
           sx={{
             display: 'flex',
             alignItems: 'center',
-            gap: 0.25,
+            gap: 0.5,
             width: { xs: '100%', sm: 'auto' },
           }}
         >
           <IconButton
             onClick={handlePreviousDay}
-            size="small"
+            aria-label="Previous day"
             sx={{
+              flex: { xs: 1, sm: 'none' },
+              width: { sm: 40 },
+              height: 36,
+              borderRadius: 1,
               color: 'text.secondary',
-              width: { xs: 28, sm: 32 },
-              height: { xs: 28, sm: 32 },
-              p: 0.5,
               '&:hover': { backgroundColor: 'action.hover' },
             }}
           >
-            <ChevronLeftIcon sx={{ fontSize: { xs: 18, sm: 20 } }} />
+            <ChevronLeftIcon sx={{ fontSize: 20 }} />
           </IconButton>
           <Button
             variant={isToday(selectedDate) ? 'contained' : 'outlined'}
             startIcon={isMobile ? null : <TodayIcon sx={{ fontSize: 16 }} />}
             onClick={handleToday}
-            size="small"
             sx={{
-              minWidth: { xs: 'auto', sm: 160 },
-              flex: { xs: 1, sm: 'none' },
+              flex: { xs: 2, sm: 'none' },
+              minWidth: { sm: 160 },
+              height: 36,
               textTransform: 'none',
               fontWeight: 500,
-              fontSize: { xs: '0.75rem', sm: '0.8rem' },
-              minHeight: { xs: 28, sm: 32 },
+              fontSize: { xs: '0.8125rem', sm: '0.8rem' },
               px: { xs: 1, sm: 1.5 },
             }}
           >
@@ -1010,16 +1011,17 @@ function Transactions() {
           </Button>
           <IconButton
             onClick={handleNextDay}
-            size="small"
+            aria-label="Next day"
             sx={{
+              flex: { xs: 1, sm: 'none' },
+              width: { sm: 40 },
+              height: 36,
+              borderRadius: 1,
               color: 'text.secondary',
-              width: { xs: 28, sm: 32 },
-              height: { xs: 28, sm: 32 },
-              p: 0.5,
               '&:hover': { backgroundColor: 'action.hover' },
             }}
           >
-            <ChevronRightIcon sx={{ fontSize: { xs: 18, sm: 20 } }} />
+            <ChevronRightIcon sx={{ fontSize: 20 }} />
           </IconButton>
         </Box>
         <Box
@@ -1134,76 +1136,61 @@ function Transactions() {
             alignItems: 'center',
             justifyContent: 'space-between',
             mb: 1,
-            p: 1,
             height: 44,
             borderBottom: '1px solid',
             borderColor: 'divider',
           }}
         >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
+            <IconButton
+              size="small"
+              onClick={exitSelectionMode}
+              aria-label="Exit selection"
+              sx={{ color: 'text.secondary' }}
+            >
+              <CloseIcon sx={{ fontSize: 18 }} />
+            </IconButton>
             <Checkbox
               checked={isAllSelected}
               indeterminate={isIndeterminate}
               onChange={(e) => handleSelectAll(e.target.checked)}
               size="small"
+              sx={{ p: 0.5 }}
             />
             <Typography
               variant="body2"
-              color="text.secondary"
-              sx={{ fontSize: '0.875rem' }}
+              sx={{ fontSize: '0.8125rem', fontWeight: 500 }}
             >
-              {selectedItems.size > 0
-                ? `${selectedItems.size} selected`
-                : 'Select items'}
+              {selectedItems.size} selected
             </Typography>
           </Box>
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <Button
-              variant="text"
-              size="small"
-              onClick={exitSelectionMode}
-              sx={{
-                textTransform: 'none',
-                fontSize: '0.875rem',
-                minHeight: 32,
-              }}
-            >
-              Cancel
-            </Button>
-            {selectedTransactionIds.length > 0 && (
-              <Button
-                variant="outlined"
+          {selectedItems.size > 0 && (
+            <Box sx={{ display: 'flex', gap: 0.25 }}>
+              {selectedTransactionIds.length > 0 && (
+                <IconButton
+                  size="small"
+                  onClick={() => setBulkEditOpen(true)}
+                  disabled={isBulkDeleting}
+                  aria-label="Edit selected"
+                  sx={{ color: 'text.secondary' }}
+                >
+                  <EditIcon sx={{ fontSize: 18 }} />
+                </IconButton>
+              )}
+              <IconButton
                 size="small"
-                startIcon={<EditIcon sx={{ fontSize: 16 }} />}
-                onClick={() => setBulkEditOpen(true)}
-                disabled={isBulkDeleting}
-                sx={{
-                  textTransform: 'none',
-                  fontSize: '0.875rem',
-                  minHeight: 32,
-                }}
-              >
-                Edit
-              </Button>
-            )}
-            {selectedItems.size > 0 && (
-              <Button
-                variant="outlined"
-                color="error"
-                size="small"
-                startIcon={<DeleteIcon sx={{ fontSize: 16 }} />}
                 onClick={() => setBulkDeleteConfirm(true)}
                 disabled={isBulkDeleting}
+                aria-label="Delete selected"
                 sx={{
-                  textTransform: 'none',
-                  fontSize: '0.875rem',
-                  minHeight: 32,
+                  color: 'text.secondary',
+                  '&:hover': { color: 'google.red' },
                 }}
               >
-                Delete
-              </Button>
-            )}
-          </Box>
+                <DeleteIcon sx={{ fontSize: 18 }} />
+              </IconButton>
+            </Box>
+          )}
         </Box>
       )}
 

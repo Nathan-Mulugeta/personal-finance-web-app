@@ -140,17 +140,35 @@ function Home({ quickAddExpense = false }) {
     }
   }, [quickAddExpense]);
 
-  // Auto-focus search input when page becomes visible
+  // Keep the search field focused reliably: on mount (covers navigating to
+  // Home, including the app being reopened to Home) and whenever the page
+  // becomes visible again. Skipped while a dialog is open so it doesn't
+  // steal focus from a form.
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && searchInputRef.current) {
-        searchInputRef.current.focus();
+    const focusSearch = () => {
+      if (
+        quickAddExpense ||
+        document.querySelector('.MuiDialog-root, .MuiModal-root')
+      ) {
+        return;
       }
+      searchInputRef.current?.focus();
     };
 
+    const mountTimer = setTimeout(focusSearch, 120);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // Small delay lets any resume-time navigation to Home settle first
+        setTimeout(focusSearch, 120);
+      }
+    };
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, []);
+    return () => {
+      clearTimeout(mountTimer);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [quickAddExpense]);
 
   // Search transactions by category name and description
   const searchResults = useMemo(() => {

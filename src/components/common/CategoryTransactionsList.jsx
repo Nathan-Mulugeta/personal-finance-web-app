@@ -16,7 +16,9 @@ import {
 import ChecklistIcon from '@mui/icons-material/Checklist';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import CloseIcon from '@mui/icons-material/Close';
 import { format, parseISO, isToday } from 'date-fns';
+import { formatCurrency } from '../../utils/currencyConversion';
 import {
   selectAccountNameGetter,
   selectCategoryDisplayNameGetter,
@@ -79,6 +81,28 @@ function CategoryTransactionsList({ transactions, pageSize }) {
     () => transactions.map((t) => t.transaction_id),
     [transactions]
   );
+
+  // Per-currency total (like the Transactions page): spending (outflow) by
+  // currency, falling back to income for income-only lists
+  const totalLabel = useMemo(() => {
+    const out = {};
+    const inc = {};
+    transactions.forEach((t) => {
+      const bucket =
+        t.type === 'Expense' || t.type === 'Transfer Out'
+          ? out
+          : t.type === 'Income' || t.type === 'Transfer In'
+          ? inc
+          : null;
+      if (!bucket) return;
+      bucket[t.currency] = (bucket[t.currency] || 0) + Math.abs(t.amount || 0);
+    });
+    const source = Object.keys(out).length ? out : inc;
+    const parts = Object.entries(source).map(([currency, amount]) =>
+      formatCurrency(amount, currency)
+    );
+    return parts.length ? `Total: ${parts.join(', ')}` : '';
+  }, [transactions]);
 
   // Optional chunked rendering (search results can be long)
   const [visibleCount, setVisibleCount] = useState(
@@ -175,61 +199,78 @@ function CategoryTransactionsList({ transactions, pageSize }) {
       >
         {selectionMode ? (
           <>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
+              <IconButton
+                size="small"
+                onClick={exitSelection}
+                aria-label="Exit selection"
+                sx={{ color: 'text.secondary' }}
+              >
+                <CloseIcon sx={{ fontSize: 18 }} />
+              </IconButton>
               <Checkbox
                 checked={allSelected}
                 indeterminate={someSelected}
                 onChange={(e) => handleSelectAll(e.target.checked)}
                 size="small"
+                sx={{ p: 0.5 }}
               />
-              <Typography variant="body2" color="text.secondary">
-                {selectedIds.size > 0
-                  ? `${selectedIds.size} selected`
-                  : 'Select items'}
+              <Typography
+                variant="body2"
+                sx={{ fontSize: '0.8125rem', fontWeight: 500 }}
+              >
+                {selectedIds.size} selected
               </Typography>
             </Box>
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <Button size="small" onClick={exitSelection} sx={{ minHeight: 32 }}>
-                Cancel
-              </Button>
-              {selectedIds.size > 0 && (
-                <>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    startIcon={<EditIcon sx={{ fontSize: 16 }} />}
-                    onClick={() => setBulkEditOpen(true)}
-                    disabled={isBulkDeleting}
-                    sx={{ minHeight: 32 }}
-                  >
-                    Edit
-                  </Button>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    color="error"
-                    startIcon={<DeleteIcon sx={{ fontSize: 16 }} />}
-                    onClick={() => setBulkDeleteConfirm(true)}
-                    disabled={isBulkDeleting}
-                    sx={{ minHeight: 32 }}
-                  >
-                    Delete
-                  </Button>
-                </>
-              )}
-            </Box>
+            {selectedIds.size > 0 && (
+              <Box sx={{ display: 'flex', gap: 0.25 }}>
+                <IconButton
+                  size="small"
+                  onClick={() => setBulkEditOpen(true)}
+                  disabled={isBulkDeleting}
+                  aria-label="Edit selected"
+                  sx={{ color: 'text.secondary' }}
+                >
+                  <EditIcon sx={{ fontSize: 18 }} />
+                </IconButton>
+                <IconButton
+                  size="small"
+                  onClick={() => setBulkDeleteConfirm(true)}
+                  disabled={isBulkDeleting}
+                  aria-label="Delete selected"
+                  sx={{
+                    color: 'text.secondary',
+                    '&:hover': { color: 'google.red' },
+                  }}
+                >
+                  <DeleteIcon sx={{ fontSize: 18 }} />
+                </IconButton>
+              </Box>
+            )}
           </>
         ) : (
           <>
-            <Typography variant="caption" color="text.secondary">
+            <Typography
+              variant="caption"
+              noWrap
+              sx={{ color: 'text.secondary', minWidth: 0 }}
+            >
               {transactions.length} transaction
               {transactions.length !== 1 ? 's' : ''}
+              {totalLabel && (
+                <>
+                  {' · '}
+                  <Box component="span" sx={{ fontWeight: 600, color: 'text.primary' }}>
+                    {totalLabel}
+                  </Box>
+                </>
+              )}
             </Typography>
             <IconButton
               onClick={() => setSelectionMode(true)}
               size="small"
               aria-label="Select multiple"
-              sx={{ color: 'text.secondary' }}
+              sx={{ color: 'text.secondary', flexShrink: 0 }}
             >
               <ChecklistIcon sx={{ fontSize: 18 }} />
             </IconButton>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Box, Drawer, useMediaQuery, useTheme } from '@mui/material';
 import Sidebar from './Sidebar';
 import Header from './Header';
@@ -15,6 +15,8 @@ const SWIPE_VELOCITY_THRESHOLD = 0.3; // Minimum velocity to trigger swipe
 function AppLayout() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const navigate = useNavigate();
+  const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const touchStartRef = useRef(null);
@@ -22,6 +24,22 @@ function AppLayout() {
 
   // Handle data refresh (focus, periodic, reactive)
   useDataRefresh();
+
+  // Always return to Home when the app is reopened / brought back to the
+  // foreground, so opening the app is a consistent "start at Home" experience
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (
+        document.visibilityState === 'visible' &&
+        location.pathname !== '/home'
+      ) {
+        navigate('/home');
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () =>
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [navigate, location.pathname]);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
