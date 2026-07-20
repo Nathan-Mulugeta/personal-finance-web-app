@@ -42,7 +42,21 @@ export const supabase = createClient(
 // Helper function to generate IDs
 export function generateId(prefix) {
   const timestamp = Date.now()
-  const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0')
+  // 48 bits of entropy in the suffix. The old 3-digit random (1000 values)
+  // collided by the birthday paradox once a batch created more than a handful
+  // of rows in the same millisecond, and a duplicate transaction_id rejects
+  // the entire batch INSERT. Keep the prefix_timestamp_suffix shape (readable,
+  // time-sortable) but make the suffix effectively collision-proof.
+  let random
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const bytes = crypto.getRandomValues(new Uint8Array(6))
+    random = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+  } else {
+    random = (
+      Math.random().toString(36).slice(2, 8) +
+      Math.random().toString(36).slice(2, 8)
+    ).slice(0, 12)
+  }
   return `${prefix}_${timestamp}_${random}`
 }
 

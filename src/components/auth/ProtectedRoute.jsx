@@ -1,12 +1,17 @@
 import { useEffect, useRef } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
+import { Box, Button, Typography } from '@mui/material'
 import { supabase, setCachedUser, clearUserCache } from '../../lib/supabase'
 import { setUser, setSession, setLoading, setAuthChecked } from '../../store/slices/authSlice'
-import { initializeApp } from '../../store/slices/appInitSlice'
+import { initializeApp, clearError } from '../../store/slices/appInitSlice'
 import LoadingSpinner from '../common/LoadingSpinner'
 import { useRealtimeSync } from '../../hooks/useRealtimeSync'
 import { useDataRefresh } from '../../hooks/useDataRefresh'
+
+// How many times to silently retry a failed initial sync before surfacing a
+// manual "Try again" screen (transient cold-start network errors self-heal)
+const MAX_AUTO_RETRIES = 3
 
 function ProtectedRoute({ children }) {
   const dispatch = useDispatch()
@@ -15,6 +20,7 @@ function ProtectedRoute({ children }) {
   const isAuthChecked = useSelector((state) => state.auth.isAuthChecked)
   const isInitialized = useSelector((state) => state.appInit.isInitialized)
   const isInitializing = useSelector((state) => state.appInit.isLoading)
+  const initError = useSelector((state) => state.appInit.error)
 
   // Initialize realtime subscriptions for instant updates
   useRealtimeSync()
@@ -89,25 +95,80 @@ function ProtectedRoute({ children }) {
   // fetching entirely, leaving the app on stale cached data. Track whether
   // this page load has fetched yet so a warm open still refreshes in the
   // background (cached data keeps rendering; no loading gate is shown).
+  // Kick off the initial data fetch exactly once per page load. isInitialized
+  // is rehydrated true on a warm open, so we can't gate on it — we'd skip the
+  // background refresh. We also must NOT re-dispatch on failure here (that hot-
+  // loops the network); retries are handled by the backoff effect below.
   const hasFetchedThisLoad = useRef(false)
   useEffect(() => {
-    if (!user || isInitializing) return
-    if (!isInitialized || !hasFetchedThisLoad.current) {
-      hasFetchedThisLoad.current = true
-      dispatch(initializeApp())
-    }
-  }, [user, isInitialized, isInitializing, dispatch])
+    if (!user || isInitializing || hasFetchedThisLoad.current) return
+    hasFetchedThisLoad.current = true
+    dispatch(initializeApp())
+  }, [user, isInitializing, dispatch])
 
-  // Show loading spinner while:
-  // 1. Auth check is in progress (loading or not yet checked)
-  // 2. User is authenticated but app data not yet loaded
-  if (loading || !isAuthChecked || (user && !isInitialized)) {
+  // Auto-retry a failed initial sync a few times with backoff. Previously a
+  // single rejection (e.g. a transient network error) left the app stuck on
+  // the loading spinner forever with no way forward but a manual page reload.
+  const autoRetryCountRef = useRef(0)
+  useEffect(() => {
+    if (!user || isInitialized || isInitializing || !initError) return
+    if (autoRetryCountRef.current >= MAX_AUTO_RETRIES) return
+    const attempt = autoRetryCountRef.current
+    const delay = 2000 * Math.pow(2, attempt) // 2s, 4s, 8s
+    const timer = setTimeout(() => {
+      autoRetryCountRef.current = attempt + 1
+      dispatch(initializeApp())
+    }, delay)
+    return () => clearTimeout(timer)
+  }, [user, isInitialized, isInitializing, initError, dispatch])
+
+  const handleManualRetry = () => {
+    autoRetryCountRef.current = 0
+    dispatch(clearError())
+    dispatch(initializeApp())
+  }
+
+  // Auth still resolving
+  if (loading || !isAuthChecked) {
     return <LoadingSpinner fullScreen />
   }
 
   // Only redirect to login after auth has been fully checked
   if (!user) {
     return <Navigate to="/login" replace />
+  }
+
+  // Authenticated but initial data not loaded yet
+  if (!isInitialized) {
+    // Exhausted auto-retries and still failing → let the user retry manually
+    // instead of spinning forever
+    if (initError && !isInitializing && autoRetryCountRef.current >= MAX_AUTO_RETRIES) {
+      return (
+        <Box
+          sx={{
+            minHeight: '100dvh',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            textAlign: 'center',
+            px: 3,
+            gap: 1.5,
+          }}
+        >
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            Couldn&apos;t load your data
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 320 }}>
+            Check your connection and try again. Your data is safe.
+          </Typography>
+          <Button variant="contained" onClick={handleManualRetry} sx={{ mt: 1 }}>
+            Try again
+          </Button>
+        </Box>
+      )
+    }
+    return <LoadingSpinner fullScreen />
   }
 
   return children

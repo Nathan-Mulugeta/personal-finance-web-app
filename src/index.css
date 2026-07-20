@@ -2,6 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Kill the native mobile tap highlight (the blue/grey flash Chrome/Safari
+   paint on tap, which can linger while a finger is held down) everywhere.
+   Deliberate pressed/hover feedback is handled per-element via MUI styles. */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',

@@ -49,7 +49,13 @@ export const initializeApp = createAsyncThunk(
         dispatch(fetchTransfers({ ...syncFilters })),
         dispatch(fetchBorrowingLendingRecords({ ...syncFilters })),
         dispatch(fetchSettings({ ...syncFilters })),
-        exchangeRatesApi.getExchangeRates({}),
+        // Exchange rates are the one unwrapped API call here; a transient
+        // failure must not reject the whole init (which would strand the app
+        // on the loading screen). Degrade to empty rates instead.
+        exchangeRatesApi.getExchangeRates({}).catch((err) => {
+          console.warn('Exchange rates fetch failed during init:', err?.message)
+          return []
+        }),
       ])
 
       if (needsFullSync) {

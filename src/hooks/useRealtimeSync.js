@@ -141,12 +141,16 @@ export function useRealtimeSync() {
     let reconnectDelay = 5000
     let missedEventsPossible = false
 
-    const scheduleReconnect = () => {
+    const scheduleReconnect = ({ assumeMissedEvents = true } = {}) => {
       if (disposed || reconnectTimerRef.current) return
       console.warn(
         `Realtime sync dropped, reconnecting in ${reconnectDelay / 1000}s...`
       )
-      missedEventsPossible = true
+      // Only flag a catch-up refetch for genuine mid-session drops. Benign
+      // CLOSED events (token refresh, backgrounding) shouldn't trigger one —
+      // a real background return is already caught up by useDataRefresh — so
+      // they no longer flicker the sync indicator while the app sits idle.
+      if (assumeMissedEvents) missedEventsPossible = true
       reconnectTimerRef.current = setTimeout(() => {
         reconnectTimerRef.current = null
         if (channelRef.current) {
@@ -215,12 +219,12 @@ export function useRealtimeSync() {
             dispatch(fetchTransactions({}))
             dispatch(fetchAccounts({ status: 'Active' }))
           }
-        } else if (
-          status === 'CHANNEL_ERROR' ||
-          status === 'TIMED_OUT' ||
-          status === 'CLOSED'
-        ) {
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          // Genuine drop mid-session — reconnect and catch up on missed events
           scheduleReconnect()
+        } else if (status === 'CLOSED') {
+          // Expected/benign close — reconnect quietly without a catch-up fetch
+          scheduleReconnect({ assumeMissedEvents: false })
         }
       })
 

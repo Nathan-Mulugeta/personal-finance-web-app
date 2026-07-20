@@ -93,7 +93,12 @@ export const fetchTransactions = createAsyncThunk(
       // Get last sync timestamp for incremental fetch
       const syncState = getState().sync;
       const lastSync = syncState.lastSyncTransactions;
-      const isIncremental = !!lastSync && !filters.forceFull;
+      // An incremental fetch only returns rows changed since the cursor. If the
+      // local cache is empty (e.g. purged/corrupted while the cursor persisted),
+      // an incremental result would replace it with a partial slice and drop
+      // every older row — so force a full fetch when there's nothing to merge.
+      const cacheEmpty = getState().transactions.allTransactions.length === 0;
+      const isIncremental = !!lastSync && !filters.forceFull && !cacheEmpty;
 
       // Add since parameter if we have a last sync timestamp
       const fetchFilters = isIncremental
@@ -340,7 +345,13 @@ const transactionsSlice = createSlice({
       .addCase(fetchTransactions.rejected, (state, action) => {
         state.loading = false;
         state.backgroundLoading = false;
-        state.error = action.payload;
+        // Only surface a page-level error when there's nothing to show. A
+        // failed background refresh (offline blip, mid-request drop) must not
+        // leave a persistent error box over cached data — it self-heals on the
+        // next successful sync, so nagging the user is worse than staying quiet.
+        if (!state.isInitialized || state.allTransactions.length === 0) {
+          state.error = action.payload;
+        }
       })
       // Fetch transaction
       .addCase(fetchTransaction.pending, (state) => {

@@ -48,6 +48,7 @@ import ErrorMessage from '../components/common/ErrorMessage';
 import { usePageRefresh } from '../hooks/usePageRefresh';
 import { getStatusChipSx } from '../utils/chipStyles';
 import { buildCategoryTree } from '../utils/categoryHierarchy';
+import { getErrorMessage } from '../utils/errorMessage';
 
 function Categories() {
   const dispatch = useDispatch();
@@ -182,9 +183,9 @@ function Categories() {
       handleCloseDialog();
     } catch (err) {
       console.error('Error saving category:', err);
-      const errorMessage =
-        err?.message || 'Failed to save category. Please try again.';
-      setActionError(errorMessage);
+      setActionError(
+        getErrorMessage(err, 'Failed to save category. Please try again.')
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -201,9 +202,9 @@ function Categories() {
       setDeleteError(null);
     } catch (err) {
       console.error('Error deleting category:', err);
-      const errorMessage =
-        err?.message || 'Failed to delete category. Please try again.';
-      setDeleteError(errorMessage);
+      setDeleteError(
+        getErrorMessage(err, 'Failed to delete category. Please try again.')
+      );
     } finally {
       setIsDeleting(false);
     }
@@ -277,6 +278,9 @@ function Categories() {
       return (
         <Box key={category.category_id}>
           <Box
+            onClick={() => {
+              if (hasChildren) toggleExpand(category.category_id);
+            }}
             sx={{
               display: 'flex',
               alignItems: 'center',
@@ -286,6 +290,7 @@ function Categories() {
               minHeight: { xs: 40, sm: 44 },
               borderBottom: '1px solid',
               borderColor: 'divider',
+              cursor: hasChildren ? 'pointer' : 'default',
               transition: 'background-color 0.1s ease',
               '&:hover': {
                 backgroundColor: 'action.hover',
@@ -333,19 +338,14 @@ function Categories() {
               )}
             </Box>
 
-            {/* Category Name - Clickable to expand/collapse */}
+            {/* Category Name — the whole row toggles expand (handler on the
+                outer row Box); this just lays out the name + status chip */}
             <Box
-              onClick={() => {
-                if (hasChildren) {
-                  toggleExpand(category.category_id);
-                }
-              }}
               sx={{
                 flex: 1,
                 display: 'flex',
                 alignItems: 'center',
                 gap: { xs: 0.75, sm: 1 },
-                cursor: hasChildren ? 'pointer' : 'default',
                 minWidth: 0,
                 overflow: 'hidden',
               }}

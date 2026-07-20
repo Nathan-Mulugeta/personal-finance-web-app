@@ -93,7 +93,7 @@ export async function createTransaction(transactionData) {
 
   // Auto-create borrowing/lending record if category matches
   try {
-    await autoCreateBorrowingLending(data, user.id);
+    await autoCreateBorrowingLending(data);
   } catch (err) {
     // Log error but don't fail transaction creation
     console.error('Failed to create borrowing/lending record:', err);
@@ -103,7 +103,7 @@ export async function createTransaction(transactionData) {
 }
 
 // Auto-create borrowing/lending record
-async function autoCreateBorrowingLending(transaction, userId) {
+async function autoCreateBorrowingLending(transaction) {
   // Get settings
   const settings = await settingsApi.getSettings();
   const borrowingCategoryId = settings.find(
@@ -175,6 +175,66 @@ async function autoCreateBorrowingLending(transaction, userId) {
     currency: transaction.currency,
     notes,
   });
+}
+
+// Batch variant of auto-creating borrowing/lending records. The per-row
+// autoCreateBorrowingLending() re-fetches settings AND every borrowing/lending
+// record for each transaction, which turns a batch import into O(N) extra
+// round-trips. This fetches both once, then creates only the matching records.
+async function batchAutoCreateBorrowingLending(transactions) {
+  if (!transactions || transactions.length === 0) return;
+
+  const settings = await settingsApi.getSettings();
+  const borrowingCategoryId = settings.find(
+    (s) => s.setting_key === 'BorrowingCategoryID'
+  )?.setting_value;
+  const lendingCategoryId = settings.find(
+    (s) => s.setting_key === 'LendingCategoryID'
+  )?.setting_value;
+
+  const hasBorrowing = borrowingCategoryId && borrowingCategoryId.trim() !== '';
+  const hasLending = lendingCategoryId && lendingCategoryId.trim() !== '';
+  if (!hasBorrowing && !hasLending) return;
+
+  // Which transactions map to a borrowing/lending record?
+  const matches = [];
+  for (const txn of transactions) {
+    if (!txn.category_id) continue;
+    const catId = String(txn.category_id);
+    let recordType = null;
+    if (hasBorrowing && catId === String(borrowingCategoryId)) {
+      recordType = 'Borrowing';
+    } else if (hasLending && catId === String(lendingCategoryId)) {
+      recordType = 'Lending';
+    }
+    if (recordType) matches.push({ txn, recordType });
+  }
+  if (matches.length === 0) return;
+
+  const { getBorrowingLendingRecords, createBorrowingLendingRecord } =
+    await import('./borrowingsLendings');
+
+  // Fetch existing records once to skip transactions that already have one
+  const existingRecords = await getBorrowingLendingRecords({});
+  const existingTxnIds = new Set(
+    existingRecords.map((r) => r.original_transaction_id)
+  );
+
+  await Promise.allSettled(
+    matches
+      .filter(({ txn }) => !existingTxnIds.has(txn.transaction_id))
+      .map(({ txn, recordType }) => {
+        const { entityName, notes } = parseEntityName(txn.description);
+        return createBorrowingLendingRecord({
+          type: recordType,
+          originalTransactionId: txn.transaction_id,
+          entityName,
+          originalAmount: Math.abs(txn.amount),
+          currency: txn.currency,
+          notes,
+        });
+      })
+  );
 }
 
 // Batch create transactions
@@ -306,13 +366,12 @@ export async function batchCreateTransactions(transactionsArray) {
 
   if (error) throw error;
 
-  // Auto-create borrowing/lending records (non-blocking)
-  for (const transaction of data) {
-    try {
-      await autoCreateBorrowingLending(transaction, user.id);
-    } catch (err) {
-      console.error('Failed to create borrowing/lending record:', err);
-    }
+  // Auto-create borrowing/lending records (non-blocking), fetching settings
+  // and existing records once for the whole batch instead of per row
+  try {
+    await batchAutoCreateBorrowingLending(data);
+  } catch (err) {
+    console.error('Failed to create borrowing/lending records for batch:', err);
   }
 
   return data;

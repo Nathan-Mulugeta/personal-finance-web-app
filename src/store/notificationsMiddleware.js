@@ -1,4 +1,5 @@
 import { showNotification } from './slices/notificationsSlice'
+import { getErrorMessage } from '../utils/errorMessage'
 
 const countOf = (value) => {
   if (Array.isArray(value)) return value.length
@@ -27,9 +28,10 @@ const SUCCESS_MESSAGES = {
   },
   'transactions/bulkUpdateTransactions/fulfilled': (action) => {
     const count = action.payload?.updated?.length
-    return count
-      ? `${plural(count, 'transaction')} updated`
-      : 'Transactions updated'
+    // Skip the success toast when nothing actually updated (e.g. every row
+    // failed a category/currency check). The edit dialog surfaces the failure
+    // detail; a green "updated" toast on total failure would contradict it.
+    return count ? `${plural(count, 'transaction')} updated` : null
   },
   'transfers/createTransfer/fulfilled': 'Transfer created',
   'transfers/deleteTransfer/fulfilled': 'Transfer deleted',
@@ -51,7 +53,17 @@ const SUCCESS_MESSAGES = {
   'settings/updateSettings/fulfilled': 'Settings saved',
 }
 
-// Shows a success snackbar whenever a mutating thunk fulfills, so individual
+// Mutations we surface feedback for. Their `/rejected` counterparts are the
+// only failures we toast — so background fetch failures (flaky network, sync)
+// stay silent instead of nagging the user with error snackbars.
+const ERROR_ELIGIBLE = new Set(
+  Object.keys(SUCCESS_MESSAGES).map((type) =>
+    type.replace('/fulfilled', '/rejected')
+  )
+)
+
+// Shows a success snackbar whenever a mutating thunk fulfills, and an error
+// snackbar (with the real backend reason) whenever one rejects, so individual
 // dialogs and pages don't each need to dispatch feedback.
 export const notificationsMiddleware = (storeApi) => (next) => (action) => {
   const result = next(action)
@@ -61,6 +73,11 @@ export const notificationsMiddleware = (storeApi) => (next) => (action) => {
     if (message) {
       storeApi.dispatch(showNotification({ message }))
     }
+  } else if (ERROR_ELIGIBLE.has(action.type)) {
+    // rejectWithValue(error.message) puts the reason in action.payload (a
+    // string); fall back to action.error for non-rejectWithValue rejections.
+    const reason = getErrorMessage(action.payload || action.error?.message)
+    storeApi.dispatch(showNotification({ message: reason, severity: 'error' }))
   }
   return result
 }

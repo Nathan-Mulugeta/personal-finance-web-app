@@ -51,6 +51,7 @@ import {
   bulkDeleteTransactions as bulkDeleteTransactionsThunk,
   removeDeletedTransactions,
   filterTransactions,
+  clearError,
 } from '../store/slices/transactionsSlice';
 import { deleteTransfer } from '../store/slices/transfersSlice';
 import {
@@ -1126,7 +1127,9 @@ function Transactions() {
         </Box>
       </Box>
 
-      {error && <ErrorMessage error={error} />}
+      {error && (
+        <ErrorMessage error={error} onClose={() => dispatch(clearError())} />
+      )}
 
       {/* Selection Header - only visible in selection mode */}
       {selectionMode && combinedItems.length > 0 && (
