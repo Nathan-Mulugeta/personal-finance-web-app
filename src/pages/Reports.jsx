@@ -1,4 +1,4 @@
-import { useState, useMemo, Fragment } from 'react';
+import { useState, useMemo, useEffect, Fragment } from 'react';
 import { useSelector } from 'react-redux';
 import {
   Box,
@@ -127,7 +127,13 @@ function Reports() {
   const [periodType, setPeriodType] = useState('month'); // 'month' | '6months' | '1year'
   const [expandedCategories, setExpandedCategories] = useState(new Set());
   const [reportSearch, setReportSearch] = useState('');
-  const reportSearchActive = reportSearch.trim().length > 0;
+  // Debounced copy drives the (expensive) filtering so typing stays smooth
+  const [debouncedReportSearch, setDebouncedReportSearch] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedReportSearch(reportSearch), 250);
+    return () => clearTimeout(t);
+  }, [reportSearch]);
+  const reportSearchActive = debouncedReportSearch.trim().length > 0;
   const [transactionModalOpen, setTransactionModalOpen] = useState(false);
   const [selectedCategoryForModal, setSelectedCategoryForModal] =
     useState(null);
@@ -933,30 +939,24 @@ function Reports() {
   };
 
   // Memoized report data
+  // Build the (expensive) report data independent of the search text, so a
+  // keystroke never triggers a full recompute — only the cheap filter re-runs.
+  const incomeReportDataFull = useMemo(
+    () => buildReportData('Income'),
+    [categories, budgets, allTransactions, dateRange, exchangeRates, baseCurrency]
+  );
   const incomeReportData = useMemo(
-    () => filterReportBySearch(buildReportData('Income'), reportSearch),
-    [
-      categories,
-      budgets,
-      allTransactions,
-      dateRange,
-      exchangeRates,
-      baseCurrency,
-      reportSearch,
-    ]
+    () => filterReportBySearch(incomeReportDataFull, debouncedReportSearch),
+    [incomeReportDataFull, debouncedReportSearch]
   );
 
+  const expenseReportDataFull = useMemo(
+    () => buildReportData('Expense'),
+    [categories, budgets, allTransactions, dateRange, exchangeRates, baseCurrency]
+  );
   const expenseReportData = useMemo(
-    () => filterReportBySearch(buildReportData('Expense'), reportSearch),
-    [
-      categories,
-      budgets,
-      allTransactions,
-      dateRange,
-      exchangeRates,
-      baseCurrency,
-      reportSearch,
-    ]
+    () => filterReportBySearch(expenseReportDataFull, debouncedReportSearch),
+    [expenseReportDataFull, debouncedReportSearch]
   );
 
   const incomeTotals = useMemo(
@@ -2106,7 +2106,10 @@ function Reports() {
             endAdornment: reportSearch && (
               <InputAdornment position="end">
                 <IconButton
-                  onClick={() => setReportSearch('')}
+                  onClick={() => {
+                    setReportSearch('');
+                    setDebouncedReportSearch('');
+                  }}
                   edge="end"
                   size="small"
                   aria-label="Clear filter"

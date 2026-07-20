@@ -147,32 +147,40 @@ function Home({ quickAddExpense = false }) {
   }, [quickAddExpense]);
 
   // Keep the search field focused reliably: on mount (covers navigating to
-  // Home, including the app being reopened to Home) and whenever the page
-  // becomes visible again. Skipped while a dialog is open so it doesn't
-  // steal focus from a form.
+  // Home, including the app being reopened to Home) and whenever the app is
+  // resumed. A freshly-resumed PWA often ignores the first focus() (no user
+  // gesture yet) and won't restore focus itself if the field was blurred
+  // before backgrounding — so we retry a few times and listen on every resume
+  // signal (visibilitychange / pageshow / window focus). Skipped while a
+  // dialog is open so it doesn't steal focus from a form.
   useEffect(() => {
     const focusSearch = () => {
-      if (
-        quickAddExpense ||
-        document.querySelector('.MuiDialog-root, .MuiModal-root')
-      ) {
-        return;
-      }
-      searchInputRef.current?.focus();
+      if (quickAddExpense) return;
+      const input = searchInputRef.current;
+      if (!input) return;
+      if (document.querySelector('.MuiDialog-root')) return;
+      input.focus({ preventScroll: true });
     };
 
-    const mountTimer = setTimeout(focusSearch, 120);
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        // Small delay lets any resume-time navigation to Home settle first
-        setTimeout(focusSearch, 120);
-      }
+    let timers = [];
+    const focusWithRetries = () => {
+      timers.forEach(clearTimeout);
+      timers = [0, 80, 200, 450].map((d) => setTimeout(focusSearch, d));
     };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    focusWithRetries();
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') focusWithRetries();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('pageshow', focusWithRetries);
+    window.addEventListener('focus', focusWithRetries);
     return () => {
-      clearTimeout(mountTimer);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      timers.forEach(clearTimeout);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('pageshow', focusWithRetries);
+      window.removeEventListener('focus', focusWithRetries);
     };
   }, [quickAddExpense]);
 
