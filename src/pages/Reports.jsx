@@ -30,6 +30,8 @@ import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
+import ArrowDropUpIcon from '@mui/icons-material/ArrowDropUp';
+import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import BudgetDialog from '../components/common/BudgetDialog';
 import CategoryTransactionsList from '../components/common/CategoryTransactionsList';
 import { usePageRefresh } from '../hooks/usePageRefresh';
@@ -144,6 +146,26 @@ function Reports() {
     () => getDateRange(selectedMonth, periodType),
     [selectedMonth, periodType]
   );
+
+  // The immediately preceding period of the same length, for month-over-month
+  // (period-over-period) deltas on totals and each category
+  const previousDateRange = useMemo(() => {
+    const monthsBack =
+      periodType === '6months' ? 6 : periodType === '1year' ? 12 : 1;
+    const prevMonth = format(
+      subMonths(parseISO(`${selectedMonth}-01`), monthsBack),
+      'yyyy-MM'
+    );
+    return getDateRange(prevMonth, periodType);
+  }, [selectedMonth, periodType]);
+
+  // Human label for the previous period, used in delta captions
+  const periodWord =
+    periodType === '6months'
+      ? 'prev 6 mo'
+      : periodType === '1year'
+      ? 'last year'
+      : 'last month';
 
   // Month navigation handlers
   const handlePreviousPeriod = () => {
@@ -617,9 +639,19 @@ function Reports() {
     ]);
     const isActuallyMixed = allCurrenciesWithAmounts.size > 1;
 
+    // Same-category actual for the previous period (incl. descendants), for the
+    // period-over-period delta shown on the row
+    const previousActual = calculateCategoryActual(
+      category.category_id,
+      previousDateRange,
+      type,
+      true
+    ).amount;
+
     return {
       budget: budgetAmount,
       actual: actualAmount,
+      previousActual,
       difference,
       variance,
       currencies: Array.from(allCurrencies),
@@ -653,6 +685,9 @@ function Reports() {
       }
     });
 
+    // Biggest actual first, so "where the money went" reads top-down
+    reportData.sort((a, b) => b.actual - a.actual);
+
     return reportData;
   };
 
@@ -660,6 +695,7 @@ function Reports() {
   const calculateSectionTotals = (reportData) => {
     let totalBudget = 0;
     let totalActual = 0;
+    let totalPreviousActual = 0;
     const allCurrencies = new Set();
     const totalBudgetOriginalAmounts = {};
     const totalActualOriginalAmounts = {};
@@ -667,6 +703,7 @@ function Reports() {
     reportData.forEach((item) => {
       totalBudget += item.budget;
       totalActual += item.actual;
+      totalPreviousActual += item.previousActual || 0;
       item.currencies.forEach((c) => allCurrencies.add(c));
 
       // Aggregate original amounts
@@ -720,6 +757,7 @@ function Reports() {
     return {
       budget: totalBudget,
       actual: totalActual,
+      previousActual: totalPreviousActual,
       difference: totalDifference,
       variance: totalVariance,
       currencies: Array.from(allCurrencies),
@@ -919,8 +957,89 @@ function Reports() {
   const netSummary = useMemo(() => {
     const plannedSavings = incomeTotals.budget - expenseTotals.budget;
     const actualSavings = incomeTotals.actual - expenseTotals.actual;
-    return { plannedSavings, actualSavings };
+    const previousSavings =
+      (incomeTotals.previousActual || 0) - (expenseTotals.previousActual || 0);
+    return { plannedSavings, actualSavings, previousSavings };
   }, [incomeTotals, expenseTotals]);
+
+  // Period-over-period delta. `goodWhen` decides the color: for income (and
+  // net) higher is good; for expenses lower is good. Returns null when there's
+  // no prior baseline or the change rounds to 0.
+  const getDelta = (current, previous, goodWhen = 'up') => {
+    if (previous == null || previous <= 0) return null;
+    const rounded = Math.round(((current - previous) / previous) * 100);
+    if (rounded === 0) return null;
+    const up = rounded > 0;
+    const isGood = goodWhen === 'up' ? up : !up;
+    return {
+      up,
+      text: `${Math.abs(rounded)}%`,
+      color: isGood ? 'google.green' : 'google.red',
+    };
+  };
+
+  // A compact, well-aligned trend badge: a filled up/down triangle + percent,
+  // scaled to the surrounding font. `label` appends "vs {period}".
+  const renderDelta = (delta, { label = false } = {}) => {
+    if (!delta) return null;
+    const Arrow = delta.up ? ArrowDropUpIcon : ArrowDropDownIcon;
+    return (
+      <Box
+        component="span"
+        sx={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          whiteSpace: 'nowrap',
+          fontWeight: 600,
+          color: delta.color,
+          lineHeight: 1,
+        }}
+      >
+        <Arrow sx={{ fontSize: '1.35em', mx: '-0.18em' }} />
+        <Box component="span" sx={{ ml: '0.25em' }}>
+          {delta.text}
+        </Box>
+        {label && (
+          <Box
+            component="span"
+            sx={{ color: 'text.secondary', fontWeight: 400, ml: '0.4em' }}
+          >
+            vs {periodWord}
+          </Box>
+        )}
+      </Box>
+    );
+  };
+
+  // One-line, positive-leaning headline that gives the numbers meaning
+  const insight = useMemo(() => {
+    const income = incomeTotals.actual;
+    const expense = expenseTotals.actual;
+    if (income <= 0 && expense <= 0) return null;
+
+    const parts = [];
+    if (income > 0) {
+      const rate = Math.round(((income - expense) / income) * 100);
+      parts.push(
+        rate >= 0
+          ? `${rate}% of income saved`
+          : `spending ${Math.abs(rate)}% over income`
+      );
+    }
+    const prevExpense = expenseTotals.previousActual || 0;
+    if (expense > 0 && prevExpense > 0) {
+      const pct = Math.round(((expense - prevExpense) / prevExpense) * 100);
+      if (pct !== 0) {
+        parts.push(
+          `spending ${pct > 0 ? 'up' : 'down'} ${Math.abs(pct)}% vs ${periodWord}`
+        );
+      }
+    }
+    if (parts.length === 0 && expense > 0) {
+      parts.push(`Spent ${formatCurrency(expense, baseCurrency)}`);
+    }
+    return parts.length ? parts.join(' · ') : null;
+  }, [incomeTotals, expenseTotals, baseCurrency, periodWord]);
 
   const modalTransactions = useMemo(
     () => getTransactionsForModal(),
@@ -965,6 +1084,7 @@ function Reports() {
       category,
       budget,
       actual,
+      previousActual,
       difference,
       variance,
       isMixed,
@@ -977,6 +1097,11 @@ function Reports() {
     const isExpanded =
       reportSearchActive || expandedCategories.has(category.category_id);
     const differenceColor = getDifferenceColor(difference, type);
+    const spendDelta = getDelta(
+      actual,
+      previousActual,
+      type === 'Income' ? 'up' : 'down'
+    );
     const ownBudget = findBudgetForCategory(category.category_id);
     const childBudgets =
       budget > 0 && hasChildren && descendantsHaveBudgets(category.category_id);
@@ -1154,6 +1279,18 @@ function Reports() {
               actualOriginalAmounts,
               true
             )}
+            {spendDelta && (
+              <Box
+                sx={{
+                  fontSize: '0.6875rem',
+                  mt: 0.25,
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                }}
+              >
+                {renderDelta(spendDelta, { label: true })}
+              </Box>
+            )}
           </TableCell>
           <TableCell align="right">
             <Box
@@ -1211,16 +1348,20 @@ function Reports() {
         </TableRow>
         {hasChildren && isExpanded && (
           <>
-            {category.children.map((child) => {
-              const childData = calculateCategoryData(child, type);
-              const hasChildData = childData.budget > 0 || childData.actual > 0;
-              if (!hasChildData) return null;
-              return renderCategoryRow(
-                { category: child, ...childData },
-                type,
-                level + 1
-              );
-            })}
+            {category.children
+              .map((child) => ({
+                child,
+                data: calculateCategoryData(child, type),
+              }))
+              .filter(({ data }) => data.budget > 0 || data.actual > 0)
+              .sort((a, b) => b.data.actual - a.data.actual)
+              .map(({ child, data }) =>
+                renderCategoryRow(
+                  { category: child, ...data },
+                  type,
+                  level + 1
+                )
+              )}
             <TableRow
               hover
               onClick={() => handleRowClick(category.category_id, type)}
@@ -1327,6 +1468,7 @@ function Reports() {
       category,
       budget,
       actual,
+      previousActual,
       difference,
       variance,
       isMixed,
@@ -1338,6 +1480,13 @@ function Reports() {
     const hasChildren = category.children && category.children.length > 0;
     const isExpanded =
       reportSearchActive || expandedCategories.has(category.category_id);
+    // Period-over-period trend + an over-budget cue on the amount itself
+    const spendDelta = getDelta(
+      actual,
+      previousActual,
+      type === 'Income' ? 'up' : 'down'
+    );
+    const overBudget = type === 'Expense' && budget > 0 && actual > budget;
     const budgetForeign = getForeignCurrencyDisplay(
       currencies,
       budgetOriginalAmounts
@@ -1443,19 +1592,37 @@ function Reports() {
                 />
               )}
             </Box>
-            <Typography
-              variant="body2"
-              sx={{ fontSize: '0.9375rem', fontWeight: 600, flexShrink: 0 }}
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.625,
+                flexShrink: 0,
+              }}
             >
-              {formatCurrencyDisplay(
-                actual,
-                currencies,
-                isMixed,
-                actualOriginalAmounts
+              {spendDelta && (
+                <Box sx={{ fontSize: '0.6875rem' }}>
+                  {renderDelta(spendDelta)}
+                </Box>
               )}
-              {actualForeign &&
-                ` · ${formatCurrency(actualForeign.amount, actualForeign.currency)}`}
-            </Typography>
+              <Typography
+                variant="body2"
+                sx={{
+                  fontSize: '0.9375rem',
+                  fontWeight: 600,
+                  color: overBudget ? 'warning.main' : 'text.primary',
+                }}
+              >
+                {formatCurrencyDisplay(
+                  actual,
+                  currencies,
+                  isMixed,
+                  actualOriginalAmounts
+                )}
+                {actualForeign &&
+                  ` · ${formatCurrency(actualForeign.amount, actualForeign.currency)}`}
+              </Typography>
+            </Box>
           </Box>
           <Box
             sx={{
@@ -1469,7 +1636,13 @@ function Reports() {
           >
             <Typography
               variant="caption"
-              sx={{ fontSize: '0.6875rem', color: variancePhrase.color }}
+              noWrap
+              sx={{
+                fontSize: '0.6875rem',
+                color: variancePhrase.color,
+                minWidth: 0,
+                flexShrink: 1,
+              }}
             >
               {variancePhrase.text}
             </Typography>
@@ -1483,6 +1656,7 @@ function Reports() {
                 alignItems: 'center',
                 gap: 0.25,
                 minWidth: 0,
+                flexShrink: 0,
                 py: 0.25,
                 px: 0.5,
                 mr: -0.5,
@@ -1566,17 +1740,20 @@ function Reports() {
         </Box>
         {hasChildren && isExpanded && (
           <>
-            {category.children.map((child) => {
-              const childData = calculateCategoryData(child, type);
-              const hasChildData =
-                childData.budget > 0 || childData.actual > 0;
-              if (!hasChildData) return null;
-              return renderMobileCategoryRow(
-                { category: child, ...childData },
-                type,
-                level + 1
-              );
-            })}
+            {category.children
+              .map((child) => ({
+                child,
+                data: calculateCategoryData(child, type),
+              }))
+              .filter(({ data }) => data.budget > 0 || data.actual > 0)
+              .sort((a, b) => b.data.actual - a.data.actual)
+              .map(({ child, data }) =>
+                renderMobileCategoryRow(
+                  { category: child, ...data },
+                  type,
+                  level + 1
+                )
+              )}
             <Box
               onClick={() => handleRowClick(category.category_id, type)}
               sx={{
@@ -1620,17 +1797,19 @@ function Reports() {
       totals.differenceOriginalAmounts
     );
     const variancePhrase = getVariancePhrase(totals.variance, type);
+    const sectionColor = type === 'Income' ? 'google.green' : 'google.red';
 
     return (
       <Box>
-        {/* Section header band — anchors the section and its total so the
-            eye can chunk the list into clear sections while scanning */}
+        {/* Section header — a colored label + rule marks the section without a
+            heavy grey block, so it reads as structure rather than clutter */}
         <Box
           sx={{
-            px: 1.25,
-            py: 1,
-            borderRadius: 1,
-            backgroundColor: 'action.hover',
+            pt: 0.25,
+            pb: 0.75,
+            mb: 0.5,
+            borderBottom: '2px solid',
+            borderColor: sectionColor,
           }}
         >
           <Box
@@ -1645,10 +1824,10 @@ function Reports() {
             <Typography
               sx={{
                 fontSize: '0.6875rem',
-                fontWeight: 600,
+                fontWeight: 700,
                 letterSpacing: 0.6,
                 textTransform: 'uppercase',
-                color: 'text.secondary',
+                color: sectionColor,
               }}
             >
               {label}
@@ -1937,12 +2116,22 @@ function Reports() {
                   value: incomeTotals.actual,
                   plan: incomeTotals.budget,
                   color: 'success.main',
+                  delta: getDelta(
+                    incomeTotals.actual,
+                    incomeTotals.previousActual,
+                    'up'
+                  ),
                 },
                 {
                   label: 'Expenses',
                   value: expenseTotals.actual,
                   plan: expenseTotals.budget,
                   color: 'error.main',
+                  delta: getDelta(
+                    expenseTotals.actual,
+                    expenseTotals.previousActual,
+                    'down'
+                  ),
                 },
                 {
                   label: 'Net',
@@ -1952,6 +2141,11 @@ function Reports() {
                     netSummary.actualSavings >= 0
                       ? 'success.main'
                       : 'error.main',
+                  delta: getDelta(
+                    netSummary.actualSavings,
+                    netSummary.previousSavings,
+                    'up'
+                  ),
                 },
               ].map((tile, index) => (
                 <Fragment key={tile.label}>
@@ -1976,6 +2170,16 @@ function Reports() {
                     >
                       {formatCurrency(tile.value, baseCurrency)}
                     </Typography>
+                    {tile.delta && (
+                      <Box
+                        sx={{
+                          fontSize: { xs: '0.625rem', md: '0.75rem' },
+                          mt: 0.25,
+                        }}
+                      >
+                        {renderDelta(tile.delta, { label: true })}
+                      </Box>
+                    )}
                     <Typography
                       noWrap
                       variant="caption"
@@ -1991,6 +2195,18 @@ function Reports() {
                 </Fragment>
               ))}
             </Box>
+            {insight && (
+              <Typography
+                sx={{
+                  mt: { xs: 1.25, sm: 1.5 },
+                  textAlign: 'center',
+                  fontSize: { xs: '0.75rem', md: '0.8125rem' },
+                  color: 'text.secondary',
+                }}
+              >
+                {insight}
+              </Typography>
+            )}
       </Box>
 
       {/* Income Budget vs Actual Section */}
