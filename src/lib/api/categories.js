@@ -40,22 +40,8 @@ export async function createCategory(categoryData) {
     }
   }
 
-  // Validate no circular reference (using database function)
-  if (parentCategoryId) {
-    const { data: isValid } = await supabase.rpc('validate_category_hierarchy', {
-      p_category_id: null, // New category, no ID yet
-      p_parent_category_id: parentCategoryId,
-      p_user_id: user.id,
-    })
-
-    // Note: For new categories, we'll let the database trigger handle this
-    // But we can do a basic check here
-    if (parentCategoryId) {
-      // Check if parent is a descendant (would create cycle)
-      const descendants = await getCategoryDescendants(parentCategoryId, user.id)
-      // This check is basic - the database trigger will catch actual cycles
-    }
-  }
+  // Cycle prevention (a parent can't be one of its own descendants) is
+  // enforced by the database trigger on insert — no client round-trips needed.
 
   const categoryId = generateId('CAT')
   const { data, error } = await supabase

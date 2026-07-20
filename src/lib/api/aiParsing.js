@@ -156,27 +156,27 @@ function extractJSON(text) {
   // Attempt 1: strict parse on stripped text
   try {
     return JSON.parse(stripped);
-  } catch (_) {}
+  } catch { /* fall through to the next parse strategy */ }
 
   // Attempt 2: extract the first {...} block then strict parse
   const objectMatch = stripped.match(/\{[\s\S]*\}/);
   if (objectMatch) {
     try {
       return JSON.parse(objectMatch[0]);
-    } catch (_) {}
+    } catch { /* fall through to the next parse strategy */ }
   }
 
   // Attempt 3: repair then parse (handles unquoted keys, single quotes,
   // trailing commas, and other common AI output quirks)
   try {
     return JSON.parse(jsonrepair(stripped));
-  } catch (_) {}
+  } catch { /* fall through to the next parse strategy */ }
 
   // Attempt 4: repair the extracted object block
   if (objectMatch) {
     try {
       return JSON.parse(jsonrepair(objectMatch[0]));
-    } catch (_) {}
+    } catch { /* fall through to the next parse strategy */ }
   }
 
   throw new Error('Could not extract valid JSON from response');
@@ -218,21 +218,6 @@ function normalizeParsedData(parsed) {
   }
 
   return parsed;
-}
-
-/**
- * Convert file to base64
- */
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const base64 = reader.result.split(',')[1];
-      resolve(base64);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
 }
 
 function sleep(ms) {

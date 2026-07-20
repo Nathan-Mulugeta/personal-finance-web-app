@@ -68,6 +68,12 @@ const persistConfig = {
   version: PERSIST_VERSION,
   storage: persistStorage,
   whitelist: ['accounts', 'categories', 'transactions', 'budgets', 'transfers', 'borrowingsLendings', 'settings', 'exchangeRates', 'appInit', 'sync'],
+  // Coalesce writes to at most once/sec. Without this, every state change
+  // (each realtime merge, background fetch, optimistic edit) re-serializes the
+  // ENTIRE persisted state — including the whole transactions array — to
+  // IndexedDB, which gets progressively heavier as the dataset grows. Data is
+  // server-backed and redux-persist flushes on unload, so a 1s window is safe.
+  throttle: 1000,
   transforms: [stripTransientFlags],
   migrate: (state) => {
     if (!state || state._persist?.version !== PERSIST_VERSION) {

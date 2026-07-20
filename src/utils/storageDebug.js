@@ -58,7 +58,7 @@ export async function getStorageInfo() {
 }
 
 // Make functions available globally in development
-if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+if (typeof window !== 'undefined' && import.meta.env.DEV) {
   window.checkStorage = checkStorage
   window.getStorageInfo = getStorageInfo
 }

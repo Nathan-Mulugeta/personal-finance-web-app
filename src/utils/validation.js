@@ -21,7 +21,7 @@ export function isValidDate(dateString) {
 export function isValidMonth(monthString) {
   const regex = /^\d{4}-\d{2}$/
   if (!regex.test(monthString)) return false
-  const [year, month] = monthString.split('-')
+  const [, month] = monthString.split('-')
   const monthNum = parseInt(month, 10)
   return monthNum >= 1 && monthNum <= 12
 }
