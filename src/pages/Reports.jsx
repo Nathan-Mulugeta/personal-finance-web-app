@@ -80,7 +80,7 @@ const PERIOD_OPTIONS = [
 // break, while still staying muted.
 const PAGE_DIVIDER_SX = (theme) => ({
   mx: { xs: -1.5, sm: -2, md: -3 },
-  my: { xs: 2, sm: 2.5 },
+  my: { xs: 1.5, sm: 2 },
   borderBottomWidth: 2,
   borderColor:
     theme.palette.mode === 'dark'
@@ -920,6 +920,52 @@ function Reports() {
     return null;
   };
 
+  // Format money, using the short "Br" symbol for ETB so it fits in tight rows
+  const fmt = (amount, currency) => {
+    const s = formatCurrency(amount, currency);
+    return currency === 'ETB' ? s.replace('ETB', 'Br').trim() : s;
+  };
+
+  // For a category in a single non-base currency (e.g. you budget & log an
+  // income in USD while the base is ETB), show the ORIGINAL amount as the
+  // primary and the base conversion as a much smaller secondary — you read the
+  // number you actually think in, with the base value as a tiny reference.
+  // Base-only or mixed-currency amounts just show the base amount.
+  const getMoneyDisplay = (baseAmount, originalAmounts) => {
+    const foreign = getForeignCurrencyDisplay(null, originalAmounts);
+    if (foreign) {
+      return {
+        primary: fmt(foreign.amount, foreign.currency),
+        secondary: fmt(baseAmount, baseCurrency),
+      };
+    }
+    return {
+      primary: fmt(baseAmount, baseCurrency),
+      secondary: null,
+    };
+  };
+
+  // Render primary amount with an optional much-smaller, muted secondary — a
+  // tiny reference glance without eating row space
+  const renderMoneyInline = (money) => (
+    <>
+      {money.primary}
+      {money.secondary && (
+        <Box
+          component="span"
+          sx={{
+            fontSize: '0.68em',
+            fontWeight: 400,
+            color: 'text.secondary',
+            ml: 0.35,
+          }}
+        >
+          {money.secondary}
+        </Box>
+      )}
+    </>
+  );
+
   // Income exceeding its budget is a win, not a deficit — never show the
   // difference with a minus sign there; expenses keep their sign
   const getDisplayDifference = (amount, type) =>
@@ -1485,9 +1531,7 @@ function Reports() {
       actual,
       previousActual,
       difference,
-      variance,
       isMixed,
-      currencies,
       budgetOriginalAmounts,
       actualOriginalAmounts,
       differenceOriginalAmounts,
@@ -1502,19 +1546,17 @@ function Reports() {
       type === 'Income' ? 'up' : 'down'
     );
     const overBudget = type === 'Expense' && budget > 0 && actual > budget;
-    const budgetForeign = getForeignCurrencyDisplay(
-      currencies,
-      budgetOriginalAmounts
-    );
-    const actualForeign = getForeignCurrencyDisplay(
-      currencies,
-      actualOriginalAmounts
-    );
-    const differenceForeign = getForeignCurrencyDisplay(
-      currencies,
+    // Original-currency-first money displays (see getMoneyDisplay)
+    const actualMoney = getMoneyDisplay(actual, actualOriginalAmounts);
+    const budgetMoney = getMoneyDisplay(budget, budgetOriginalAmounts);
+    const diffForeign = getForeignCurrencyDisplay(
+      null,
       differenceOriginalAmounts
     );
-    const variancePhrase = getVariancePhrase(variance, type);
+    // Difference is shown in a single currency — the one it was budgeted in
+    const diffText = diffForeign
+      ? fmt(getDisplayDifference(diffForeign.amount, type), diffForeign.currency)
+      : fmt(getDisplayDifference(difference, type), baseCurrency);
 
     // Budgets aggregated purely from children (the common case) get no
     // label; a real parent-level budget is the rare case worth flagging.
@@ -1526,21 +1568,11 @@ function Reports() {
     const budgetFromChildrenOnly = childBudgets && !ownBudget;
     const budgetIncludesChildren = childBudgets && !!ownBudget;
     const budgetParentOnly = !!ownBudget && hasChildren && !childBudgets;
-
-    const budgetCaption =
-      budget > 0
-        ? `of ${formatCurrency(budget, baseCurrency)}${
-            budgetForeign
-              ? ` · ${formatCurrency(budgetForeign.amount, budgetForeign.currency)}`
-              : ''
-          }${
-            budgetParentOnly
-              ? ' (applies to parent only)'
-              : budgetIncludesChildren
-              ? ' (includes subcategories)'
-              : ''
-          }`
-        : '';
+    const budgetLabel = budgetParentOnly
+      ? ' (applies to parent only)'
+      : budgetIncludesChildren
+      ? ' (includes subcategories)'
+      : '';
 
     return (
       <Fragment key={category.category_id}>
@@ -1551,7 +1583,7 @@ function Reports() {
               : handleRowClick(category.category_id, type)
           }
           sx={{
-            py: 1.25,
+            py: level > 0 ? 1 : 1.25,
             pl: level * 3.5,
             borderBottom: '1px solid',
             borderColor: 'divider',
@@ -1589,7 +1621,12 @@ function Reports() {
               <Typography
                 variant="body2"
                 noWrap
-                sx={{ fontSize: '0.9375rem', fontWeight: 500, minWidth: 0 }}
+                sx={{
+                  fontSize: level > 0 ? '0.875rem' : '0.9375rem',
+                  fontWeight: level > 0 ? 400 : 500,
+                  color: level > 0 ? 'text.secondary' : 'text.primary',
+                  minWidth: 0,
+                }}
               >
                 {category.name}
               </Typography>
@@ -1623,44 +1660,29 @@ function Reports() {
               <Typography
                 variant="body2"
                 sx={{
-                  fontSize: '0.9375rem',
-                  fontWeight: 600,
-                  color: overBudget ? 'warning.main' : 'text.primary',
+                  fontSize: level > 0 ? '0.875rem' : '0.9375rem',
+                  fontWeight: level > 0 ? 500 : 600,
+                  color: overBudget
+                    ? 'error.main'
+                    : level > 0
+                    ? 'text.secondary'
+                    : 'text.primary',
                 }}
               >
-                {formatCurrencyDisplay(
-                  actual,
-                  currencies,
-                  isMixed,
-                  actualOriginalAmounts
-                )}
-                {actualForeign &&
-                  ` · ${formatCurrency(actualForeign.amount, actualForeign.currency)}`}
+                {renderMoneyInline(actualMoney)}
               </Typography>
             </Box>
           </Box>
           <Box
             sx={{
               display: 'flex',
-              alignItems: 'baseline',
+              alignItems: 'center',
               justifyContent: 'space-between',
               gap: 1,
-              mt: 0.25,
+              mt: 0.125,
               pl: hasChildren ? 2.875 : 0,
             }}
           >
-            <Typography
-              variant="caption"
-              noWrap
-              sx={{
-                fontSize: '0.6875rem',
-                color: variancePhrase.color,
-                minWidth: 0,
-                flexShrink: 1,
-              }}
-            >
-              {variancePhrase.text}
-            </Typography>
             <Box
               onClick={(event) => {
                 event.stopPropagation();
@@ -1671,15 +1693,14 @@ function Reports() {
                 alignItems: 'center',
                 gap: 0.25,
                 minWidth: 0,
-                flexShrink: 0,
                 py: 0.25,
                 px: 0.5,
-                mr: -0.5,
+                ml: -0.5,
                 borderRadius: 0.5,
                 ...tappableRowSx,
               }}
             >
-              {budgetCaption ? (
+              {budget > 0 ? (
                 <>
                   <Typography
                     variant="caption"
@@ -1690,15 +1711,19 @@ function Reports() {
                       minWidth: 0,
                     }}
                   >
-                    {budgetCaption}
+                    of {renderMoneyInline(budgetMoney)}
+                    {budgetLabel}
                   </Typography>
-                  {!budgetFromChildrenOnly && (
+                  {/* Edit cue when there's an editable own budget; a "+" cue
+                      when the shown budget is aggregated from children and
+                      tapping instead creates the parent's own budget */}
+                  {budgetFromChildrenOnly ? (
+                    <AddIcon
+                      sx={{ fontSize: 13, color: 'text.secondary', flexShrink: 0 }}
+                    />
+                  ) : (
                     <EditIcon
-                      sx={{
-                        fontSize: 11,
-                        color: 'text.secondary',
-                        flexShrink: 0,
-                      }}
+                      sx={{ fontSize: 11, color: 'text.secondary', flexShrink: 0 }}
                     />
                   )}
                 </>
@@ -1712,46 +1737,21 @@ function Reports() {
                 </Typography>
               )}
             </Box>
-          </Box>
-          {budget > 0 && (
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'baseline',
-                justifyContent: 'space-between',
-                gap: 1,
-                mt: 0.5,
-                pl: hasChildren ? 2.875 : 0,
-              }}
-            >
-              <Typography
-                variant="caption"
-                sx={{ fontSize: '0.6875rem', color: 'text.secondary' }}
-              >
-                Difference
-              </Typography>
+            {budget > 0 && (
               <Typography
                 variant="caption"
                 noWrap
                 sx={{
                   fontSize: '0.6875rem',
-                  fontWeight: 500,
+                  fontWeight: 600,
                   color: getDifferenceColor(difference, type),
-                  minWidth: 0,
+                  flexShrink: 0,
                 }}
               >
-                {formatCurrency(
-                  getDisplayDifference(difference, type),
-                  baseCurrency
-                )}
-                {differenceForeign &&
-                  ` · ${formatCurrency(
-                    getDisplayDifference(differenceForeign.amount, type),
-                    differenceForeign.currency
-                  )}`}
+                {diffText} · {Math.round((actual / budget) * 100)}%
               </Typography>
-            </Box>
-          )}
+            )}
+          </Box>
         </Box>
         {hasChildren && isExpanded && (
           <>
@@ -1799,32 +1799,29 @@ function Reports() {
 
   // Render a full report section as a dense list with totals up top (mobile)
   const renderSectionMobile = (reportData, totals, type, label) => {
-    const actualForeign = getForeignCurrencyDisplay(
-      totals.currencies,
+    const totalActualMoney = getMoneyDisplay(
+      totals.actual,
       totals.actualOriginalAmounts
     );
-    const budgetForeign = getForeignCurrencyDisplay(
-      totals.currencies,
+    const totalBudgetMoney = getMoneyDisplay(
+      totals.budget,
       totals.budgetOriginalAmounts
-    );
-    const differenceForeign = getForeignCurrencyDisplay(
-      totals.currencies,
-      totals.differenceOriginalAmounts
     );
     const variancePhrase = getVariancePhrase(totals.variance, type);
     const sectionColor = type === 'Income' ? 'google.green' : 'google.red';
+    const sectionTint = type === 'Income' ? 'google.greenBg' : 'google.redBg';
 
     return (
       <Box>
-        {/* Section header — a colored label + rule marks the section without a
-            heavy grey block, so it reads as structure rather than clutter */}
+        {/* Section header — a subtle green/red aggregate band marks the start
+            of each section, following the app's income/expense colour pattern */}
         <Box
           sx={{
-            pt: 0.25,
-            pb: 0.75,
-            mb: 0.5,
-            borderBottom: '1px solid',
-            borderColor: 'divider',
+            px: 1.25,
+            py: 1,
+            mb: 0.75,
+            borderRadius: 1.5,
+            backgroundColor: sectionTint,
           }}
         >
           <Box
@@ -1867,14 +1864,7 @@ function Reports() {
             }}
           >
             <Typography sx={{ fontSize: '1.25rem', fontWeight: 700, minWidth: 0 }}>
-              {formatCurrencyDisplay(
-                totals.actual,
-                totals.currencies,
-                totals.isMixed,
-                totals.actualOriginalAmounts
-              )}
-              {actualForeign &&
-                ` · ${formatCurrency(actualForeign.amount, actualForeign.currency)}`}
+              {renderMoneyInline(totalActualMoney)}
             </Typography>
             {totals.budget > 0 && (
               <Typography
@@ -1887,50 +1877,10 @@ function Reports() {
                   minWidth: 0,
                 }}
               >
-                of {formatCurrency(totals.budget, baseCurrency)}
-                {budgetForeign &&
-                  ` · ${formatCurrency(budgetForeign.amount, budgetForeign.currency)}`}
+                of {renderMoneyInline(totalBudgetMoney)}
               </Typography>
             )}
           </Box>
-          {totals.budget > 0 && (
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'baseline',
-                justifyContent: 'space-between',
-                gap: 1,
-                mt: 0.5,
-              }}
-            >
-              <Typography
-                variant="caption"
-                sx={{ fontSize: '0.6875rem', color: 'text.secondary' }}
-              >
-                Difference
-              </Typography>
-              <Typography
-                variant="caption"
-                noWrap
-                sx={{
-                  fontSize: '0.6875rem',
-                  fontWeight: 600,
-                  color: getDifferenceColor(totals.difference, type),
-                  minWidth: 0,
-                }}
-              >
-                {formatCurrency(
-                  getDisplayDifference(totals.difference, type),
-                  baseCurrency
-                )}
-                {differenceForeign &&
-                  ` · ${formatCurrency(
-                    getDisplayDifference(differenceForeign.amount, type),
-                    differenceForeign.currency
-                  )}`}
-              </Typography>
-            </Box>
-          )}
         </Box>
         {reportData.length === 0 ? (
           <Typography
@@ -1990,12 +1940,12 @@ function Reports() {
       {error && <ErrorMessage error={error} />}
 
       {/* Period Navigation */}
-      <Box sx={{ mb: { xs: 2.5, sm: 3 } }}>
+      <Box sx={{ mb: { xs: 1.25, sm: 2 } }}>
           <Box
             sx={{
               display: 'flex',
               flexDirection: 'column',
-              gap: 2,
+              gap: { xs: 0.75, sm: 1.5 },
             }}
           >
             {/* Period Type Selector — borderless underline tabs */}
@@ -2015,7 +1965,7 @@ function Reports() {
                     onClick={() => setPeriodType(option.value)}
                     sx={{
                       px: { xs: 1.5, sm: 2.5 },
-                      py: 0.75,
+                      py: { xs: 0.5, sm: 0.75 },
                       fontSize: '0.875rem',
                       cursor: 'pointer',
                       WebkitTapHighlightColor: 'transparent',
@@ -2062,7 +2012,7 @@ function Reports() {
               </IconButton>
               <Typography
                 variant="h6"
-                sx={{ minWidth: { xs: 150, sm: 250 }, textAlign: 'center', fontSize: { xs: '1rem', sm: '1.25rem' } }}
+                sx={{ minWidth: { xs: 120, sm: 250 }, textAlign: 'center', fontSize: { xs: '1rem', sm: '1.25rem' } }}
               >
                 {periodDisplay}
               </Typography>
@@ -2129,8 +2079,8 @@ function Reports() {
 
       {/* At-a-glance summary */}
       <Box sx={{ mb: { xs: 2.5, sm: 3 } }}>
-            <Box sx={{ display: 'flex', gap: { xs: 1.5, md: 4 } }}>
-              {[
+            {(() => {
+              const tiles = [
                 {
                   label: 'Income',
                   value: incomeTotals.actual,
@@ -2167,54 +2117,127 @@ function Reports() {
                     'up'
                   ),
                 },
-              ].map((tile, index) => (
-                <Fragment key={tile.label}>
-                  {index > 0 && <Divider orientation="vertical" flexItem />}
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography
-                      variant="caption"
+              ];
+
+              // Desktop: three columns with dividers
+              if (isDesktopView) {
+                return (
+                  <Box sx={{ display: 'flex', gap: 4 }}>
+                    {tiles.map((tile, index) => (
+                      <Fragment key={tile.label}>
+                        {index > 0 && (
+                          <Divider orientation="vertical" flexItem />
+                        )}
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              fontSize: '0.8125rem',
+                              color: 'text.secondary',
+                            }}
+                          >
+                            {tile.label}
+                          </Typography>
+                          <Typography
+                            noWrap
+                            sx={{
+                              fontSize: '1.375rem',
+                              fontWeight: 600,
+                              color: tile.color,
+                            }}
+                          >
+                            {formatCurrency(tile.value, baseCurrency)}
+                          </Typography>
+                          {tile.delta && (
+                            <Box sx={{ fontSize: '0.75rem', mt: 0.25 }}>
+                              {renderDelta(tile.delta, { label: true })}
+                            </Box>
+                          )}
+                          <Typography
+                            noWrap
+                            variant="caption"
+                            sx={{
+                              fontSize: '0.75rem',
+                              color: 'text.secondary',
+                              display: 'block',
+                            }}
+                          >
+                            Plan: {formatCurrency(tile.plan, baseCurrency)}
+                          </Typography>
+                        </Box>
+                      </Fragment>
+                    ))}
+                  </Box>
+                );
+              }
+
+              // Mobile: stacked rows — label left, amount + delta right, so a
+              // long amount gets the full width instead of a squeezed column
+              return (
+                <Box>
+                  {tiles.map((tile, index) => (
+                    <Box
+                      key={tile.label}
                       sx={{
-                        fontSize: { xs: '0.6875rem', md: '0.8125rem' },
-                        color: 'text.secondary',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 1.5,
+                        py: 1,
+                        borderTop: index > 0 ? '1px solid' : 'none',
+                        borderColor: 'divider',
                       }}
                     >
-                      {tile.label}
-                    </Typography>
-                    <Typography
-                      noWrap
-                      sx={{
-                        fontSize: { xs: '0.9375rem', md: '1.375rem' },
-                        fontWeight: 600,
-                        color: tile.color,
-                      }}
-                    >
-                      {formatCurrency(tile.value, baseCurrency)}
-                    </Typography>
-                    {tile.delta && (
-                      <Box
+                      <Typography
                         sx={{
-                          fontSize: { xs: '0.625rem', md: '0.75rem' },
-                          mt: 0.25,
+                          fontSize: '0.875rem',
+                          fontWeight: 500,
+                          flexShrink: 0,
                         }}
                       >
-                        {renderDelta(tile.delta, { label: true })}
+                        {tile.label}
+                      </Typography>
+                      <Box sx={{ textAlign: 'right', minWidth: 0 }}>
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'flex-end',
+                            gap: 0.75,
+                          }}
+                        >
+                          {tile.delta && (
+                            <Box sx={{ fontSize: '0.6875rem' }}>
+                              {renderDelta(tile.delta)}
+                            </Box>
+                          )}
+                          <Typography
+                            noWrap
+                            sx={{
+                              fontSize: '1.0625rem',
+                              fontWeight: 700,
+                              color: tile.color,
+                            }}
+                          >
+                            {formatCurrency(tile.value, baseCurrency)}
+                          </Typography>
+                        </Box>
+                        {tile.plan > 0 && (
+                          <Typography
+                            sx={{
+                              fontSize: '0.6875rem',
+                              color: 'text.secondary',
+                            }}
+                          >
+                            Plan {formatCurrency(tile.plan, baseCurrency)}
+                          </Typography>
+                        )}
                       </Box>
-                    )}
-                    <Typography
-                      noWrap
-                      variant="caption"
-                      sx={{
-                        fontSize: { xs: '0.625rem', md: '0.75rem' },
-                        color: 'text.secondary',
-                        display: 'block',
-                      }}
-                    >
-                      Plan: {formatCurrency(tile.plan, baseCurrency)}
-                    </Typography>
-                  </Box>
-                </Fragment>
-              ))}
-            </Box>
+                    </Box>
+                  ))}
+                </Box>
+              );
+            })()}
             {insight && (
               <Typography
                 sx={{
