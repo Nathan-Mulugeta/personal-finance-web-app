@@ -1,11 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import {
-  selectAccountNameGetter,
-  selectCategoryDisplayNameGetter,
-  selectCategoryMap,
-} from '../store/selectors';
+import { selectCategoryMap } from '../store/selectors';
 import {
   Button,
   Box,
@@ -19,15 +15,8 @@ import {
   InputAdornment,
   Checkbox,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   TextField,
   Typography,
-  useMediaQuery,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
@@ -39,7 +28,7 @@ import CameraAltIcon from '@mui/icons-material/CameraAlt';
 import ChatIcon from '@mui/icons-material/Chat';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import AddTransactionDialog from '../components/common/AddTransactionDialog';
-import EditTransactionDialog from '../components/common/EditTransactionDialog';
+import CategoryTransactionsList from '../components/common/CategoryTransactionsList';
 import BatchTransactionDialog from '../components/common/BatchTransactionDialog';
 import AddTransferDialog from '../components/common/AddTransferDialog';
 import ReceiptCaptureDialog from '../components/common/ReceiptCaptureDialog';
@@ -47,7 +36,6 @@ import NaturalLanguageDialog from '../components/common/NaturalLanguageDialog';
 import AITransactionsReviewModal from '../components/common/AITransactionsReviewModal';
 import ErrorMessage from '../components/common/ErrorMessage';
 import EmptyState from '../components/common/EmptyState';
-import { format, parseISO, isToday, isYesterday } from 'date-fns';
 import { usePageRefresh } from '../hooks/usePageRefresh';
 import { clearError } from '../store/slices/transactionsSlice';
 import { updateSetting } from '../store/slices/settingsSlice';
@@ -57,12 +45,8 @@ const HOME_SHORTCUTS_SETTING_KEY = 'HomeCategoryShortcuts';
 function Home({ quickAddExpense = false }) {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  // Matches the md breakpoint previously used for the CSS card/table switch
-  const isDesktopView = useMediaQuery((theme) => theme.breakpoints.up('md'));
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [editingTransaction, setEditingTransaction] = useState(null);
   const [addTransactionOpen, setAddTransactionOpen] = useState(false);
   const [addTransactionPrefill, setAddTransactionPrefill] = useState(null);
   const [batchTransactionOpen, setBatchTransactionOpen] = useState(false);
@@ -85,8 +69,6 @@ function Home({ quickAddExpense = false }) {
   const { settings } = useSelector((state) => state.settings);
 
   // Memoized O(1) lookup functions from selectors
-  const getAccountName = useSelector(selectAccountNameGetter);
-  const getCategoryDisplayName = useSelector(selectCategoryDisplayNameGetter);
   const categoryMap = useSelector(selectCategoryMap);
 
   const activeShortcutCategories = useMemo(
@@ -226,26 +208,7 @@ function Home({ quickAddExpense = false }) {
 
   // Get date display with time (Today shows time only, Yesterday shows "Yesterday, time", older dates show "Dec 25, time")
   // Now uses the date field which contains full datetime (TIMESTAMPTZ)
-  const getDateDisplay = useCallback((transaction) => {
-    const txnDateTime = parseISO(transaction.date);
-    
-    if (isToday(txnDateTime)) {
-      return format(txnDateTime, 'h:mm a');
-    } else if (isYesterday(txnDateTime)) {
-      return `Yesterday, ${format(txnDateTime, 'h:mm a')}`;
-    }
-    return format(txnDateTime, 'MMM d, h:mm a');
-  }, []);
 
-  const handleOpenEditDialog = useCallback((transaction) => {
-    setEditingTransaction(transaction);
-    setEditDialogOpen(true);
-  }, []);
-
-  const handleCloseEditDialog = useCallback(() => {
-    setEditDialogOpen(false);
-    setEditingTransaction(null);
-  }, []);
 
   const handleClearSearch = useCallback(() => {
     setSearchQuery('');
@@ -320,292 +283,6 @@ function Home({ quickAddExpense = false }) {
     setAddTransactionPrefill(null);
   }, []);
 
-  // Render mobile transaction row
-  const renderMobileTransaction = (transaction) => {
-    const description = transaction.description || '';
-    const dateDisplay = getDateDisplay(transaction);
-
-    return (
-      <Box
-        key={transaction.transaction_id}
-        onClick={() => handleOpenEditDialog(transaction)}
-        sx={{
-          py: 1,
-          px: 0.5,
-          borderBottom: '1px solid',
-          borderColor: 'divider',
-          cursor: 'pointer',
-          display: 'flex',
-          gap: 0.75,
-          alignItems: 'flex-start',
-          '&:active': { backgroundColor: 'action.hover' },
-          overflow: 'hidden',
-          width: '100%',
-          boxSizing: 'border-box',
-          userSelect: 'none',
-        }}
-      >
-        <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden', width: 0 }}>
-          <Box
-            sx={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              gap: 1,
-              width: '100%',
-            }}
-          >
-            <Typography
-              variant="body2"
-              component="div"
-              sx={{
-                fontSize: '0.8125rem',
-                fontWeight: 500,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                minWidth: 0,
-                flex: 1,
-              }}
-            >
-              {getCategoryDisplayName(transaction.category_id)}
-            </Typography>
-            <Typography
-              variant="body2"
-              fontWeight={600}
-              sx={{
-                fontSize: '0.875rem',
-                color:
-                  transaction.type === 'Income' ||
-                  transaction.type === 'Transfer In'
-                    ? 'google.green'
-                    : transaction.type === 'Expense' ||
-                      transaction.type === 'Transfer Out'
-                    ? 'google.red'
-                    : 'text.primary',
-                flexShrink: 0,
-              }}
-            >
-              {transaction.currency}{' '}
-              {new Intl.NumberFormat('en-US', {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              }).format(Math.abs(transaction.amount))}
-            </Typography>
-          </Box>
-          <Box
-            sx={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              gap: 1,
-              width: '100%',
-            }}
-          >
-            <Typography
-              variant="body2"
-              component="div"
-              sx={{
-                fontSize: '0.6875rem',
-                color: 'text.secondary',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                minWidth: 0,
-                flex: 1,
-              }}
-            >
-              {getAccountName(transaction.account_id)}
-              {description && ` • ${description}`}
-            </Typography>
-            <Typography
-              variant="body2"
-              sx={{
-                fontSize: '0.6875rem',
-                color: 'text.secondary',
-                flexShrink: 0,
-              }}
-            >
-              {dateDisplay}
-            </Typography>
-          </Box>
-        </Box>
-      </Box>
-    );
-  };
-
-  // Render desktop table row
-  const renderDesktopTableRow = (transaction) => {
-    const dateDisplay = getDateDisplay(transaction);
-
-    return (
-      <TableRow
-        key={transaction.transaction_id}
-        hover
-        onClick={() => handleOpenEditDialog(transaction)}
-        sx={{
-          cursor: 'pointer',
-          userSelect: 'none',
-          '&:hover': {
-            backgroundColor: 'action.hover',
-          },
-          '& td': {
-            borderBottom: '1px solid',
-            borderColor: 'divider',
-            py: 0.5,
-            fontSize: '0.8125rem',
-          },
-        }}
-      >
-        <TableCell>
-          <Typography
-            variant="body2"
-            sx={{
-              fontSize: '0.8125rem',
-              fontWeight: 500,
-            }}
-          >
-            {getCategoryDisplayName(transaction.category_id)}
-          </Typography>
-        </TableCell>
-        <TableCell>
-          <Typography variant="body2" sx={{ fontSize: '0.8125rem' }}>
-            {getAccountName(transaction.account_id)}
-          </Typography>
-        </TableCell>
-        <TableCell>
-          <Typography
-            variant="body2"
-            sx={{
-              fontSize: '0.8125rem',
-              color: 'text.secondary',
-              maxWidth: 200,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {transaction.description || '-'}
-          </Typography>
-        </TableCell>
-        <TableCell>
-          <Typography
-            variant="body2"
-            sx={{
-              fontSize: '0.8125rem',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {dateDisplay}
-          </Typography>
-        </TableCell>
-        <TableCell align="right">
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'flex-end',
-              gap: 0.5,
-            }}
-          >
-            <Typography
-              variant="body2"
-              sx={{
-                fontSize: '0.75rem',
-                color: 'text.secondary',
-              }}
-            >
-              {transaction.currency}
-            </Typography>
-            <Typography
-              variant="body2"
-              fontWeight={600}
-              sx={{
-                fontSize: '0.875rem',
-                color:
-                  transaction.type === 'Income' ||
-                  transaction.type === 'Transfer In'
-                    ? 'google.green'
-                    : transaction.type === 'Expense' ||
-                      transaction.type === 'Transfer Out'
-                    ? 'google.red'
-                    : 'text.primary',
-              }}
-            >
-              {new Intl.NumberFormat('en-US', {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              }).format(Math.abs(transaction.amount))}
-            </Typography>
-          </Box>
-        </TableCell>
-      </TableRow>
-    );
-  };
-
-  // Render transactions list/table
-  const renderTransactions = (transactions) => {
-    if (transactions.length === 0) {
-      return (
-        <EmptyState
-          icon={<ReceiptIcon />}
-          title={
-            debouncedSearchQuery ? 'No transactions found' : 'No transactions yet'
-          }
-          subtitle={
-            debouncedSearchQuery
-              ? 'Try searching by category name or transaction description'
-              : 'Add your first transaction to get started'
-          }
-        />
-      );
-    }
-
-    return (
-      <>
-        {/* Mobile View */}
-        {!isDesktopView && (
-        <Box sx={{ overflow: 'hidden' }}>
-          {transactions.map((txn) => renderMobileTransaction(txn))}
-        </Box>
-        )}
-
-        {/* Desktop Table View */}
-        {isDesktopView && (
-        <TableContainer sx={{ overflow: 'hidden' }}>
-          <Table size="small">
-            <TableHead>
-              <TableRow
-                sx={{
-                  backgroundColor: 'background.default',
-                  '& th': {
-                    borderBottom: '1px solid',
-                    borderColor: 'divider',
-                    py: 0.75,
-                    fontSize: '0.6875rem',
-                    fontWeight: 600,
-                    color: 'text.secondary',
-                    textTransform: 'uppercase',
-                    letterSpacing: 0.5,
-                  },
-                }}
-              >
-                <TableCell>Category</TableCell>
-                <TableCell>Account</TableCell>
-                <TableCell>Description</TableCell>
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>Date</TableCell>
-                <TableCell align="right">Amount</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {transactions.map((txn) => renderDesktopTableRow(txn))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-        )}
-      </>
-    );
-  };
 
   return (
     <Box>
@@ -741,12 +418,6 @@ function Home({ quickAddExpense = false }) {
         initialValues={addTransactionPrefill}
       />
 
-      {/* Edit Transaction Dialog */}
-      <EditTransactionDialog
-        open={editDialogOpen}
-        onClose={handleCloseEditDialog}
-        transaction={editingTransaction}
-      />
 
       {/* Batch Transaction Dialog */}
       <BatchTransactionDialog
@@ -882,9 +553,14 @@ function Home({ quickAddExpense = false }) {
         </Box>
       )}
 
-      {/* Search Results */}
+      {/* Search Results — same look and functionality as the Transactions page */}
       {debouncedSearchQuery && (
-        <Box>{renderTransactions(searchResults)}</Box>
+        <Box>
+          <CategoryTransactionsList
+            transactions={searchResults}
+            pageSize={50}
+          />
+        </Box>
       )}
 
       {/* Recent Transactions (shown when no search query) */}
@@ -920,17 +596,25 @@ function Home({ quickAddExpense = false }) {
               </Button>
             )}
           </Box>
-          {renderTransactions(recentTransactions)}
-          {recentTransactions.length > 0 && (
-            <Button
-              fullWidth
-              size="small"
-              onClick={() => navigate('/transactions')}
-              endIcon={<ArrowForwardIcon sx={{ fontSize: 16 }} />}
-              sx={{ mt: 1, textTransform: 'none', color: 'text.secondary' }}
-            >
-              View all transactions
-            </Button>
+          {recentTransactions.length === 0 ? (
+            <EmptyState
+              icon={<ReceiptIcon />}
+              title="No transactions yet"
+              subtitle="Add your first transaction to get started"
+            />
+          ) : (
+            <>
+              <CategoryTransactionsList transactions={recentTransactions} />
+              <Button
+                fullWidth
+                size="small"
+                onClick={() => navigate('/transactions')}
+                endIcon={<ArrowForwardIcon sx={{ fontSize: 16 }} />}
+                sx={{ mt: 1, textTransform: 'none', color: 'text.secondary' }}
+              >
+                View all transactions
+              </Button>
+            </>
           )}
         </Box>
       )}

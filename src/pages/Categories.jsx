@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
+  Badge,
   Box,
   Button,
   Chip,
@@ -45,7 +46,7 @@ import { CATEGORY_TYPES, CATEGORY_STATUSES } from '../lib/api/categories';
 import PageSkeleton from '../components/common/PageSkeleton';
 import ErrorMessage from '../components/common/ErrorMessage';
 import { usePageRefresh } from '../hooks/usePageRefresh';
-import { getStatusChipSx, getTypeChipSx } from '../utils/chipStyles';
+import { getStatusChipSx } from '../utils/chipStyles';
 import { buildCategoryTree } from '../utils/categoryHierarchy';
 
 function Categories() {
@@ -282,10 +283,9 @@ function Categories() {
               pl: { xs: level * 2 + 1, sm: level * 3 + 1.5 },
               pr: { xs: 0.5, sm: 1.5 },
               py: { xs: 0.75, sm: 1 },
-              minHeight: { xs: 44, sm: 48 },
+              minHeight: { xs: 40, sm: 44 },
               borderBottom: '1px solid',
               borderColor: 'divider',
-              backgroundColor: 'background.paper',
               transition: 'background-color 0.1s ease',
               '&:hover': {
                 backgroundColor: 'action.hover',
@@ -363,20 +363,6 @@ function Categories() {
               >
                 {category.name}
               </Typography>
-              <Chip
-                label={category.type}
-                size="small"
-                sx={{
-                  height: { xs: 20, sm: 22 },
-                  fontSize: { xs: '0.6875rem', sm: '0.75rem' },
-                  flexShrink: 0,
-                  border: 'none',
-                  '& .MuiChip-label': {
-                    px: { xs: 0.75, sm: 1 },
-                  },
-                  ...getTypeChipSx(category.type),
-                }}
-              />
               {category.status === 'Archived' && (
                 <Chip
                   label="Archived"
@@ -489,19 +475,20 @@ function Categories() {
       <Box
         sx={{
           display: 'flex',
-          flexDirection: { xs: 'column', sm: 'row' },
+          alignItems: 'center',
           justifyContent: 'space-between',
-          alignItems: { xs: 'flex-start', sm: 'center' },
-          mb: { xs: 1.5, sm: 2 },
-          gap: { xs: 1, sm: 0 },
+          mb: { xs: 2, sm: 2 },
+          gap: 1,
         }}
       >
         <Typography
           variant="h5"
+          noWrap
           sx={{
             fontSize: { xs: '1.25rem', sm: '1.5rem' },
             fontWeight: 500,
             color: 'text.primary',
+            minWidth: 0,
           }}
         >
           Categories
@@ -509,40 +496,50 @@ function Categories() {
         <Box
           sx={{
             display: 'flex',
-            gap: 1,
-            flexWrap: 'wrap',
-            width: { xs: '100%', sm: 'auto' },
+            alignItems: 'center',
+            gap: { xs: 0.25, sm: 0.5 },
+            flexShrink: 0,
           }}
         >
-          <Button
-            variant={activeFilterCount > 0 ? 'contained' : 'text'}
-            startIcon={<FilterListIcon sx={{ fontSize: 18 }} />}
+          <IconButton
             onClick={() => setFiltersOpen(!filtersOpen)}
-            color={activeFilterCount > 0 ? 'primary' : 'inherit'}
-            size="small"
+            aria-label="Filters"
             sx={{
-              textTransform: 'none',
-              fontSize: '0.875rem',
-              minHeight: 36,
-              flex: { xs: '1 1 auto', sm: 'none' },
+              width: 36,
+              height: 36,
+              color: 'text.secondary',
+              '&:hover': { backgroundColor: 'action.hover' },
             }}
           >
-            Filters {activeFilterCount > 0 && `(${activeFilterCount})`}
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon sx={{ fontSize: 18 }} />}
+            <Badge
+              badgeContent={activeFilterCount}
+              color="primary"
+              overlap="circular"
+              sx={{
+                '& .MuiBadge-badge': {
+                  fontSize: '0.5625rem',
+                  height: 15,
+                  minWidth: 15,
+                  px: 0.25,
+                },
+              }}
+            >
+              <FilterListIcon sx={{ fontSize: 20 }} />
+            </Badge>
+          </IconButton>
+          <IconButton
             onClick={() => handleOpenDialog()}
-            size="small"
+            aria-label="Add category"
             sx={{
-              textTransform: 'none',
-              fontSize: '0.875rem',
-              minHeight: 36,
-              flex: { xs: '1 1 auto', sm: 'none' },
+              width: 36,
+              height: 36,
+              backgroundColor: 'primary.main',
+              color: 'primary.contrastText',
+              '&:hover': { backgroundColor: 'primary.dark' },
             }}
           >
-            Add Category
-          </Button>
+            <AddIcon sx={{ fontSize: 20 }} />
+          </IconButton>
         </Box>
       </Box>
 
@@ -657,53 +654,44 @@ function Categories() {
           </Button>
         </Box>
       ) : (
-        <Box
-          sx={{
-            border: '1px solid',
-            borderColor: 'divider',
-            borderRadius: 1,
-            overflow: 'hidden',
-            backgroundColor: 'background.paper',
-          }}
-        >
-          {/* Table Header */}
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              px: { xs: 1.5, sm: 2 },
-              py: 1,
-              borderBottom: '1px solid',
-              borderColor: 'divider',
-              backgroundColor: 'background.default',
-            }}
-          >
-            <Typography
-              variant="caption"
-              sx={{
-                fontSize: '0.75rem',
-                fontWeight: 600,
-                color: 'text.secondary',
-                textTransform: 'uppercase',
-                letterSpacing: 0.5,
-              }}
-            >
-              Category
-            </Typography>
-            <Typography
-              variant="caption"
-              sx={{
-                fontSize: '0.75rem',
-                color: 'text.secondary',
-              }}
-            >
-              {countTotalCategories(categoryTree)} categor
-              {countTotalCategories(categoryTree) === 1 ? 'y' : 'ies'}
-            </Typography>
-          </Box>
-          {/* Category List */}
-          <Box>{renderCategoryTree(categoryTree)}</Box>
+        <Box>
+          {[
+            { label: 'Income', nodes: categoryTree.filter((n) => n.type === 'Income') },
+            { label: 'Expenses', nodes: categoryTree.filter((n) => n.type === 'Expense') },
+          ].map(
+            (section) =>
+              section.nodes.length > 0 && (
+                <Box key={section.label} sx={{ mb: 3 }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'baseline',
+                      justifyContent: 'space-between',
+                      mb: 0.5,
+                    }}
+                  >
+                    <Typography
+                      sx={{
+                        fontSize: '0.6875rem',
+                        fontWeight: 600,
+                        letterSpacing: 0.6,
+                        textTransform: 'uppercase',
+                        color: 'text.secondary',
+                      }}
+                    >
+                      {section.label}
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      sx={{ fontSize: '0.6875rem', color: 'text.disabled' }}
+                    >
+                      {countTotalCategories(section.nodes)}
+                    </Typography>
+                  </Box>
+                  <Box>{renderCategoryTree(section.nodes)}</Box>
+                </Box>
+              )
+          )}
         </Box>
       )}
 

@@ -19,12 +19,11 @@ import {
   LinearProgress,
   useMediaQuery,
   useTheme,
-  ToggleButtonGroup,
-  ToggleButton,
 } from '@mui/material';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import TodayIcon from '@mui/icons-material/Today';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import BudgetDialog from '../components/common/BudgetDialog';
@@ -61,6 +60,12 @@ const tappableRowSx = {
     '&:hover': { backgroundColor: 'action.hover' },
   },
 };
+
+const PERIOD_OPTIONS = [
+  { value: 'month', label: 'Month' },
+  { value: '6months', label: '6 Months' },
+  { value: '1year', label: '1 Year' },
+];
 
 function Reports() {
   const theme = useTheme();
@@ -143,12 +148,6 @@ function Reports() {
     }
     const newDate = addMonths(currentDate, monthsToAdd);
     setSelectedMonth(format(newDate, 'yyyy-MM'));
-  };
-
-  const handlePeriodTypeChange = (event, newPeriodType) => {
-    if (newPeriodType !== null) {
-      setPeriodType(newPeriodType);
-    }
   };
 
   // Toggle category expansion
@@ -936,6 +935,7 @@ function Reports() {
   };
 
   const periodDisplay = getPeriodDisplay();
+  const currentMonth = format(new Date(), 'yyyy-MM');
 
   // Render category row
   const renderCategoryRow = (item, type, level = 0) => {
@@ -1405,7 +1405,7 @@ function Reports() {
               <Typography
                 variant="body2"
                 noWrap
-                sx={{ fontSize: '0.875rem', fontWeight: 500, minWidth: 0 }}
+                sx={{ fontSize: '0.9375rem', fontWeight: 500, minWidth: 0 }}
               >
                 {category.name}
               </Typography>
@@ -1425,7 +1425,7 @@ function Reports() {
             </Box>
             <Typography
               variant="body2"
-              sx={{ fontSize: '0.875rem', fontWeight: 600, flexShrink: 0 }}
+              sx={{ fontSize: '0.9375rem', fontWeight: 600, flexShrink: 0 }}
             >
               {formatCurrencyDisplay(
                 actual,
@@ -1600,7 +1600,7 @@ function Reports() {
   };
 
   // Render a full report section as a dense list with totals up top (mobile)
-  const renderSectionMobile = (reportData, totals, type) => {
+  const renderSectionMobile = (reportData, totals, type, label) => {
     const actualForeign = getForeignCurrencyDisplay(
       totals.currencies,
       totals.actualOriginalAmounts
@@ -1624,8 +1624,47 @@ function Reports() {
 
     return (
       <Box>
-        {/* Section totals at a glance */}
-        <Box sx={{ mb: 0.5 }}>
+        {/* Section header band — anchors the section and its total so the
+            eye can chunk the list into clear sections while scanning */}
+        <Box
+          sx={{
+            px: 1.25,
+            py: 1,
+            borderRadius: 1,
+            backgroundColor: 'action.hover',
+          }}
+        >
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 1,
+              mb: 0.25,
+            }}
+          >
+            <Typography
+              sx={{
+                fontSize: '0.6875rem',
+                fontWeight: 600,
+                letterSpacing: 0.6,
+                textTransform: 'uppercase',
+                color: 'text.secondary',
+              }}
+            >
+              {label}
+            </Typography>
+            <Typography
+              sx={{
+                fontSize: '0.6875rem',
+                fontWeight: 600,
+                color: variancePhrase.color,
+                flexShrink: 0,
+              }}
+            >
+              {variancePhrase.text}
+            </Typography>
+          </Box>
           <Box
             sx={{
               display: 'flex',
@@ -1634,9 +1673,7 @@ function Reports() {
               gap: 1,
             }}
           >
-            <Typography
-              sx={{ fontSize: '1.125rem', fontWeight: 600, minWidth: 0 }}
-            >
+            <Typography sx={{ fontSize: '1.25rem', fontWeight: 700, minWidth: 0 }}>
               {formatCurrencyDisplay(
                 totals.actual,
                 totals.currencies,
@@ -1645,33 +1682,23 @@ function Reports() {
               )}
               {actualForeign &&
                 ` · ${formatCurrency(actualForeign.amount, actualForeign.currency)}`}
-              {totals.budget > 0 && (
-                <Typography
-                  component="span"
-                  sx={{
-                    display: 'block',
-                    fontSize: '0.75rem',
-                    fontWeight: 400,
-                    color: 'text.secondary',
-                  }}
-                >
-                  of {formatCurrency(totals.budget, baseCurrency)}
-                  {budgetForeign &&
-                    ` · ${formatCurrency(budgetForeign.amount, budgetForeign.currency)}`}
-                </Typography>
-              )}
             </Typography>
-            <Typography
-              variant="caption"
-              sx={{
-                fontSize: '0.75rem',
-                fontWeight: 500,
-                color: variancePhrase.color,
-                flexShrink: 0,
-              }}
-            >
-              {variancePhrase.text}
-            </Typography>
+            {totals.budget > 0 && (
+              <Typography
+                variant="caption"
+                noWrap
+                sx={{
+                  fontSize: '0.75rem',
+                  color: 'text.secondary',
+                  flexShrink: 0,
+                  minWidth: 0,
+                }}
+              >
+                of {formatCurrency(totals.budget, baseCurrency)}
+                {budgetForeign &&
+                  ` · ${formatCurrency(budgetForeign.amount, budgetForeign.currency)}`}
+              </Typography>
+            )}
           </Box>
           {pctUsed !== null && (
             <LinearProgress
@@ -1680,9 +1707,9 @@ function Reports() {
               color={barColor}
               sx={{
                 mt: 0.75,
-                height: 5,
-                borderRadius: 2.5,
-                backgroundColor: 'action.hover',
+                height: 6,
+                borderRadius: 3,
+                backgroundColor: 'action.selected',
               }}
             />
           )}
@@ -1707,7 +1734,7 @@ function Reports() {
                 noWrap
                 sx={{
                   fontSize: '0.6875rem',
-                  fontWeight: 500,
+                  fontWeight: 600,
                   color: getDifferenceColor(totals.difference, type),
                   minWidth: 0,
                 }}
@@ -1729,12 +1756,12 @@ function Reports() {
           <Typography
             variant="body2"
             color="text.secondary"
-            sx={{ mt: 1, fontSize: '0.8125rem' }}
+            sx={{ mt: 1.5, fontSize: '0.8125rem' }}
           >
             No categories with budget or activity for this period
           </Typography>
         ) : (
-          <Box>
+          <Box sx={{ mt: 0.5 }}>
             {reportData.map((item) => renderMobileCategoryRow(item, type))}
           </Box>
         )}
@@ -1789,30 +1816,54 @@ function Reports() {
               gap: 2,
             }}
           >
-            {/* Period Type Selector */}
+            {/* Period Type Selector — borderless underline tabs */}
             <Box
-              sx={{
-                display: 'flex',
-                justifyContent: 'center',
-              }}
+              sx={{ display: 'flex', justifyContent: 'center' }}
             >
-              <ToggleButtonGroup
-                value={periodType}
-                exclusive
-                onChange={handlePeriodTypeChange}
-                aria-label="period type"
-                size="small"
-              >
-                <ToggleButton value="month" aria-label="month">
-                  Month
-                </ToggleButton>
-                <ToggleButton value="6months" aria-label="6 months">
-                  6 Months
-                </ToggleButton>
-                <ToggleButton value="1year" aria-label="1 year">
-                  1 Year
-                </ToggleButton>
-              </ToggleButtonGroup>
+              {PERIOD_OPTIONS.map((option, index) => (
+                <Fragment key={option.value}>
+                  {index > 0 && (
+                    <Divider
+                      orientation="vertical"
+                      flexItem
+                      sx={{ my: 0.75 }}
+                    />
+                  )}
+                  <Box
+                    onClick={() => setPeriodType(option.value)}
+                    sx={{
+                      px: { xs: 1.5, sm: 2.5 },
+                      py: 0.75,
+                      fontSize: '0.875rem',
+                      cursor: 'pointer',
+                      WebkitTapHighlightColor: 'transparent',
+                      userSelect: 'none',
+                      fontWeight: periodType === option.value ? 600 : 400,
+                      color:
+                        periodType === option.value
+                          ? 'primary.main'
+                          : 'text.secondary',
+                      borderBottom: '2px solid',
+                      borderColor:
+                        periodType === option.value
+                          ? 'primary.main'
+                          : 'transparent',
+                      transition:
+                        'color 0.15s ease, border-color 0.15s ease',
+                      '@media (hover: hover)': {
+                        '&:hover': {
+                          color:
+                            periodType === option.value
+                              ? 'primary.main'
+                              : 'text.primary',
+                        },
+                      },
+                    }}
+                  >
+                    {option.label}
+                  </Box>
+                </Fragment>
+              ))}
             </Box>
 
             {/* Period Navigation */}
@@ -1837,6 +1888,20 @@ function Reports() {
                 <ChevronRightIcon />
               </IconButton>
             </Box>
+
+            {/* Quick jump back to the current month */}
+            {selectedMonth !== currentMonth && (
+              <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                <Button
+                  size="small"
+                  onClick={() => setSelectedMonth(currentMonth)}
+                  startIcon={<TodayIcon sx={{ fontSize: 16 }} />}
+                  sx={{ textTransform: 'none' }}
+                >
+                  This month
+                </Button>
+              </Box>
+            )}
           </Box>
       </Box>
 
@@ -1906,13 +1971,15 @@ function Reports() {
       </Box>
 
       {/* Income Budget vs Actual Section */}
-      <Box sx={{ mb: { xs: 2.5, sm: 3 } }}>
-          <Typography variant="h6" sx={{ mb: { xs: 1.5, sm: 2 }, fontWeight: 'bold', fontSize: { xs: '1rem', sm: '1.125rem' } }}>
-            {isDesktopView ? 'Income Budget vs Actual' : 'Income'}
-          </Typography>
+      <Box sx={{ mb: { xs: 3, sm: 3 } }}>
+          {isDesktopView && (
+            <Typography variant="h6" sx={{ mb: { xs: 1.5, sm: 2 }, fontWeight: 'bold', fontSize: { xs: '1rem', sm: '1.125rem' } }}>
+              Income Budget vs Actual
+            </Typography>
+          )}
           {/* Mobile list view */}
           {!isDesktopView &&
-            renderSectionMobile(incomeReportData, incomeTotals, 'Income')}
+            renderSectionMobile(incomeReportData, incomeTotals, 'Income', 'Income')}
           {/* Desktop table view */}
           {isDesktopView && (
           <Box
@@ -2131,12 +2198,14 @@ function Reports() {
 
       {/* Expense Budget vs Actual Section */}
       <Box sx={{ mb: { xs: 2.5, sm: 3 } }}>
-          <Typography variant="h6" sx={{ mb: { xs: 1.5, sm: 2 }, fontWeight: 'bold', fontSize: { xs: '1rem', sm: '1.125rem' } }}>
-            {isDesktopView ? 'Expense Budget vs Actual' : 'Expenses'}
-          </Typography>
+          {isDesktopView && (
+            <Typography variant="h6" sx={{ mb: { xs: 1.5, sm: 2 }, fontWeight: 'bold', fontSize: { xs: '1rem', sm: '1.125rem' } }}>
+              Expense Budget vs Actual
+            </Typography>
+          )}
           {/* Mobile list view */}
           {!isDesktopView &&
-            renderSectionMobile(expenseReportData, expenseTotals, 'Expense')}
+            renderSectionMobile(expenseReportData, expenseTotals, 'Expense', 'Expenses')}
           {/* Desktop table view */}
           {isDesktopView && (
           <Box

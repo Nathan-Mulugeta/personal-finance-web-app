@@ -58,8 +58,10 @@ const dateDisplay = (dateStr) => {
  * Transactions page needs to change.
  *
  * @param {Array} transactions - plain transaction rows to display
+ * @param {number} [pageSize] - if set, render in chunks with a "Show more"
+ *   button (like the Transactions page); omit to render all rows
  */
-function CategoryTransactionsList({ transactions }) {
+function CategoryTransactionsList({ transactions, pageSize }) {
   const dispatch = useDispatch();
   const getAccountName = useSelector(selectAccountNameGetter);
   const getCategoryDisplayName = useSelector(selectCategoryDisplayNameGetter);
@@ -77,6 +79,18 @@ function CategoryTransactionsList({ transactions }) {
     () => transactions.map((t) => t.transaction_id),
     [transactions]
   );
+
+  // Optional chunked rendering (search results can be long)
+  const [visibleCount, setVisibleCount] = useState(
+    pageSize || transactions.length
+  );
+  useEffect(() => {
+    setVisibleCount(pageSize || transactions.length);
+  }, [pageSize, transactions]);
+  const visibleTransactions = pageSize
+    ? transactions.slice(0, visibleCount)
+    : transactions;
+  const hiddenCount = transactions.length - visibleTransactions.length;
 
   // Drop any selected ids that are no longer in the list (e.g. after a delete)
   useEffect(() => {
@@ -225,7 +239,7 @@ function CategoryTransactionsList({ transactions }) {
 
       {/* Rows */}
       <Box>
-        {transactions.map((txn) => {
+        {visibleTransactions.map((txn) => {
           const isSelected = selectedIds.has(txn.transaction_id);
           const description = txn.description || '';
           return (
@@ -317,6 +331,19 @@ function CategoryTransactionsList({ transactions }) {
           );
         })}
       </Box>
+
+      {hiddenCount > 0 && (
+        <Button
+          fullWidth
+          size="small"
+          onClick={() =>
+            setVisibleCount((count) => count + (pageSize || count))
+          }
+          sx={{ mt: 1, textTransform: 'none', color: 'text.secondary' }}
+        >
+          Show {Math.min(pageSize, hiddenCount)} more ({hiddenCount} remaining)
+        </Button>
+      )}
 
       {/* Per-row edit (stacked over the modal) */}
       <EditTransactionDialog

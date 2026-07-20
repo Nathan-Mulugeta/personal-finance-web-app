@@ -7,6 +7,7 @@ import {
   selectFilteredTransactions,
 } from '../store/selectors';
 import {
+  Badge,
   Box,
   Button,
   Checkbox,
@@ -874,19 +875,20 @@ function Transactions() {
       <Box
         sx={{
           display: 'flex',
-          flexDirection: { xs: 'column', sm: 'row' },
+          alignItems: 'center',
           justifyContent: 'space-between',
-          alignItems: { xs: 'flex-start', sm: 'center' },
           mb: 2,
-          gap: { xs: 1.5, sm: 0 },
+          gap: 1,
         }}
       >
         <Typography
           variant="h5"
+          noWrap
           sx={{
             fontSize: { xs: '1.25rem', sm: '1.5rem' },
             fontWeight: 500,
             color: 'text.primary',
+            minWidth: 0,
           }}
         >
           Transactions
@@ -894,72 +896,62 @@ function Transactions() {
         <Box
           sx={{
             display: 'flex',
-            gap: 0.5,
-            flexWrap: 'wrap',
-            width: { xs: '100%', sm: 'auto' },
+            alignItems: 'center',
+            gap: { xs: 0.25, sm: 0.5 },
+            flexShrink: 0,
           }}
         >
-          <Button
-            variant="outlined"
-            startIcon={
-              isMobile ? null : <FilterListIcon sx={{ fontSize: 16 }} />
-            }
+          <IconButton
             onClick={() => setFiltersOpen(!filtersOpen)}
-            color={activeFilterCount > 0 ? 'primary' : 'inherit'}
-            size="small"
+            aria-label="Filters"
             sx={{
-              flex: { xs: '1 1 auto', sm: 'none' },
-              textTransform: 'none',
-              fontSize: { xs: '0.75rem', sm: '0.8rem' },
-              minHeight: { xs: 32, sm: 34 },
-              px: { xs: 1, sm: 1.5 },
+              width: 36,
+              height: 36,
+              color: 'text.secondary',
+              '&:hover': { backgroundColor: 'action.hover' },
             }}
           >
-            {isMobile ? (
-              <FilterListIcon
-                sx={{ fontSize: 16, mr: activeFilterCount > 0 ? 0.5 : 0 }}
-              />
-            ) : null}
-            {isMobile
-              ? activeFilterCount > 0
-                ? activeFilterCount
-                : ''
-              : `Filters ${
-                  activeFilterCount > 0 ? `(${activeFilterCount})` : ''
-                }`}
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={
-              isMobile ? null : <SwapHorizIcon sx={{ fontSize: 16 }} />
-            }
+            <Badge
+              badgeContent={activeFilterCount}
+              color="primary"
+              overlap="circular"
+              sx={{
+                '& .MuiBadge-badge': {
+                  fontSize: '0.5625rem',
+                  height: 15,
+                  minWidth: 15,
+                  px: 0.25,
+                },
+              }}
+            >
+              <FilterListIcon sx={{ fontSize: 20 }} />
+            </Badge>
+          </IconButton>
+          <IconButton
             onClick={handleOpenTransferDialog}
-            size="small"
+            aria-label="New transfer"
             sx={{
-              flex: { xs: '1 1 auto', sm: 'none' },
-              textTransform: 'none',
-              fontSize: { xs: '0.75rem', sm: '0.8rem' },
-              minHeight: { xs: 32, sm: 34 },
-              px: { xs: 1, sm: 1.5 },
+              width: 36,
+              height: 36,
+              color: 'text.secondary',
+              '&:hover': { backgroundColor: 'action.hover' },
             }}
           >
-            {isMobile ? <SwapHorizIcon sx={{ fontSize: 16 }} /> : 'Transfer'}
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={isMobile ? null : <AddIcon sx={{ fontSize: 16 }} />}
+            <SwapHorizIcon sx={{ fontSize: 20 }} />
+          </IconButton>
+          <IconButton
             onClick={() => setAddTransactionOpen(true)}
-            size="small"
+            aria-label="Add transaction"
             sx={{
-              flex: { xs: '1 1 auto', sm: 'none' },
-              textTransform: 'none',
-              fontSize: { xs: '0.75rem', sm: '0.8rem' },
-              minHeight: { xs: 32, sm: 34 },
-              px: { xs: 1, sm: 1.5 },
+              width: 36,
+              height: 36,
+              backgroundColor: 'primary.main',
+              color: 'primary.contrastText',
+              '&:hover': { backgroundColor: 'primary.dark' },
             }}
           >
-            {isMobile ? <AddIcon sx={{ fontSize: 16 }} /> : 'Add'}
-          </Button>
+            <AddIcon sx={{ fontSize: 20 }} />
+          </IconButton>
         </Box>
       </Box>
 

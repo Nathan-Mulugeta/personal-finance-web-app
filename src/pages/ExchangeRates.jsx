@@ -75,10 +75,24 @@ function ExchangeRates() {
         />
         <Typography
           variant="h4"
-          sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' }, fontWeight: 500 }}
+          sx={{
+            fontSize: { xs: '1.25rem', sm: '1.5rem' },
+            fontWeight: 500,
+            flex: 1,
+            minWidth: 0,
+          }}
         >
           Exchange Rates
         </Typography>
+        {sortedExchangeRates.length > 10 && (
+          <Button
+            size="small"
+            onClick={() => setShowAll(!showAll)}
+            sx={{ textTransform: 'none', flexShrink: 0 }}
+          >
+            {showAll ? 'Show less' : `Show all (${sortedExchangeRates.length})`}
+          </Button>
+        )}
       </Box>
 
       {error && <ErrorMessage error={error} />}
@@ -91,25 +105,6 @@ function ExchangeRates() {
         />
       ) : (
         <>
-          {/* Show All / Show Less Button */}
-          {sortedExchangeRates.length > 10 && (
-            <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
-              <Button
-                variant="outlined"
-                size="small"
-                onClick={() => setShowAll(!showAll)}
-                sx={{
-                  textTransform: 'none',
-                  minHeight: 36,
-                }}
-              >
-                {showAll
-                  ? 'Show Less (10 Most Recent)'
-                  : `Show All (${sortedExchangeRates.length} total)`}
-              </Button>
-            </Box>
-          )}
-
           {/* Mobile dense-row view */}
           <Box sx={{ display: { xs: 'block', md: 'none' } }}>
             {displayedRates.map((rate) => (

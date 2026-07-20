@@ -2,12 +2,12 @@ import { useEffect, useState, useMemo, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useForm } from 'react-hook-form';
 import {
+  Badge,
   Box,
   Button,
-  Card,
-  CardContent,
   Chip,
   CircularProgress,
+  Divider,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -19,14 +19,7 @@ import {
   InputLabel,
   LinearProgress,
   MenuItem,
-  Paper,
   Select,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   TextField,
   Typography,
   Tooltip,
@@ -42,6 +35,7 @@ import PeopleIcon from '@mui/icons-material/People';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import PaymentIcon from '@mui/icons-material/Payment';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import {
   fetchBorrowingLendingRecords,
   createBorrowingLendingRecord,
@@ -59,6 +53,7 @@ import {
 } from '../lib/api/borrowingsLendings';
 import PageSkeleton from '../components/common/PageSkeleton';
 import ErrorMessage from '../components/common/ErrorMessage';
+import EmptyState from '../components/common/EmptyState';
 import { usePageRefresh } from '../hooks/usePageRefresh';
 import {
   formatCurrency,
@@ -70,8 +65,6 @@ function BorrowingsLendings() {
   const dispatch = useDispatch();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  // Matches the md breakpoint previously used for the CSS card/table switch
-  const isDesktopView = useMediaQuery(theme.breakpoints.up('md'));
   const { records, summary, loading, backgroundLoading, isInitialized, error } =
     useSelector((state) => state.borrowingsLendings);
   const { allTransactions } = useSelector((state) => state.transactions);
@@ -89,6 +82,7 @@ function BorrowingsLendings() {
   const [isEditing, setIsEditing] = useState(false);
   const [editError, setEditError] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [showHistory, setShowHistory] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
   const [isMarkingPaid, setIsMarkingPaid] = useState(null);
@@ -234,6 +228,17 @@ function BorrowingsLendings() {
 
     return filtered;
   }, [records, filters]);
+
+  // Active = current, actionable records; the rest (FullyPaid / Cancelled)
+  // form the settled history log
+  const activeRecords = useMemo(
+    () => filteredRecords.filter((r) => r.status === 'Active'),
+    [filteredRecords]
+  );
+  const historyRecords = useMemo(
+    () => filteredRecords.filter((r) => r.status !== 'Active'),
+    [filteredRecords]
+  );
 
   // Calculate summary from filtered records
   const calculatedSummary = useMemo(() => {
@@ -613,180 +618,144 @@ function BorrowingsLendings() {
       <Box
         sx={{
           display: 'flex',
-          flexDirection: { xs: 'column', sm: 'row' },
+          alignItems: 'center',
           justifyContent: 'space-between',
-          alignItems: { xs: 'flex-start', sm: 'center' },
-          mb: { xs: 1.5, sm: 2, md: 3 },
-          gap: { xs: 1.5, sm: 0 },
+          gap: 1,
+          mb: { xs: 2, sm: 3 },
         }}
       >
         <Typography
           variant="h4"
-          sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' }, fontWeight: 500 }}
+          sx={{
+            fontSize: { xs: '1.25rem', sm: '1.5rem' },
+            fontWeight: 500,
+            minWidth: 0,
+          }}
+          noWrap
         >
           Borrowings/Lendings
         </Typography>
         <Box
           sx={{
             display: 'flex',
-            gap: 1,
-            flexWrap: 'wrap',
-            width: { xs: '100%', sm: 'auto' },
+            alignItems: 'center',
+            gap: { xs: 0.25, sm: 0.5 },
+            flexShrink: 0,
           }}
         >
-          <Button
-            variant="outlined"
-            startIcon={<FilterListIcon sx={{ fontSize: 18 }} />}
+          <IconButton
             onClick={() => setFiltersOpen(!filtersOpen)}
-            color={activeFilterCount > 0 ? 'primary' : 'inherit'}
-            size="small"
-            sx={{ flex: { xs: '1 1 auto', sm: 'none' }, textTransform: 'none', minHeight: 36 }}
+            aria-label="Filters"
+            sx={{
+              width: 36,
+              height: 36,
+              color: 'text.secondary',
+              '&:hover': { backgroundColor: 'action.hover' },
+            }}
           >
-            Filters {activeFilterCount > 0 && `(${activeFilterCount})`}
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon sx={{ fontSize: 18 }} />}
+            <Badge
+              badgeContent={activeFilterCount}
+              color="primary"
+              overlap="circular"
+              sx={{
+                '& .MuiBadge-badge': {
+                  fontSize: '0.5625rem',
+                  height: 15,
+                  minWidth: 15,
+                  px: 0.25,
+                },
+              }}
+            >
+              <FilterListIcon sx={{ fontSize: 20 }} />
+            </Badge>
+          </IconButton>
+          <IconButton
             onClick={handleOpenDialog}
-            size="small"
-            sx={{ flex: { xs: '1 1 auto', sm: 'none' }, textTransform: 'none', minHeight: 36 }}
+            aria-label="Add record"
+            sx={{
+              width: 36,
+              height: 36,
+              backgroundColor: 'primary.main',
+              color: 'primary.contrastText',
+              '&:hover': { backgroundColor: 'primary.dark' },
+            }}
           >
-            Add Record
-          </Button>
+            <AddIcon sx={{ fontSize: 20 }} />
+          </IconButton>
         </Box>
       </Box>
 
       {error && <ErrorMessage error={error} />}
 
-      {/* Summary overview (Reports-style tiles) */}
+      {/* Compact overview — outstanding amounts */}
       {filteredRecords.length > 0 && (
-        <Card sx={{ mb: { xs: 2, sm: 3 } }}>
-          <CardContent
-            sx={{
-              p: { xs: 1.5, sm: 2 },
-              '&:last-child': { pb: { xs: 1.5, sm: 2 } },
-            }}
-          >
-            <Grid container spacing={{ xs: 1.5, md: 3 }}>
-            <Grid item xs={6} md={3}>
-              <Typography
-                variant="caption"
-                sx={{ fontSize: { xs: '0.6875rem', md: '0.8125rem' }, color: 'text.secondary' }}
-              >
-                Total Borrowing
-              </Typography>
-              <Typography
-                noWrap
-                sx={{
-                  fontSize: { xs: '0.9375rem', md: '1.375rem' },
-                  fontWeight: 600,
-                  color: 'google.red',
-                }}
-              >
-                {formatCurrency(calculatedSummary.borrowing.total, calculatedSummary.baseCurrency)}
-              </Typography>
-              <Typography
-                noWrap
-                variant="caption"
-                sx={{
-                  fontSize: { xs: '0.625rem', md: '0.75rem' },
-                  color: 'text.secondary',
-                  display: 'block',
-                }}
-              >
-                {calculatedSummary.borrowing.count} record{calculatedSummary.borrowing.count !== 1 ? 's' : ''}
-              </Typography>
-            </Grid>
-            <Grid item xs={6} md={3}>
-              <Typography
-                variant="caption"
-                sx={{ fontSize: { xs: '0.6875rem', md: '0.8125rem' }, color: 'text.secondary' }}
-              >
-                Remaining Borrowing
-              </Typography>
-              <Typography
-                noWrap
-                sx={{
-                  fontSize: { xs: '0.9375rem', md: '1.375rem' },
-                  fontWeight: 600,
-                  color: 'google.red',
-                }}
-              >
-                {formatCurrency(calculatedSummary.borrowing.remaining, calculatedSummary.baseCurrency)}
-              </Typography>
-              <Typography
-                noWrap
-                variant="caption"
-                sx={{
-                  fontSize: { xs: '0.625rem', md: '0.75rem' },
-                  color: 'text.secondary',
-                  display: 'block',
-                }}
-              >
-                {formatCurrency(calculatedSummary.borrowing.paid, calculatedSummary.baseCurrency)} paid
-              </Typography>
-            </Grid>
-            <Grid item xs={6} md={3}>
-              <Typography
-                variant="caption"
-                sx={{ fontSize: { xs: '0.6875rem', md: '0.8125rem' }, color: 'text.secondary' }}
-              >
-                Total Lending
-              </Typography>
-              <Typography
-                noWrap
-                sx={{
-                  fontSize: { xs: '0.9375rem', md: '1.375rem' },
-                  fontWeight: 600,
-                  color: 'google.green',
-                }}
-              >
-                {formatCurrency(calculatedSummary.lending.total, calculatedSummary.baseCurrency)}
-              </Typography>
-              <Typography
-                noWrap
-                variant="caption"
-                sx={{
-                  fontSize: { xs: '0.625rem', md: '0.75rem' },
-                  color: 'text.secondary',
-                  display: 'block',
-                }}
-              >
-                {calculatedSummary.lending.count} record{calculatedSummary.lending.count !== 1 ? 's' : ''}
-              </Typography>
-            </Grid>
-            <Grid item xs={6} md={3}>
-              <Typography
-                variant="caption"
-                sx={{ fontSize: { xs: '0.6875rem', md: '0.8125rem' }, color: 'text.secondary' }}
-              >
-                Remaining Lending
-              </Typography>
-              <Typography
-                noWrap
-                sx={{
-                  fontSize: { xs: '0.9375rem', md: '1.375rem' },
-                  fontWeight: 600,
-                  color: 'google.green',
-                }}
-              >
-                {formatCurrency(calculatedSummary.lending.remaining, calculatedSummary.baseCurrency)}
-              </Typography>
-              <Typography
-                noWrap
-                variant="caption"
-                sx={{
-                  fontSize: { xs: '0.625rem', md: '0.75rem' },
-                  color: 'text.secondary',
-                  display: 'block',
-                }}
-              >
-                {formatCurrency(calculatedSummary.lending.paid, calculatedSummary.baseCurrency)} paid
-              </Typography>
-            </Grid>
-            </Grid>
-          </CardContent>
-        </Card>
+        <Box
+          sx={{
+            mb: { xs: 2, sm: 3 },
+            display: 'flex',
+            alignItems: 'stretch',
+            gap: { xs: 2, md: 4 },
+          }}
+        >
+            {calculatedSummary.borrowing.count > 0 && (
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography
+                  variant="caption"
+                  sx={{ fontSize: { xs: '0.6875rem', md: '0.8125rem' }, color: 'text.secondary' }}
+                >
+                  Borrowing
+                </Typography>
+                <Typography
+                  noWrap
+                  sx={{
+                    fontSize: { xs: '1.125rem', md: '1.5rem' },
+                    fontWeight: 600,
+                    color: 'google.red',
+                  }}
+                >
+                  {formatCurrency(calculatedSummary.borrowing.remaining, calculatedSummary.baseCurrency)}
+                </Typography>
+                <Typography
+                  noWrap
+                  variant="caption"
+                  sx={{ fontSize: { xs: '0.625rem', md: '0.75rem' }, color: 'text.secondary', display: 'block' }}
+                >
+                  of {formatCurrency(calculatedSummary.borrowing.total, calculatedSummary.baseCurrency)} · {calculatedSummary.borrowing.count} record{calculatedSummary.borrowing.count !== 1 ? 's' : ''}
+                </Typography>
+              </Box>
+            )}
+            {calculatedSummary.borrowing.count > 0 &&
+              calculatedSummary.lending.count > 0 && (
+                <Divider orientation="vertical" flexItem />
+              )}
+            {calculatedSummary.lending.count > 0 && (
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography
+                  variant="caption"
+                  sx={{ fontSize: { xs: '0.6875rem', md: '0.8125rem' }, color: 'text.secondary' }}
+                >
+                  Lending
+                </Typography>
+                <Typography
+                  noWrap
+                  sx={{
+                    fontSize: { xs: '1.125rem', md: '1.5rem' },
+                    fontWeight: 600,
+                    color: 'google.green',
+                  }}
+                >
+                  {formatCurrency(calculatedSummary.lending.remaining, calculatedSummary.baseCurrency)}
+                </Typography>
+                <Typography
+                  noWrap
+                  variant="caption"
+                  sx={{ fontSize: { xs: '0.625rem', md: '0.75rem' }, color: 'text.secondary', display: 'block' }}
+                >
+                  of {formatCurrency(calculatedSummary.lending.total, calculatedSummary.baseCurrency)} · {calculatedSummary.lending.count} record{calculatedSummary.lending.count !== 1 ? 's' : ''}
+                </Typography>
+              </Box>
+            )}
+        </Box>
       )}
 
       {/* Filters Section */}
@@ -880,287 +849,332 @@ function BorrowingsLendings() {
       </Collapse>
 
       {filteredRecords.length === 0 ? (
-        <Box
-          sx={{
-            textAlign: 'center',
-            py: { xs: 3, sm: 4 },
-            border: '1px solid',
-            borderColor: 'divider',
-            borderRadius: 1,
-            backgroundColor: 'background.paper',
-          }}
-        >
-          <PeopleIcon sx={{ fontSize: { xs: 48, sm: 64 }, color: 'text.secondary', mb: { xs: 1.5, sm: 2 } }} />
-          <Typography variant="h6" color="text.secondary" gutterBottom sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}>
-            No records yet
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: { xs: 1.5, sm: 2 }, fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}>
-            Create your first borrowing/lending record from a transaction
-          </Typography>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon sx={{ fontSize: 18 }} />}
-            onClick={handleOpenDialog}
-            sx={{ textTransform: 'none', minHeight: 36 }}
-          >
-            Create Record
-          </Button>
-        </Box>
+        <EmptyState
+          icon={<PeopleIcon />}
+          title="No records yet"
+          subtitle="Create your first borrowing/lending record from a transaction"
+          action={
+            <Button
+              variant="contained"
+              startIcon={<AddIcon sx={{ fontSize: 18 }} />}
+              onClick={handleOpenDialog}
+              sx={{ textTransform: 'none', minHeight: 36 }}
+            >
+              Create Record
+            </Button>
+          }
+        />
       ) : (
-        <Box>
-          {/* Mobile Card View */}
-          {!isDesktopView && (
-          <Box>
-            {filteredRecords.map((record) => {
-              const originalAmount = parseFloat(record.original_amount || 0);
-              const paidAmount = parseFloat(record.paid_amount || 0);
-              const remainingAmount = parseFloat(record.remaining_amount || 0);
-              const percentage =
-                originalAmount > 0 ? (paidAmount / originalAmount) * 100 : 0;
+        (() => {
+          // Interactive row for an active borrowing/lending
+          const renderActiveRow = (record) => {
+            const originalAmount = parseFloat(record.original_amount || 0);
+            const paidAmount = parseFloat(record.paid_amount || 0);
+            const remainingAmount = parseFloat(record.remaining_amount || 0);
+            const percentage =
+              originalAmount > 0 ? (paidAmount / originalAmount) * 100 : 0;
 
-              return (
+            return (
+              <Box
+                key={record.record_id}
+                sx={{
+                  py: 1.25,
+                  borderBottom: '1px solid',
+                  borderColor: 'divider',
+                }}
+              >
                 <Box
-                  key={record.record_id}
                   sx={{
-                    mb: 1.5,
-                    p: 1.5,
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    borderRadius: 1,
-                    backgroundColor: 'background.paper',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: 1,
                   }}
                 >
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-                    <Box sx={{ flex: 1 }}>
-                      <Typography variant="body1" fontWeight="medium" sx={{ fontSize: '0.875rem', mb: 0.5 }}>
-                        {record.entity_name}
-                      </Typography>
-                      <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                        <Chip
-                          label={record.type}
-                          size="small"
-                          sx={{ height: 20, fontSize: '0.6875rem', ...getTypeChipSx(record.type) }}
-                        />
-                        <Chip label={record.currency} size="small" variant="outlined" sx={{ height: 20, fontSize: '0.6875rem' }} />
-                        <Chip label={record.status} size="small" sx={{ height: 20, fontSize: '0.6875rem', ...getStatusChipSx(record.status) }} />
-                      </Box>
-                    </Box>
-                    <Box sx={{ display: 'flex', gap: 0 }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 0.5,
+                      minWidth: 0,
+                      flex: 1,
+                    }}
+                  >
+                    <Typography
+                      noWrap
+                      sx={{ fontSize: '0.9375rem', fontWeight: 500, minWidth: 0 }}
+                    >
+                      {record.entity_name}
+                    </Typography>
+                    <Chip
+                      label={record.type}
+                      size="small"
+                      sx={{
+                        height: 16,
+                        fontSize: '0.625rem',
+                        flexShrink: 0,
+                        ...getTypeChipSx(record.type),
+                      }}
+                    />
+                  </Box>
+                  <Typography
+                    sx={{
+                      fontSize: '0.9375rem',
+                      fontWeight: 600,
+                      flexShrink: 0,
+                      color:
+                        record.type === 'Borrowing'
+                          ? 'google.red'
+                          : 'google.green',
+                    }}
+                  >
+                    {formatCurrency(remainingAmount, record.currency)}
+                  </Typography>
+                </Box>
+
+                <Box
+                  sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: 1,
+                    mt: 0.25,
+                  }}
+                >
+                  <Typography
+                    variant="caption"
+                    noWrap
+                    sx={{
+                      fontSize: '0.6875rem',
+                      color: 'text.secondary',
+                      minWidth: 0,
+                    }}
+                  >
+                    {formatCurrency(paidAmount, record.currency)} paid of{' '}
+                    {formatCurrency(originalAmount, record.currency)} ·{' '}
+                    {percentage.toFixed(0)}%
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexShrink: 0 }}>
+                    {remainingAmount > 0 && (
                       <Tooltip title="Record Payment">
+                        <IconButton
+                          size="small"
+                          onClick={() => handleOpenPaymentDialog(record)}
+                          color="primary"
+                          sx={{ p: 0.5 }}
+                        >
+                          <PaymentIcon sx={{ fontSize: 17 }} />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                    {remainingAmount > 0 && (
+                      <Tooltip title="Mark as fully paid">
                         <span>
                           <IconButton
                             size="small"
-                            onClick={() => handleOpenPaymentDialog(record)}
-                            color="primary"
-                            disabled={record.status !== 'Active'}
-                            sx={{ p: 0.5 }}
+                            onClick={() => handleMarkAsFullyPaid(record)}
+                            disabled={isMarkingPaid === record.record_id}
+                            sx={{ p: 0.5, color: 'google.green' }}
                           >
-                            <PaymentIcon sx={{ fontSize: 18 }} />
+                            {isMarkingPaid === record.record_id ? (
+                              <CircularProgress size={16} color="inherit" />
+                            ) : (
+                              <CheckCircleIcon sx={{ fontSize: 17 }} />
+                            )}
                           </IconButton>
                         </span>
                       </Tooltip>
-                      <IconButton size="small" onClick={() => handleOpenEditDialog(record)} sx={{ color: 'google.gray', '&:hover': { color: 'google.blue' }, p: 0.5 }}>
-                        <EditIcon sx={{ fontSize: 18 }} />
-                      </IconButton>
-                      <IconButton size="small" onClick={() => setDeleteConfirm(record)} sx={{ color: 'google.gray', '&:hover': { color: 'google.red' }, p: 0.5 }}>
-                        <DeleteIcon sx={{ fontSize: 18 }} />
-                      </IconButton>
-                    </Box>
-                  </Box>
-
-                  {/* Progress Bar */}
-                  <Box sx={{ mb: 1 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.25 }}>
-                      <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                        Paid: {formatCurrency(paidAmount, record.currency)}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                        Total: {formatCurrency(originalAmount, record.currency)}
-                      </Typography>
-                    </Box>
-                    <LinearProgress
-                      variant="determinate"
-                      value={Math.min(percentage, 100)}
-                      color={percentage >= 100 ? 'success' : 'primary'}
-                      sx={{ height: 6, borderRadius: 1 }}
-                    />
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.25 }}>
-                      <Typography
-                        variant="caption"
-                        color={remainingAmount > 0 ? 'warning.main' : 'success.main'}
-                        fontWeight="medium"
-                        sx={{ fontSize: '0.6875rem' }}
-                      >
-                        Remaining: {formatCurrency(remainingAmount, record.currency)}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6875rem' }}>
-                        {percentage.toFixed(1)}%
-                      </Typography>
-                    </Box>
-                  </Box>
-
-                  {record.notes && (
-                    <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                      {record.notes}
-                    </Typography>
-                  )}
-
-                  {record.status === 'Active' && remainingAmount > 0 && (
-                    <Button
-                      variant="outlined"
+                    )}
+                    <IconButton
                       size="small"
-                      startIcon={
-                        isMarkingPaid === record.record_id ? (
-                          <CircularProgress size={16} color="inherit" />
-                        ) : (
-                          <CheckCircleIcon sx={{ fontSize: 16 }} />
-                        )
-                      }
-                      onClick={() => handleMarkAsFullyPaid(record)}
-                      disabled={isMarkingPaid === record.record_id}
-                      sx={{ mt: 1, textTransform: 'none', fontSize: '0.8125rem' }}
-                      fullWidth
+                      onClick={() => handleOpenEditDialog(record)}
+                      sx={{
+                        p: 0.5,
+                        color: 'google.gray',
+                        '&:hover': { color: 'google.blue' },
+                      }}
                     >
-                      {isMarkingPaid === record.record_id ? 'Marking...' : 'Mark as Fully Paid'}
-                    </Button>
-                  )}
+                      <EditIcon sx={{ fontSize: 17 }} />
+                    </IconButton>
+                    <IconButton
+                      size="small"
+                      onClick={() => setDeleteConfirm(record)}
+                      sx={{
+                        p: 0.5,
+                        color: 'google.gray',
+                        '&:hover': { color: 'google.red' },
+                      }}
+                    >
+                      <DeleteIcon sx={{ fontSize: 17 }} />
+                    </IconButton>
+                  </Box>
                 </Box>
-              );
-            })}
-          </Box>
-          )}
 
-          {/* Desktop Table View */}
-          {isDesktopView && (
-          <TableContainer component={Paper}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Entity</TableCell>
-                  <TableCell>Type</TableCell>
-                  <TableCell>Currency</TableCell>
-                  <TableCell align="right">Original Amount</TableCell>
-                  <TableCell align="right">Paid</TableCell>
-                  <TableCell>Progress</TableCell>
-                  <TableCell align="right">Remaining</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell align="right">Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredRecords.map((record) => {
-                  const originalAmount = parseFloat(
-                    record.original_amount || 0
-                  );
-                  const paidAmount = parseFloat(record.paid_amount || 0);
-                  const remainingAmount = parseFloat(
-                    record.remaining_amount || 0
-                  );
-                  const percentage =
-                    originalAmount > 0
-                      ? (paidAmount / originalAmount) * 100
-                      : 0;
+                <LinearProgress
+                  variant="determinate"
+                  value={Math.min(percentage, 100)}
+                  color={percentage >= 100 ? 'success' : 'primary'}
+                  sx={{
+                    mt: 0.75,
+                    height: 4,
+                    borderRadius: 2,
+                    backgroundColor: 'action.hover',
+                  }}
+                />
 
-                  return (
-                    <TableRow key={record.record_id} hover>
-                      <TableCell>
-                        <Typography variant="body1" fontWeight="medium">
-                          {record.entity_name}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={record.type}
-                          size="small"
-                          sx={getTypeChipSx(record.type)}
-                        />
-                      </TableCell>
-                      <TableCell>{record.currency}</TableCell>
-                      <TableCell align="right">
-                        {formatCurrency(originalAmount, record.currency)}
-                      </TableCell>
-                      <TableCell align="right">
-                        {formatCurrency(paidAmount, record.currency)}
-                      </TableCell>
-                      <TableCell>
-                        <Box
-                          sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
-                        >
-                          <LinearProgress
-                            variant="determinate"
-                            value={Math.min(percentage, 100)}
-                            color={percentage >= 100 ? 'success' : 'primary'}
-                            sx={{ flex: 1, height: 8, borderRadius: 1 }}
-                          />
-                          <Typography
-                            variant="caption"
-                            color="text.secondary"
-                            sx={{ minWidth: 45 }}
-                          >
-                            {percentage.toFixed(1)}%
-                          </Typography>
-                        </Box>
-                      </TableCell>
-                      <TableCell align="right">
-                        <Typography
-                          variant="body1"
-                          fontWeight="medium"
-                          color={
-                            remainingAmount > 0
-                              ? 'warning.main'
-                              : 'success.main'
-                          }
-                        >
-                          {formatCurrency(remainingAmount, record.currency)}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={record.status}
-                          size="small"
-                          sx={getStatusChipSx(record.status)}
-                        />
-                      </TableCell>
-                      <TableCell align="right">
-                        <Tooltip title="Record Payment">
-                          <span>
-                            <IconButton
-                              size="small"
-                              onClick={() => handleOpenPaymentDialog(record)}
-                              color="primary"
-                              disabled={record.status !== 'Active'}
-                            >
-                              <PaymentIcon fontSize="small" />
-                            </IconButton>
-                          </span>
-                        </Tooltip>
-                        <Tooltip title="Edit">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleOpenEditDialog(record)}
-                            sx={{ color: 'google.gray', '&:hover': { color: 'google.blue' } }}
-                          >
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Delete">
-                          <IconButton
-                            size="small"
-                            onClick={() => setDeleteConfirm(record)}
-                            sx={{ color: 'google.gray', '&:hover': { color: 'google.red' } }}
-                          >
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
-          )}
-        </Box>
+                {record.notes && (
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    noWrap
+                    sx={{ fontSize: '0.6875rem', display: 'block', mt: 0.5 }}
+                  >
+                    {record.notes}
+                  </Typography>
+                )}
+              </Box>
+            );
+          };
+
+          // Compact, muted log row for a settled (FullyPaid / Cancelled) record
+          const renderHistoryRow = (record) => {
+            const originalAmount = parseFloat(record.original_amount || 0);
+            return (
+              <Box
+                key={record.record_id}
+                onClick={() => handleOpenEditDialog(record)}
+                sx={{
+                  py: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 1,
+                  borderBottom: '1px solid',
+                  borderColor: 'divider',
+                  cursor: 'pointer',
+                  WebkitTapHighlightColor: 'transparent',
+                  '&:active': { backgroundColor: 'action.hover' },
+                  '@media (hover: hover)': {
+                    '&:hover': { backgroundColor: 'action.hover' },
+                  },
+                }}
+              >
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.5,
+                    minWidth: 0,
+                    flex: 1,
+                  }}
+                >
+                  <Typography
+                    noWrap
+                    sx={{
+                      fontSize: '0.8125rem',
+                      color: 'text.secondary',
+                      minWidth: 0,
+                    }}
+                  >
+                    {record.entity_name}
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    sx={{ fontSize: '0.625rem', color: 'text.disabled', flexShrink: 0 }}
+                  >
+                    {record.type}
+                  </Typography>
+                  <Chip
+                    label={record.status === 'FullyPaid' ? 'Paid' : record.status}
+                    size="small"
+                    sx={{
+                      height: 15,
+                      fontSize: '0.5625rem',
+                      flexShrink: 0,
+                      ...getStatusChipSx(record.status),
+                    }}
+                  />
+                </Box>
+                <Typography
+                  sx={{
+                    fontSize: '0.8125rem',
+                    color: 'text.secondary',
+                    flexShrink: 0,
+                  }}
+                >
+                  {formatCurrency(originalAmount, record.currency)}
+                </Typography>
+              </Box>
+            );
+          };
+
+          return (
+            <Box>
+              {activeRecords.length > 0 && (
+                <Box sx={{ mb: historyRecords.length > 0 ? 3 : 0 }}>
+                  <Typography
+                    sx={{
+                      fontSize: '0.6875rem',
+                      fontWeight: 600,
+                      letterSpacing: 0.6,
+                      textTransform: 'uppercase',
+                      color: 'text.secondary',
+                      mb: 0.5,
+                    }}
+                  >
+                    Active
+                  </Typography>
+                  {activeRecords.map(renderActiveRow)}
+                </Box>
+              )}
+
+              {historyRecords.length > 0 && (
+                <Box>
+                  <Box
+                    onClick={() => setShowHistory((prev) => !prev)}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 0.5,
+                      py: 0.5,
+                      cursor: 'pointer',
+                      WebkitTapHighlightColor: 'transparent',
+                    }}
+                  >
+                    <ExpandMoreIcon
+                      sx={{
+                        fontSize: 18,
+                        color: 'text.secondary',
+                        transform: showHistory ? 'none' : 'rotate(-90deg)',
+                        transition: 'transform 0.15s ease-in-out',
+                      }}
+                    />
+                    <Typography
+                      sx={{
+                        fontSize: '0.6875rem',
+                        fontWeight: 600,
+                        letterSpacing: 0.6,
+                        textTransform: 'uppercase',
+                        color: 'text.secondary',
+                      }}
+                    >
+                      History
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      sx={{ fontSize: '0.6875rem', color: 'text.disabled' }}
+                    >
+                      {historyRecords.length}
+                    </Typography>
+                  </Box>
+                  <Collapse in={showHistory}>
+                    {historyRecords.map(renderHistoryRow)}
+                  </Collapse>
+                </Box>
+              )}
+            </Box>
+          );
+        })()
       )}
 
       {/* Create Record Dialog */}

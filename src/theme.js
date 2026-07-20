@@ -99,23 +99,36 @@ const palettes = {
     softGreen: {
       main: '#81c995',
     },
+    // Cool, slate-tinted dark surfaces (modern) rather than neutral grey.
+    // paper is a subtle step above the page for elevation without the washed
+    // Google-grey look.
     background: {
-      default: '#202124',
-      paper: '#2d2e30',
+      default: '#14161b',
+      paper: '#1c1f26',
     },
     text: {
       primary: '#e8eaed',
       secondary: '#9aa0a6',
     },
-    divider: 'rgba(232, 234, 237, 0.12)',
+    divider: 'rgba(233, 236, 244, 0.10)',
   },
 };
 
 export const getTheme = (mode) =>
-  createTheme({ palette: palettes[mode === 'dark' ? 'dark' : 'light'] });
+  createTheme({
+    palette: palettes[mode === 'dark' ? 'dark' : 'light'],
+    components: {
+      // MUI dark mode lightens Paper with an elevation overlay gradient,
+      // which is what made dialogs/menus look washed-out grey. Drop it and
+      // let the real paper color show; depth still comes from the shadow.
+      MuiPaper: {
+        styleOverrides: { root: { backgroundImage: 'none' } },
+      },
+    },
+  });
 
 // Matches the <meta name="theme-color"> so the PWA titlebar follows the theme
-export const THEME_COLOR = { light: '#1a73e8', dark: '#202124' };
+export const THEME_COLOR = { light: '#1a73e8', dark: '#14161b' };
 
 export const THEME_MODE_STORAGE_KEY = 'themeMode';
 
