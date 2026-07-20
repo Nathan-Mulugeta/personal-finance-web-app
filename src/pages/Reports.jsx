@@ -1350,10 +1350,6 @@ function Reports() {
       currencies,
       differenceOriginalAmounts
     );
-    const pctUsed = budget > 0 ? (actual / budget) * 100 : null;
-    const barColor = getDifferenceColor(difference, type).startsWith('success')
-      ? 'success'
-      : 'error';
     const variancePhrase = getVariancePhrase(variance, type);
 
     // Budgets aggregated purely from children (the common case) get no
@@ -1528,20 +1524,6 @@ function Reports() {
               )}
             </Box>
           </Box>
-          {pctUsed !== null && (
-            <LinearProgress
-              variant="determinate"
-              value={Math.min(100, pctUsed)}
-              color={barColor}
-              sx={{
-                mt: 0.75,
-                height: 4,
-                borderRadius: 2,
-                ml: hasChildren ? 2.875 : 0,
-                backgroundColor: 'action.hover',
-              }}
-            />
-          )}
           {budget > 0 && (
             <Box
               sx={{
@@ -1637,13 +1619,6 @@ function Reports() {
       totals.currencies,
       totals.differenceOriginalAmounts
     );
-    const pctUsed =
-      totals.budget > 0 ? (totals.actual / totals.budget) * 100 : null;
-    const barColor = getDifferenceColor(totals.difference, type).startsWith(
-      'success'
-    )
-      ? 'success'
-      : 'error';
     const variancePhrase = getVariancePhrase(totals.variance, type);
 
     return (
@@ -1724,19 +1699,6 @@ function Reports() {
               </Typography>
             )}
           </Box>
-          {pctUsed !== null && (
-            <LinearProgress
-              variant="determinate"
-              value={Math.min(100, pctUsed)}
-              color={barColor}
-              sx={{
-                mt: 0.75,
-                height: 6,
-                borderRadius: 3,
-                backgroundColor: 'action.selected',
-              }}
-            />
-          )}
           {totals.budget > 0 && (
             <Box
               sx={{
