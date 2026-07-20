@@ -853,36 +853,6 @@ function Reports() {
     setBudgetDialogOpen(true);
   };
 
-  // Format currency display (amounts are already in base currency)
-  const formatCurrencyDisplay = (
-    amount,
-    currencies,
-    isMixed,
-    originalAmountsByCurrency
-  ) => {
-    // If only base currency, show normally
-    if (currencies.length === 1 && currencies[0] === baseCurrency) {
-      return formatCurrency(amount, baseCurrency);
-    }
-
-    // If multiple currencies, show mixed chip (handled separately in render)
-    if (isMixed) {
-      return formatCurrency(amount, baseCurrency);
-    }
-
-    // If one foreign currency, find it and show original amount
-    const foreignCurrency = currencies.find((c) => c !== baseCurrency);
-    if (
-      foreignCurrency &&
-      originalAmountsByCurrency &&
-      originalAmountsByCurrency[foreignCurrency]
-    ) {
-      return formatCurrency(amount, baseCurrency);
-    }
-
-    return formatCurrency(amount, baseCurrency);
-  };
-
   // Get foreign currency display - check if all amounts are in the same foreign currency
   const getForeignCurrencyDisplay = (currencies, originalAmountsByCurrency) => {
     if (!originalAmountsByCurrency) return null;
@@ -920,10 +890,15 @@ function Reports() {
     return null;
   };
 
-  // Format money, using the short "Br" symbol for ETB so it fits in tight rows
+  // Format money, using the short "Br" symbol for ETB so it fits in tight rows.
+  // Ethiopia writes the symbol after the amount, e.g. "4,500.00 Br".
   const fmt = (amount, currency) => {
-    const s = formatCurrency(amount, currency);
-    return currency === 'ETB' ? s.replace('ETB', 'Br').trim() : s;
+    if (currency !== 'ETB') return formatCurrency(amount, currency);
+    const num = new Intl.NumberFormat('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount);
+    return `${num} Br`;
   };
 
   // For a category in a single non-base currency (e.g. you budget & log an
@@ -965,6 +940,59 @@ function Reports() {
       )}
     </>
   );
+
+  // Stacked money cell (desktop table): original amount as the primary line,
+  // base conversion as a smaller secondary line beneath it
+  const renderMoneyStacked = (
+    baseAmount,
+    originalAmounts,
+    { isMixed = false, bold = false, color } = {}
+  ) => {
+    const money = getMoneyDisplay(baseAmount, originalAmounts);
+    return (
+      <Box
+        sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}
+      >
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            gap: 0.5,
+          }}
+        >
+          {isMixed && (
+            <Chip
+              label="Mixed currencies"
+              size="small"
+              sx={{ height: 18, fontSize: '0.65rem' }}
+              color="default"
+              variant="outlined"
+            />
+          )}
+          <Typography variant="body2" sx={{ fontWeight: bold ? 'bold' : undefined, color }}>
+            {money.primary}
+          </Typography>
+        </Box>
+        {money.secondary && (
+          <Typography
+            variant="caption"
+            sx={{ fontSize: '0.7rem', color: 'text.secondary' }}
+          >
+            {money.secondary}
+          </Typography>
+        )}
+      </Box>
+    );
+  };
+
+  // Difference shown in a single currency — the one it was budgeted in
+  const getDiffText = (difference, differenceOriginalAmounts, type) => {
+    const f = getForeignCurrencyDisplay(null, differenceOriginalAmounts);
+    return f
+      ? fmt(getDisplayDifference(f.amount, type), f.currency)
+      : fmt(getDisplayDifference(difference, type), baseCurrency);
+  };
 
   // Income exceeding its budget is a win, not a deficit — never show the
   // difference with a minus sign there; expenses keep their sign
@@ -1149,7 +1177,6 @@ function Reports() {
       difference,
       variance,
       isMixed,
-      currencies,
       budgetOriginalAmounts,
       actualOriginalAmounts,
       differenceOriginalAmounts,
@@ -1172,70 +1199,57 @@ function Reports() {
     const budgetIncludesChildren = childBudgets && !!ownBudget;
     const budgetParentOnly = !!ownBudget && hasChildren && !childBudgets;
 
-    // Get foreign currency displays
-    const budgetForeign = getForeignCurrencyDisplay(
-      currencies,
-      budgetOriginalAmounts
-    );
-    const actualForeign = getForeignCurrencyDisplay(
-      currencies,
-      actualOriginalAmounts
-    );
-    const differenceForeign = getForeignCurrencyDisplay(
-      currencies,
+    // Difference is shown in a single currency — the one it was budgeted in
+    const diffForeign = getForeignCurrencyDisplay(
+      null,
       differenceOriginalAmounts
     );
+    const diffText = diffForeign
+      ? fmt(getDisplayDifference(diffForeign.amount, type), diffForeign.currency)
+      : fmt(getDisplayDifference(difference, type), baseCurrency);
 
-    // Render currency cell with optional foreign currency display
-    const renderCurrencyCell = (
-      amount,
-      foreignInfo,
-      originalAmounts,
-      showMixedChip = false
-    ) => (
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'flex-end',
-        }}
-      >
+    // Currency cell: original amount as primary, base conversion as a smaller
+    // secondary line (see getMoneyDisplay)
+    const renderCurrencyCell = (amount, originalAmounts, showMixedChip = false) => {
+      const money = getMoneyDisplay(amount, originalAmounts);
+      return (
         <Box
           sx={{
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'flex-end',
-            gap: 0.5,
+            flexDirection: 'column',
+            alignItems: 'flex-end',
           }}
         >
-          {showMixedChip && isMixed && (
-            <Chip
-              label="Mixed currencies"
-              size="small"
-              sx={{ height: 18, fontSize: '0.65rem' }}
-              color="default"
-              variant="outlined"
-            />
-          )}
-          <Typography variant="body2">
-            {formatCurrencyDisplay(
-              amount,
-              currencies,
-              isMixed,
-              originalAmounts
-            )}
-          </Typography>
-        </Box>
-        {foreignInfo && (
-          <Typography
-            variant="caption"
-            sx={{ fontSize: '0.7rem', color: 'text.secondary' }}
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'flex-end',
+              gap: 0.5,
+            }}
           >
-            {formatCurrency(foreignInfo.amount, foreignInfo.currency)}
-          </Typography>
-        )}
-      </Box>
-    );
+            {showMixedChip && isMixed && (
+              <Chip
+                label="Mixed currencies"
+                size="small"
+                sx={{ height: 18, fontSize: '0.65rem' }}
+                color="default"
+                variant="outlined"
+              />
+            )}
+            <Typography variant="body2">{money.primary}</Typography>
+          </Box>
+          {money.secondary && (
+            <Typography
+              variant="caption"
+              sx={{ fontSize: '0.7rem', color: 'text.secondary' }}
+            >
+              {money.secondary}
+            </Typography>
+          )}
+        </Box>
+      );
+    };
 
     return (
       <Fragment key={category.category_id}>
@@ -1296,12 +1310,7 @@ function Reports() {
                   <Box
                     sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
                   >
-                    {renderCurrencyCell(
-                      budget,
-                      budgetForeign,
-                      budgetOriginalAmounts,
-                      true
-                    )}
+                    {renderCurrencyCell(budget, budgetOriginalAmounts, true)}
                     {!budgetFromChildrenOnly && (
                       <EditIcon
                         sx={{ fontSize: 12, color: 'text.secondary' }}
@@ -1334,12 +1343,7 @@ function Reports() {
             </Box>
           </TableCell>
           <TableCell align="right">
-            {renderCurrencyCell(
-              actual,
-              actualForeign,
-              actualOriginalAmounts,
-              true
-            )}
+            {renderCurrencyCell(actual, actualOriginalAmounts, true)}
             {spendDelta && (
               <Box
                 sx={{
@@ -1382,25 +1386,9 @@ function Reports() {
                   variant="body2"
                   sx={{ color: differenceColor, fontWeight: 'medium' }}
                 >
-                  {formatCurrencyDisplay(
-                    getDisplayDifference(difference, type),
-                    currencies,
-                    isMixed,
-                    differenceOriginalAmounts
-                  )}
+                  {diffText}
                 </Typography>
               </Box>
-              {differenceForeign && (
-                <Typography
-                  variant="caption"
-                  sx={{ fontSize: '0.7rem', color: 'text.secondary' }}
-                >
-                  {formatCurrency(
-                    getDisplayDifference(differenceForeign.amount, type),
-                    differenceForeign.currency
-                  )}
-                </Typography>
-              )}
             </Box>
           </TableCell>
           <TableCell align="right">
@@ -2293,126 +2281,18 @@ function Reports() {
                     </Typography>
                   </TableCell>
                   <TableCell align="right">
-                    {(() => {
-                      const budgetForeign = getForeignCurrencyDisplay(
-                        incomeTotals.currencies,
-                        incomeTotals.budgetOriginalAmounts
-                      );
-                      return (
-                        <Box
-                          sx={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'flex-end',
-                          }}
-                        >
-                          <Box
-                            sx={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'flex-end',
-                              gap: 0.5,
-                            }}
-                          >
-                            {incomeTotals.isMixed && (
-                              <Chip
-                                label="Mixed currencies"
-                                size="small"
-                                sx={{ height: 18, fontSize: '0.65rem' }}
-                                color="default"
-                                variant="outlined"
-                              />
-                            )}
-                            <Typography
-                              variant="body2"
-                              sx={{ fontWeight: 'bold' }}
-                            >
-                              {formatCurrencyDisplay(
-                                incomeTotals.budget,
-                                incomeTotals.currencies,
-                                incomeTotals.isMixed,
-                                incomeTotals.budgetOriginalAmounts
-                              )}
-                            </Typography>
-                          </Box>
-                          {budgetForeign && (
-                            <Typography
-                              variant="caption"
-                              sx={{
-                                fontSize: '0.7rem',
-                                color: 'text.secondary',
-                              }}
-                            >
-                              {formatCurrency(
-                                budgetForeign.amount,
-                                budgetForeign.currency
-                              )}
-                            </Typography>
-                          )}
-                        </Box>
-                      );
-                    })()}
+                    {renderMoneyStacked(
+                      incomeTotals.budget,
+                      incomeTotals.budgetOriginalAmounts,
+                      { isMixed: incomeTotals.isMixed, bold: true }
+                    )}
                   </TableCell>
                   <TableCell align="right">
-                    {(() => {
-                      const actualForeign = getForeignCurrencyDisplay(
-                        incomeTotals.currencies,
-                        incomeTotals.actualOriginalAmounts
-                      );
-                      return (
-                        <Box
-                          sx={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'flex-end',
-                          }}
-                        >
-                          <Box
-                            sx={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'flex-end',
-                              gap: 0.5,
-                            }}
-                          >
-                            {incomeTotals.isMixed && (
-                              <Chip
-                                label="Mixed currencies"
-                                size="small"
-                                sx={{ height: 18, fontSize: '0.65rem' }}
-                                color="default"
-                                variant="outlined"
-                              />
-                            )}
-                            <Typography
-                              variant="body2"
-                              sx={{ fontWeight: 'bold' }}
-                            >
-                              {formatCurrencyDisplay(
-                                incomeTotals.actual,
-                                incomeTotals.currencies,
-                                incomeTotals.isMixed,
-                                incomeTotals.actualOriginalAmounts
-                              )}
-                            </Typography>
-                          </Box>
-                          {actualForeign && (
-                            <Typography
-                              variant="caption"
-                              sx={{
-                                fontSize: '0.7rem',
-                                color: 'text.secondary',
-                              }}
-                            >
-                              {formatCurrency(
-                                actualForeign.amount,
-                                actualForeign.currency
-                              )}
-                            </Typography>
-                          )}
-                        </Box>
-                      );
-                    })()}
+                    {renderMoneyStacked(
+                      incomeTotals.actual,
+                      incomeTotals.actualOriginalAmounts,
+                      { isMixed: incomeTotals.isMixed, bold: true }
+                    )}
                   </TableCell>
                   <TableCell align="right">
                     <Box
@@ -2442,32 +2322,12 @@ function Reports() {
                           ),
                         }}
                       >
-                        {formatCurrencyDisplay(
-                          getDisplayDifference(incomeTotals.difference, 'Income'),
-                          incomeTotals.currencies,
-                          incomeTotals.isMixed,
-                          incomeTotals.differenceOriginalAmounts
+                        {getDiffText(
+                          incomeTotals.difference,
+                          incomeTotals.differenceOriginalAmounts,
+                          'Income'
                         )}
                       </Typography>
-                      {(() => {
-                        const foreign = getForeignCurrencyDisplay(
-                          incomeTotals.currencies,
-                          incomeTotals.differenceOriginalAmounts
-                        );
-                        return (
-                          foreign && (
-                            <Typography
-                              variant="caption"
-                              sx={{ fontSize: '0.7rem', color: 'text.secondary' }}
-                            >
-                              {formatCurrency(
-                                getDisplayDifference(foreign.amount, 'Income'),
-                                foreign.currency
-                              )}
-                            </Typography>
-                          )
-                        );
-                      })()}
                     </Box>
                   </TableCell>
                   <TableCell align="right">
@@ -2521,126 +2381,18 @@ function Reports() {
                     </Typography>
                   </TableCell>
                   <TableCell align="right">
-                    {(() => {
-                      const budgetForeign = getForeignCurrencyDisplay(
-                        expenseTotals.currencies,
-                        expenseTotals.budgetOriginalAmounts
-                      );
-                      return (
-                        <Box
-                          sx={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'flex-end',
-                          }}
-                        >
-                          <Box
-                            sx={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'flex-end',
-                              gap: 0.5,
-                            }}
-                          >
-                            {expenseTotals.isMixed && (
-                              <Chip
-                                label="Mixed currencies"
-                                size="small"
-                                sx={{ height: 18, fontSize: '0.65rem' }}
-                                color="default"
-                                variant="outlined"
-                              />
-                            )}
-                            <Typography
-                              variant="body2"
-                              sx={{ fontWeight: 'bold' }}
-                            >
-                              {formatCurrencyDisplay(
-                                expenseTotals.budget,
-                                expenseTotals.currencies,
-                                expenseTotals.isMixed,
-                                expenseTotals.budgetOriginalAmounts
-                              )}
-                            </Typography>
-                          </Box>
-                          {budgetForeign && (
-                            <Typography
-                              variant="caption"
-                              sx={{
-                                fontSize: '0.7rem',
-                                color: 'text.secondary',
-                              }}
-                            >
-                              {formatCurrency(
-                                budgetForeign.amount,
-                                budgetForeign.currency
-                              )}
-                            </Typography>
-                          )}
-                        </Box>
-                      );
-                    })()}
+                    {renderMoneyStacked(
+                      expenseTotals.budget,
+                      expenseTotals.budgetOriginalAmounts,
+                      { isMixed: expenseTotals.isMixed, bold: true }
+                    )}
                   </TableCell>
                   <TableCell align="right">
-                    {(() => {
-                      const actualForeign = getForeignCurrencyDisplay(
-                        expenseTotals.currencies,
-                        expenseTotals.actualOriginalAmounts
-                      );
-                      return (
-                        <Box
-                          sx={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'flex-end',
-                          }}
-                        >
-                          <Box
-                            sx={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'flex-end',
-                              gap: 0.5,
-                            }}
-                          >
-                            {expenseTotals.isMixed && (
-                              <Chip
-                                label="Mixed currencies"
-                                size="small"
-                                sx={{ height: 18, fontSize: '0.65rem' }}
-                                color="default"
-                                variant="outlined"
-                              />
-                            )}
-                            <Typography
-                              variant="body2"
-                              sx={{ fontWeight: 'bold' }}
-                            >
-                              {formatCurrencyDisplay(
-                                expenseTotals.actual,
-                                expenseTotals.currencies,
-                                expenseTotals.isMixed,
-                                expenseTotals.actualOriginalAmounts
-                              )}
-                            </Typography>
-                          </Box>
-                          {actualForeign && (
-                            <Typography
-                              variant="caption"
-                              sx={{
-                                fontSize: '0.7rem',
-                                color: 'text.secondary',
-                              }}
-                            >
-                              {formatCurrency(
-                                actualForeign.amount,
-                                actualForeign.currency
-                              )}
-                            </Typography>
-                          )}
-                        </Box>
-                      );
-                    })()}
+                    {renderMoneyStacked(
+                      expenseTotals.actual,
+                      expenseTotals.actualOriginalAmounts,
+                      { isMixed: expenseTotals.isMixed, bold: true }
+                    )}
                   </TableCell>
                   <TableCell align="right">
                     <Box
@@ -2670,29 +2422,12 @@ function Reports() {
                           ),
                         }}
                       >
-                        {formatCurrencyDisplay(
+                        {getDiffText(
                           expenseTotals.difference,
-                          expenseTotals.currencies,
-                          expenseTotals.isMixed,
-                          expenseTotals.differenceOriginalAmounts
+                          expenseTotals.differenceOriginalAmounts,
+                          'Expense'
                         )}
                       </Typography>
-                      {(() => {
-                        const foreign = getForeignCurrencyDisplay(
-                          expenseTotals.currencies,
-                          expenseTotals.differenceOriginalAmounts
-                        );
-                        return (
-                          foreign && (
-                            <Typography
-                              variant="caption"
-                              sx={{ fontSize: '0.7rem', color: 'text.secondary' }}
-                            >
-                              {formatCurrency(foreign.amount, foreign.currency)}
-                            </Typography>
-                          )
-                        );
-                      })()}
                     </Box>
                   </TableCell>
                   <TableCell align="right">
