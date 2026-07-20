@@ -1541,10 +1541,21 @@ function Reports() {
       null,
       differenceOriginalAmounts
     );
-    // Difference is shown in a single currency — the one it was budgeted in
-    const diffText = diffForeign
-      ? fmt(getDisplayDifference(diffForeign.amount, type), diffForeign.currency)
-      : fmt(getDisplayDifference(difference, type), baseCurrency);
+    // Difference in the budgeted currency: magnitude + a direction word so it
+    // clearly reads as the budget difference. difference = budget − actual.
+    // Expense: >0 under → "left", <0 over → "over".
+    // Income:  >0 short of plan → "short", <0 exceeded → "over".
+    const diffCurrency = diffForeign ? diffForeign.currency : baseCurrency;
+    const diffAmount = diffForeign ? diffForeign.amount : difference;
+    const diffText = fmt(Math.abs(diffAmount), diffCurrency);
+    const diffWord =
+      difference < 0
+        ? 'over'
+        : difference > 0
+        ? type === 'Income'
+          ? 'short'
+          : 'left'
+        : '';
 
     // Budgets aggregated purely from children (the common case) get no
     // label; a real parent-level budget is the rare case worth flagging.
@@ -1581,7 +1592,7 @@ function Reports() {
           <Box
             sx={{
               display: 'flex',
-              alignItems: 'center',
+              alignItems: 'flex-start',
               justifyContent: 'space-between',
               gap: 1,
             }}
@@ -1632,33 +1643,46 @@ function Reports() {
                 />
               )}
             </Box>
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 0.625,
-                flexShrink: 0,
-              }}
-            >
-              {spendDelta && (
-                <Box sx={{ fontSize: '0.6875rem' }}>
-                  {renderDelta(spendDelta)}
-                </Box>
-              )}
-              <Typography
-                variant="body2"
+            <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
+              <Box
                 sx={{
-                  fontSize: level > 0 ? '0.875rem' : '0.9375rem',
-                  fontWeight: level > 0 ? 500 : 600,
-                  color: overBudget
-                    ? 'error.main'
-                    : level > 0
-                    ? 'text.secondary'
-                    : 'text.primary',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'flex-end',
+                  gap: 0.625,
                 }}
               >
-                {renderMoneyInline(actualMoney)}
-              </Typography>
+                {spendDelta && (
+                  <Box sx={{ fontSize: '0.6875rem' }}>
+                    {renderDelta(spendDelta)}
+                  </Box>
+                )}
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontSize: level > 0 ? '0.875rem' : '0.9375rem',
+                    fontWeight: level > 0 ? 500 : 600,
+                    color: overBudget
+                      ? 'error.main'
+                      : level > 0
+                      ? 'text.secondary'
+                      : 'text.primary',
+                  }}
+                >
+                  {actualMoney.primary}
+                </Typography>
+              </Box>
+              {actualMoney.secondary && (
+                <Typography
+                  sx={{
+                    fontSize: '0.625rem',
+                    lineHeight: 1.25,
+                    color: 'text.secondary',
+                  }}
+                >
+                  {actualMoney.secondary}
+                </Typography>
+              )}
             </Box>
           </Box>
           <Box
@@ -1699,7 +1723,7 @@ function Reports() {
                       minWidth: 0,
                     }}
                   >
-                    of {renderMoneyInline(budgetMoney)}
+                    of {budgetMoney.primary}
                     {budgetLabel}
                   </Typography>
                   {/* Edit cue when there's an editable own budget; a "+" cue
@@ -1736,7 +1760,9 @@ function Reports() {
                   flexShrink: 0,
                 }}
               >
-                {diffText} · {Math.round((actual / budget) * 100)}%
+                {diffText}
+                {diffWord ? ` ${diffWord}` : ''} ·{' '}
+                {Math.round((actual / budget) * 100)}%
               </Typography>
             )}
           </Box>
