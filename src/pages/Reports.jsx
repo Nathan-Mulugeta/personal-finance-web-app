@@ -73,6 +73,21 @@ const PERIOD_OPTIONS = [
   { value: '1year', label: '1 Year' },
 ];
 
+// A muted, full-bleed separator. The negative x-margins cancel the page
+// content padding (AppLayout: p {xs:1.5, sm:2, md:3}) so the line runs edge to
+// edge, stacking the page into tile-like sections without any box/tint. A hair
+// thicker and slightly stronger than a row divider so it reads as a section
+// break, while still staying muted.
+const PAGE_DIVIDER_SX = (theme) => ({
+  mx: { xs: -1.5, sm: -2, md: -3 },
+  my: { xs: 2, sm: 2.5 },
+  borderBottomWidth: 2,
+  borderColor:
+    theme.palette.mode === 'dark'
+      ? 'rgba(233, 236, 244, 0.20)'
+      : 'rgba(0, 0, 0, 0.16)',
+});
+
 // Narrow a report section to categories matching a search query. A top-level
 // row is kept when its own name matches or any of its subcategories match, so
 // searching a subcategory still surfaces its parent's row (auto-expanded).
@@ -1808,8 +1823,8 @@ function Reports() {
             pt: 0.25,
             pb: 0.75,
             mb: 0.5,
-            borderBottom: '2px solid',
-            borderColor: sectionColor,
+            borderBottom: '1px solid',
+            borderColor: 'divider',
           }}
         >
           <Box
@@ -2072,6 +2087,8 @@ function Reports() {
           </Box>
       </Box>
 
+      <Divider sx={PAGE_DIVIDER_SX} />
+
       {/* Filter to a specific category */}
       <Box sx={{ mb: { xs: 2, sm: 2.5 } }}>
         <TextField
@@ -2208,6 +2225,8 @@ function Reports() {
               </Typography>
             )}
       </Box>
+
+      <Divider sx={PAGE_DIVIDER_SX} />
 
       {/* Income Budget vs Actual Section */}
       <Box sx={{ mb: { xs: 3, sm: 3 } }}>
@@ -2434,6 +2453,8 @@ function Reports() {
           </Box>
           )}
       </Box>
+
+      <Divider sx={PAGE_DIVIDER_SX} />
 
       {/* Expense Budget vs Actual Section */}
       <Box sx={{ mb: { xs: 2.5, sm: 3 } }}>
