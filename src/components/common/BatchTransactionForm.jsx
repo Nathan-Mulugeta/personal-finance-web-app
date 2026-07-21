@@ -297,6 +297,7 @@ function BatchTransactionForm({
             <CategoryAutocomplete
               key={formKey}
               categories={getFilteredCategories()}
+              leafOnly
               value={watchedCategoryId || ''}
               onChange={(id) => setValue('categoryId', id)}
               onSelect={() => {

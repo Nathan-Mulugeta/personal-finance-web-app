@@ -299,6 +299,7 @@ function AddTransactionDialog({ open, onClose, initialValues = null }) {
             <Grid item xs={12} sm={6}>
               <CategoryAutocomplete
                 categories={getFilteredCategories()}
+                leafOnly
                 value={watchedCategoryId || ''}
                 onChange={(id) => setValue('categoryId', id)}
                 onSelect={() => {

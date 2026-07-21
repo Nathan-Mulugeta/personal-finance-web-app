@@ -392,6 +392,7 @@ function AddTransferDialog({ open, onClose }) {
             <Grid item xs={12}>
               <CategoryAutocomplete
                 categories={flattenCategoryTree(categories)}
+                leafOnly
                 value={watch('categoryId') || ''}
                 onChange={(id) => setValue('categoryId', id || null)}
                 label="Category (Optional)"

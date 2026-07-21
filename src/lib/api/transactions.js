@@ -17,6 +17,28 @@ export const TRANSACTION_STATUSES = [
   'Cancelled',
 ];
 
+/**
+ * Given category ids, return the subset that are parents — i.e. have at least
+ * one Active subcategory. Transactions must post to leaf categories, so callers
+ * reject any id in this set. One indexed query regardless of how many ids are
+ * passed. This backs the leaf-only pickers server-side (defense-in-depth).
+ *
+ * @param {string} userId
+ * @param {Array<string>} categoryIds
+ * @returns {Promise<Set<string>>}
+ */
+async function fetchParentCategoryIds(userId, categoryIds) {
+  const ids = [...new Set((categoryIds || []).filter(Boolean))];
+  if (ids.length === 0) return new Set();
+  const { data } = await supabase
+    .from('categories')
+    .select('parent_category_id')
+    .eq('user_id', userId)
+    .eq('status', 'Active')
+    .in('parent_category_id', ids);
+  return new Set((data || []).map((c) => c.parent_category_id));
+}
+
 // Create transaction using validated RPC function
 // This reduces multiple database round trips to a single call
 export async function createTransaction(transactionData) {
@@ -50,6 +72,17 @@ export async function createTransaction(transactionData) {
   }
   if (currency.length !== 3) {
     throw new Error('Currency must be a 3-letter ISO code');
+  }
+
+  // Transactions must post to a leaf category — reject a parent that has
+  // active subcategories (backs the leaf-only pickers on the server side)
+  if (categoryId) {
+    const parentIds = await fetchParentCategoryIds(user.id, [categoryId]);
+    if (parentIds.has(categoryId)) {
+      throw new Error(
+        'This category has subcategories. Please choose a specific subcategory instead.'
+      );
+    }
   }
 
   const transactionId = generateId('TXN');
@@ -278,6 +311,9 @@ export async function batchCreateTransactions(transactionsArray) {
 
   categories?.forEach((cat) => categoriesMap.set(cat.category_id, cat));
 
+  // Parent categories (with active subcategories) can't receive transactions
+  const parentCategoryIds = await fetchParentCategoryIds(user.id, categoryIds);
+
   // Validate each transaction
   transactionsArray.forEach((txn, index) => {
     const errors = [];
@@ -297,6 +333,10 @@ export async function batchCreateTransactions(transactionsArray) {
     }
     if (!categoriesMap.get(txn.categoryId)) {
       errors.push(`Category ${txn.categoryId} not found or inactive`);
+    } else if (parentCategoryIds.has(txn.categoryId)) {
+      errors.push(
+        `Category ${txn.categoryId} has subcategories — post to a subcategory`
+      );
     }
     if (txn.currency && txn.currency.length !== 3) {
       errors.push('Currency must be 3-letter ISO code');
@@ -557,6 +597,16 @@ export async function updateTransaction(transactionId, updates) {
 
     if (!category) {
       throw new Error('Category not found or is not active');
+    }
+
+    // Reject moving a transaction onto a parent that has active subcategories
+    const parentIds = await fetchParentCategoryIds(user.id, [
+      updates.categoryId,
+    ]);
+    if (parentIds.has(updates.categoryId)) {
+      throw new Error(
+        'This category has subcategories. Please choose a specific subcategory instead.'
+      );
     }
   }
 

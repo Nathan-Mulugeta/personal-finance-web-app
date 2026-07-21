@@ -24,6 +24,10 @@ import {
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import CategoryAutocomplete from './CategoryAutocomplete';
+import {
+  flattenCategoryTree,
+  getParentCategoryIds,
+} from '../../utils/categoryHierarchy';
 import { batchCreateTransactions } from '../../store/slices/transactionsSlice';
 import { format } from 'date-fns';
 import { formatCurrency } from '../../utils/currencyConversion';
@@ -269,6 +273,18 @@ function AITransactionsReviewModal({
       return;
     }
 
+    // Block parent categories (with subcategories) — an AI suggestion may land
+    // on one, and transactions must post to a specific subcategory
+    const parentCount = validTransactions.filter((txn) =>
+      activeParentIds.has(txn.categoryId),
+    ).length;
+    if (parentCount > 0) {
+      setError(
+        `${parentCount} transaction${parentCount !== 1 ? 's are' : ' is'} set to a category that has subcategories. Pick a specific subcategory for ${parentCount !== 1 ? 'them' : 'it'} before saving.`,
+      );
+      return;
+    }
+
     setIsSubmitting(true);
     setError(null);
 
@@ -309,12 +325,20 @@ function AITransactionsReviewModal({
     }
   };
 
-  // Get filtered categories by type
+  // Get filtered categories by type, organized as an indented tree so the
+  // picker matches the create-transaction modal (indentation + parent bolding)
   const getCategoriesForType = (type) => {
-    return categories.filter(
-      (cat) => cat.type === type && cat.status === 'Active',
+    return flattenCategoryTree(
+      categories.filter((cat) => cat.type === type && cat.status === 'Active'),
     );
   };
+
+  // Parent categories (with active subcategories) can't receive transactions —
+  // used to block an AI-suggested parent before it reaches the batch create
+  const activeParentIds = useMemo(
+    () => getParentCategoryIds(categories.filter((c) => c.status === 'Active')),
+    [categories],
+  );
 
   return (
     <Dialog
@@ -440,6 +464,7 @@ function AITransactionsReviewModal({
                 <Box sx={{ mb: 1.5 }}>
                   <CategoryAutocomplete
                     categories={getCategoriesForType(txn.type)}
+                    leafOnly
                     value={txn.categoryId}
                     onChange={(id) =>
                       handleTransactionChange(txn.id, 'categoryId', id)

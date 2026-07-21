@@ -20,6 +20,7 @@ import {
 } from '@mui/material';
 import { bulkUpdateTransactions } from '../../store/slices/transactionsSlice';
 import { TRANSACTION_STATUSES } from '../../lib/api/transactions';
+import { flattenCategoryTree } from '../../utils/categoryHierarchy';
 import CategoryAutocomplete from './CategoryAutocomplete';
 
 // Non-transfer transactions can only be Income or Expense (transfers are
@@ -186,7 +187,8 @@ function BulkEditTransactionsDialog({
           </FormControl>
 
           <CategoryAutocomplete
-            categories={categories}
+            categories={flattenCategoryTree(categories)}
+            leafOnly
             value={categoryId}
             onChange={(id) => setCategoryId(id || '')}
             label="Move to category"

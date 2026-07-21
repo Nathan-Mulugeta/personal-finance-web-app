@@ -15,6 +15,7 @@ function CategoryAutocomplete({
   helperText,
   disabled,
   filterByType, // Optional: 'Income' or 'Expense'
+  leafOnly = false, // Block parent categories that have subcategories (transactions post to leaves only)
   required = false,
   autoFocus = false, // Auto-focus the input on mount
   inputRef: externalInputRef, // Optional external ref for parent components to access input
@@ -136,6 +137,9 @@ function CategoryAutocomplete({
       isOptionEqualToValue={(option, value) =>
         option?.category_id === value?.category_id
       }
+      getOptionDisabled={(option) =>
+        leafOnly && !!option.hasChildren
+      }
       disabled={disabled}
       fullWidth
       renderInput={(params) => (
@@ -150,16 +154,32 @@ function CategoryAutocomplete({
       )}
       renderOption={(props, option) => {
         const { key, ...otherProps } = props;
+        const blockedParent = leafOnly && option.hasChildren;
         return (
           <Box
             component="li"
             key={key}
             {...otherProps}
-            sx={{ pl: 2 + (option.depth || 0) * 2 }}
+            sx={{
+              pl: 2 + (option.depth || 0) * 2,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'baseline',
+              gap: 1,
+            }}
           >
             <Typography sx={{ fontWeight: option.hasChildren ? 600 : 400 }}>
               {option.name}
             </Typography>
+            {blockedParent && (
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ flexShrink: 0 }}
+              >
+                has subcategories
+              </Typography>
+            )}
           </Box>
         );
       }}

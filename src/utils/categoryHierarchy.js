@@ -88,3 +88,21 @@ export function flattenCategoryTree(categories) {
   return result
 }
 
+/**
+ * Build a Set of category_ids that are parents (referenced as another
+ * category's parent_category_id) within the given list. Transactions must post
+ * to leaf categories, so any id in this set should be blocked in transaction
+ * pickers and at save time. Pass an Active-only list to match what the pickers
+ * show — a parent whose only children are archived then counts as a leaf.
+ *
+ * @param {Array} categories - flat category list (raw or flattened)
+ * @returns {Set<string>} category_ids that have at least one child in the list
+ */
+export function getParentCategoryIds(categories) {
+  const parents = new Set()
+  ;(categories || []).forEach((cat) => {
+    if (cat.parent_category_id) parents.add(cat.parent_category_id)
+  })
+  return parents
+}
+
