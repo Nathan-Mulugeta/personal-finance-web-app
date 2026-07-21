@@ -16,7 +16,15 @@ import {
   DialogActions,
   DialogContent,
   IconButton,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import ChecklistIcon from '@mui/icons-material/Checklist';
 import EditIcon from '@mui/icons-material/Edit';
@@ -82,6 +90,8 @@ function CategoryTransactionsList(
   ref
 ) {
   const dispatch = useDispatch();
+  const theme = useTheme();
+  const isDesktopView = useMediaQuery(theme.breakpoints.up('md'));
   const getAccountName = useSelector(selectAccountNameGetter);
   const getCategoryDisplayName = useSelector(selectCategoryDisplayNameGetter);
 
@@ -293,7 +303,122 @@ function CategoryTransactionsList(
       </Box>
       )}
 
-      {/* Rows */}
+      {/* Rows — a single-line aligned table on desktop (like the Transactions
+          page), the dense two-line format on mobile (untouched) */}
+      {isDesktopView ? (
+        <TableContainer sx={{ overflow: 'hidden' }}>
+          <Table size="small">
+            <TableHead>
+              <TableRow
+                sx={{
+                  backgroundColor: 'background.default',
+                  '& th': {
+                    borderBottom: '1px solid',
+                    borderColor: 'divider',
+                    py: 0.75,
+                    fontSize: '0.6875rem',
+                    fontWeight: 600,
+                    color: 'text.secondary',
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.5,
+                  },
+                }}
+              >
+                {selectionMode && (
+                  <TableCell padding="checkbox" sx={{ width: 40 }} />
+                )}
+                <TableCell>Category</TableCell>
+                <TableCell>Account</TableCell>
+                <TableCell>Description</TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>Date</TableCell>
+                <TableCell align="right">Amount</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {visibleTransactions.map((txn) => {
+                const isSelected = selectedIds.has(txn.transaction_id);
+                return (
+                  <TableRow
+                    key={txn.transaction_id}
+                    hover
+                    selected={isSelected}
+                    onClick={() => handleRowClick(txn)}
+                    sx={{
+                      cursor: 'pointer',
+                      userSelect: 'none',
+                      backgroundColor: isSelected
+                        ? 'action.selected'
+                        : 'transparent',
+                      '&:hover': {
+                        backgroundColor: isSelected
+                          ? 'action.selected'
+                          : 'action.hover',
+                      },
+                      '& td': {
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
+                        py: 0.5,
+                        fontSize: '0.8125rem',
+                      },
+                    }}
+                  >
+                    {selectionMode && (
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          checked={isSelected}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            toggleSelect(txn.transaction_id, e.target.checked);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          size="small"
+                        />
+                      </TableCell>
+                    )}
+                    <TableCell>
+                      <Typography variant="body2" sx={{ fontSize: '0.8125rem', fontWeight: 500 }}>
+                        {getCategoryDisplayName(txn.category_id)}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" noWrap sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>
+                        {getAccountName(txn.account_id)}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography
+                        variant="body2"
+                        noWrap
+                        sx={{ fontSize: '0.8125rem', color: 'text.secondary', maxWidth: 280 }}
+                      >
+                        {txn.description || '—'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                      <Typography variant="body2" sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>
+                        {dateDisplay(txn.date)}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Typography
+                        variant="body2"
+                        fontWeight={600}
+                        sx={{ fontSize: '0.8125rem', color: amountColor(txn.type), whiteSpace: 'nowrap' }}
+                      >
+                        {txn.currency}{' '}
+                        {new Intl.NumberFormat('en-US', {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        }).format(Math.abs(txn.amount))}
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      ) : (
       <Box>
         {visibleTransactions.map((txn) => {
           const isSelected = selectedIds.has(txn.transaction_id);
@@ -387,6 +512,7 @@ function CategoryTransactionsList(
           );
         })}
       </Box>
+      )}
 
       {hiddenCount > 0 && (
         <Button
