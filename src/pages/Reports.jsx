@@ -28,6 +28,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import TodayIcon from '@mui/icons-material/Today';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
 import ArrowDropUpIcon from '@mui/icons-material/ArrowDropUp';
@@ -920,27 +921,6 @@ function Reports() {
     };
   };
 
-  // Render primary amount with an optional much-smaller, muted secondary — a
-  // tiny reference glance without eating row space
-  const renderMoneyInline = (money) => (
-    <>
-      {money.primary}
-      {money.secondary && (
-        <Box
-          component="span"
-          sx={{
-            fontSize: '0.68em',
-            fontWeight: 400,
-            color: 'text.secondary',
-            ml: 0.35,
-          }}
-        >
-          {money.secondary}
-        </Box>
-      )}
-    </>
-  );
-
   // Stacked money cell (desktop table): original amount as the primary line,
   // base conversion as a smaller secondary line beneath it
   const renderMoneyStacked = (
@@ -1072,21 +1052,33 @@ function Reports() {
   const renderDelta = (delta, { label = false } = {}) => {
     if (!delta) return null;
     const Arrow = delta.up ? ArrowDropUpIcon : ArrowDropDownIcon;
+    const tint =
+      delta.color === 'google.green' ? 'google.greenBg' : 'google.redBg';
     return (
       <Box
         component="span"
-        sx={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          whiteSpace: 'nowrap',
-          fontWeight: 600,
-          color: delta.color,
-          lineHeight: 1,
-        }}
+        sx={{ display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap' }}
       >
-        <Arrow sx={{ fontSize: '1.35em', mx: '-0.18em' }} />
-        <Box component="span" sx={{ ml: '0.25em' }}>
-          {delta.text}
+        {/* Tinted pill so the trend stands out from the row rather than
+            blending into the surrounding text */}
+        <Box
+          component="span"
+          sx={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            fontWeight: 600,
+            color: delta.color,
+            bgcolor: tint,
+            borderRadius: 0.75,
+            px: '0.3em',
+            py: '0.1em',
+            lineHeight: 1,
+          }}
+        >
+          <Arrow sx={{ fontSize: '1.35em', mx: '-0.18em' }} />
+          <Box component="span" sx={{ ml: '0.15em' }}>
+            {delta.text}
+          </Box>
         </Box>
         {label && (
           <Box
@@ -1703,7 +1695,7 @@ function Reports() {
               sx={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 0.25,
+                gap: 0.5,
                 minWidth: 0,
                 py: 0.25,
                 px: 0.5,
@@ -1723,21 +1715,32 @@ function Reports() {
                       minWidth: 0,
                     }}
                   >
-                    of {budgetMoney.primary}
+                    Plan {budgetMoney.primary}
                     {budgetLabel}
                   </Typography>
-                  {/* Edit cue when there's an editable own budget; a "+" cue
-                      when the shown budget is aggregated from children and
-                      tapping instead creates the parent's own budget */}
-                  {budgetFromChildrenOnly ? (
-                    <AddIcon
-                      sx={{ fontSize: 13, color: 'text.secondary', flexShrink: 0 }}
-                    />
-                  ) : (
-                    <EditIcon
-                      sx={{ fontSize: 11, color: 'text.secondary', flexShrink: 0 }}
-                    />
-                  )}
+                  {/* Circular button-style affordance so it reads as a control,
+                      not part of the amount: a filled "+" when tapping creates
+                      the parent's own budget, a pencil when editing one */}
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: 15,
+                      height: 15,
+                      borderRadius: '50%',
+                      bgcolor: 'action.selected',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {budgetFromChildrenOnly ? (
+                      <AddIcon sx={{ fontSize: 11, color: 'text.secondary' }} />
+                    ) : (
+                      <EditOutlinedIcon
+                        sx={{ fontSize: 11, color: 'text.secondary' }}
+                      />
+                    )}
+                  </Box>
                 </>
               ) : (
                 <Typography
@@ -1877,22 +1880,45 @@ function Reports() {
               gap: 1,
             }}
           >
-            <Typography sx={{ fontSize: '1.25rem', fontWeight: 700, minWidth: 0 }}>
-              {renderMoneyInline(totalActualMoney)}
-            </Typography>
-            {totals.budget > 0 && (
-              <Typography
-                variant="caption"
-                noWrap
-                sx={{
-                  fontSize: '0.75rem',
-                  color: 'text.secondary',
-                  flexShrink: 0,
-                  minWidth: 0,
-                }}
-              >
-                of {renderMoneyInline(totalBudgetMoney)}
+            <Box sx={{ minWidth: 0 }}>
+              <Typography sx={{ fontSize: '1.25rem', fontWeight: 700 }}>
+                {totalActualMoney.primary}
               </Typography>
+              {totalActualMoney.secondary && (
+                <Typography
+                  sx={{
+                    fontSize: '0.625rem',
+                    color: 'text.secondary',
+                    lineHeight: 1.2,
+                  }}
+                >
+                  {totalActualMoney.secondary}
+                </Typography>
+              )}
+            </Box>
+            {totals.budget > 0 && (
+              <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
+                <Typography
+                  sx={{
+                    fontSize: '0.8125rem',
+                    fontWeight: 600,
+                    color: 'text.primary',
+                  }}
+                >
+                  Plan {totalBudgetMoney.primary}
+                </Typography>
+                {totalBudgetMoney.secondary && (
+                  <Typography
+                    sx={{
+                      fontSize: '0.625rem',
+                      color: 'text.secondary',
+                      lineHeight: 1.2,
+                    }}
+                  >
+                    {totalBudgetMoney.secondary}
+                  </Typography>
+                )}
+              </Box>
             )}
           </Box>
         </Box>
@@ -2160,7 +2186,7 @@ function Reports() {
                               color: tile.color,
                             }}
                           >
-                            {formatCurrency(tile.value, baseCurrency)}
+                            {fmt(tile.value, baseCurrency)}
                           </Typography>
                           {tile.delta && (
                             <Box sx={{ fontSize: '0.75rem', mt: 0.25 }}>
@@ -2176,7 +2202,7 @@ function Reports() {
                               display: 'block',
                             }}
                           >
-                            Plan: {formatCurrency(tile.plan, baseCurrency)}
+                            Plan: {fmt(tile.plan, baseCurrency)}
                           </Typography>
                         </Box>
                       </Fragment>
@@ -2197,15 +2223,16 @@ function Reports() {
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         gap: 1.5,
-                        py: 1,
+                        py: 1.25,
                         borderTop: index > 0 ? '1px solid' : 'none',
                         borderColor: 'divider',
                       }}
                     >
                       <Typography
                         sx={{
-                          fontSize: '0.875rem',
-                          fontWeight: 500,
+                          fontSize: '1.0625rem',
+                          fontWeight: 600,
+                          color: 'text.primary',
                           flexShrink: 0,
                         }}
                       >
@@ -2221,19 +2248,19 @@ function Reports() {
                           }}
                         >
                           {tile.delta && (
-                            <Box sx={{ fontSize: '0.6875rem' }}>
+                            <Box sx={{ fontSize: '0.75rem' }}>
                               {renderDelta(tile.delta)}
                             </Box>
                           )}
                           <Typography
                             noWrap
                             sx={{
-                              fontSize: '1.0625rem',
+                              fontSize: '1.3125rem',
                               fontWeight: 700,
                               color: tile.color,
                             }}
                           >
-                            {formatCurrency(tile.value, baseCurrency)}
+                            {fmt(tile.value, baseCurrency)}
                           </Typography>
                         </Box>
                         {tile.plan > 0 && (
@@ -2243,7 +2270,7 @@ function Reports() {
                               color: 'text.secondary',
                             }}
                           >
-                            Plan {formatCurrency(tile.plan, baseCurrency)}
+                            Plan {fmt(tile.plan, baseCurrency)}
                           </Typography>
                         )}
                       </Box>
