@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, Fragment } from 'react';
+import { useState, useMemo, useEffect, useRef, Fragment } from 'react';
 import { useSelector } from 'react-redux';
 import {
   Box,
@@ -18,7 +18,10 @@ import {
   Divider,
   LinearProgress,
   TextField,
+  MenuItem,
   InputAdornment,
+  Badge,
+  Collapse,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
@@ -33,6 +36,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
 import ArrowDropUpIcon from '@mui/icons-material/ArrowDropUp';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
+import FilterListIcon from '@mui/icons-material/FilterList';
 import BudgetDialog from '../components/common/BudgetDialog';
 import CategoryTransactionsList from '../components/common/CategoryTransactionsList';
 import { usePageRefresh } from '../hooks/usePageRefresh';
@@ -48,6 +52,10 @@ import {
   subMonths,
   startOfMonth,
   endOfMonth,
+  startOfDay,
+  endOfDay,
+  subDays,
+  differenceInCalendarDays,
   parseISO,
 } from 'date-fns';
 import { getCategoryDescendants } from '../utils/categoryHierarchy';
@@ -69,7 +77,7 @@ const tappableRowSx = {
 };
 
 const PERIOD_OPTIONS = [
-  { value: 'month', label: 'Month' },
+  { value: 'month', label: '1 Month' },
   { value: '6months', label: '6 Months' },
   { value: '1year', label: '1 Year' },
 ];
@@ -115,6 +123,7 @@ function Reports() {
   const { categories } = useSelector((state) => state.categories);
   const { settings } = useSelector((state) => state.settings);
   const { exchangeRates } = useSelector((state) => state.exchangeRates);
+  const { accounts } = useSelector((state) => state.accounts);
 
   // Refresh data on navigation
   usePageRefresh({
@@ -125,9 +134,16 @@ function Reports() {
   const [selectedMonth, setSelectedMonth] = useState(
     format(new Date(), 'yyyy-MM')
   );
-  const [periodType, setPeriodType] = useState('month'); // 'month' | '6months' | '1year'
+  const [periodType, setPeriodType] = useState('month'); // 'month' | '6months' | '1year' | 'custom'
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
+  const [filterAccount, setFilterAccount] = useState('');
+  const [filterType, setFilterType] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState(new Set());
   const [reportSearch, setReportSearch] = useState('');
+  const searchInputRef = useRef(null);
   // Debounced copy drives the (expensive) filtering so typing stays smooth
   const [debouncedReportSearch, setDebouncedReportSearch] = useState('');
   useEffect(() => {
@@ -163,15 +179,31 @@ function Reports() {
     return { start: startDate, end: endDate };
   };
 
+  // A custom range is active only once both ends are set
+  const isCustom = periodType === 'custom' && !!customStart && !!customEnd;
+
   // Get current date range
-  const dateRange = useMemo(
-    () => getDateRange(selectedMonth, periodType),
-    [selectedMonth, periodType]
-  );
+  const dateRange = useMemo(() => {
+    if (isCustom) {
+      return {
+        start: startOfDay(parseISO(customStart)),
+        end: endOfDay(parseISO(customEnd)),
+      };
+    }
+    return getDateRange(selectedMonth, periodType);
+  }, [selectedMonth, periodType, isCustom, customStart, customEnd]);
 
   // The immediately preceding period of the same length, for month-over-month
   // (period-over-period) deltas on totals and each category
   const previousDateRange = useMemo(() => {
+    if (isCustom) {
+      const start = parseISO(customStart);
+      const end = parseISO(customEnd);
+      const days = differenceInCalendarDays(end, start) + 1;
+      const prevEnd = subDays(start, 1);
+      const prevStart = subDays(prevEnd, days - 1);
+      return { start: startOfDay(prevStart), end: endOfDay(prevEnd) };
+    }
     const monthsBack =
       periodType === '6months' ? 6 : periodType === '1year' ? 12 : 1;
     const prevMonth = format(
@@ -179,15 +211,33 @@ function Reports() {
       'yyyy-MM'
     );
     return getDateRange(prevMonth, periodType);
-  }, [selectedMonth, periodType]);
+  }, [selectedMonth, periodType, isCustom, customStart, customEnd]);
 
   // Human label for the previous period, used in delta captions
-  const periodWord =
-    periodType === '6months'
-      ? 'prev 6 mo'
-      : periodType === '1year'
-      ? 'last year'
-      : 'last month';
+  const periodWord = isCustom
+    ? 'prev period'
+    : periodType === '6months'
+    ? 'prev 6 mo'
+    : periodType === '1year'
+    ? 'last year'
+    : 'last month';
+
+  // Duration filter handlers
+  const selectPreset = (value) => setPeriodType(value);
+  const handleCustomDate = (which, value) => {
+    const nextStart = which === 'start' ? value : customStart;
+    const nextEnd = which === 'end' ? value : customEnd;
+    if (which === 'start') setCustomStart(value);
+    else setCustomEnd(value);
+    if (nextStart && nextEnd) setPeriodType('custom');
+  };
+  // Count of active filters (non-default duration + each account/type/status)
+  const activeFilterCount =
+    (periodType !== 'month' ? 1 : 0) +
+    (filterAccount ? 1 : 0) +
+    (filterType ? 1 : 0) +
+    (filterStatus ? 1 : 0);
+  const filterActive = activeFilterCount > 0;
 
   // Month navigation handlers
   const handlePreviousPeriod = () => {
@@ -365,6 +415,11 @@ function Reports() {
       } else if (type === 'Expense') {
         if (txn.type !== 'Expense' && txn.type !== 'Transfer Out') return;
       }
+
+      // Optional account / type / status filters (default: all)
+      if (filterAccount && txn.account_id !== filterAccount) return;
+      if (filterType && txn.type !== filterType) return;
+      if (filterStatus && txn.status !== filterStatus) return;
 
       // Filter by date range
       const txnDate = parseISO(txn.date);
@@ -810,6 +865,10 @@ function Reports() {
             return false;
         }
 
+        if (filterAccount && txn.account_id !== filterAccount) return false;
+        if (filterType && txn.type !== filterType) return false;
+        if (filterStatus && txn.status !== filterStatus) return false;
+
         const txnDate = parseISO(txn.date);
         return txnDate >= rangeStart && txnDate <= rangeEnd;
       })
@@ -997,7 +1056,17 @@ function Reports() {
   // keystroke never triggers a full recompute — only the cheap filter re-runs.
   const incomeReportDataFull = useMemo(
     () => buildReportData('Income'),
-    [categories, budgets, allTransactions, dateRange, exchangeRates, baseCurrency]
+    [
+      categories,
+      budgets,
+      allTransactions,
+      dateRange,
+      exchangeRates,
+      baseCurrency,
+      filterAccount,
+      filterType,
+      filterStatus,
+    ]
   );
   const incomeReportData = useMemo(
     () => filterReportBySearch(incomeReportDataFull, debouncedReportSearch),
@@ -1006,7 +1075,17 @@ function Reports() {
 
   const expenseReportDataFull = useMemo(
     () => buildReportData('Expense'),
-    [categories, budgets, allTransactions, dateRange, exchangeRates, baseCurrency]
+    [
+      categories,
+      budgets,
+      allTransactions,
+      dateRange,
+      exchangeRates,
+      baseCurrency,
+      filterAccount,
+      filterType,
+      filterStatus,
+    ]
   );
   const expenseReportData = useMemo(
     () => filterReportBySearch(expenseReportDataFull, debouncedReportSearch),
@@ -1124,7 +1203,14 @@ function Reports() {
 
   const modalTransactions = useMemo(
     () => getTransactionsForModal(),
-    [selectedCategoryForModal, dateRange, allTransactions]
+    [
+      selectedCategoryForModal,
+      dateRange,
+      allTransactions,
+      filterAccount,
+      filterType,
+      filterStatus,
+    ]
   );
 
   if (loading && !isInitialized) {
@@ -1133,6 +1219,12 @@ function Reports() {
 
   // Format period display
   const getPeriodDisplay = () => {
+    if (isCustom) {
+      const s = dateRange.start;
+      const e = dateRange.end;
+      const sameYear = format(s, 'yyyy') === format(e, 'yyyy');
+      return `${format(s, 'MMM d')} – ${format(e, sameYear ? 'MMM d, yyyy' : 'MMM d, yyyy')}`;
+    }
     if (periodType === 'month') {
       const selectedMonthDate = parseISO(`${selectedMonth}-01`);
       return format(selectedMonthDate, 'MMMM yyyy');
@@ -1318,9 +1410,7 @@ function Reports() {
                         fontStyle: 'italic',
                       }}
                     >
-                      {budgetParentOnly
-                        ? 'applies to parent only'
-                        : 'includes subcategories'}
+                      {budgetParentOnly ? 'Parent only' : 'Incl. subcategories'}
                     </Typography>
                   )}
                 </Box>
@@ -1560,9 +1650,9 @@ function Reports() {
     const budgetIncludesChildren = childBudgets && !!ownBudget;
     const budgetParentOnly = !!ownBudget && hasChildren && !childBudgets;
     const budgetLabel = budgetParentOnly
-      ? ' (applies to parent only)'
+      ? ' · parent only'
       : budgetIncludesChildren
-      ? ' (includes subcategories)'
+      ? ' · incl. subs'
       : '';
 
     return (
@@ -1960,27 +2050,212 @@ function Reports() {
         >
           Budget vs Actual
         </Typography>
-        <IconButton
-          onClick={() => handleOpenBudgetDialog()}
-          aria-label="Add budget"
-          sx={{
-            backgroundColor: 'primary.main',
-            color: 'primary.contrastText',
-            width: 36,
-            height: 36,
-            '&:hover': {
-              backgroundColor: 'primary.dark',
-            },
-          }}
-        >
-          <AddIcon sx={{ fontSize: 20 }} />
-        </IconButton>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <IconButton
+            onClick={() => setFiltersOpen((open) => !open)}
+            aria-label="Filter"
+            sx={{ width: 36, height: 36, color: 'text.secondary' }}
+          >
+            <Badge
+              badgeContent={activeFilterCount}
+              color="primary"
+              overlap="circular"
+              sx={{
+                '& .MuiBadge-badge': {
+                  fontSize: '0.5625rem',
+                  height: 15,
+                  minWidth: 15,
+                  px: 0.25,
+                },
+              }}
+            >
+              <FilterListIcon sx={{ fontSize: 20 }} />
+            </Badge>
+          </IconButton>
+          <IconButton
+            onClick={() => handleOpenBudgetDialog()}
+            aria-label="Add budget"
+            sx={{
+              backgroundColor: 'primary.main',
+              color: 'primary.contrastText',
+              width: 36,
+              height: 36,
+              '&:hover': {
+                backgroundColor: 'primary.dark',
+              },
+            }}
+          >
+            <AddIcon sx={{ fontSize: 20 }} />
+          </IconButton>
+        </Box>
       </Box>
 
       {error && <ErrorMessage error={error} />}
 
+      {/* Duration filter — presets or a custom date range */}
+      <Collapse in={filtersOpen}>
+        <Box
+          sx={{
+            mb: 2,
+            p: 1.5,
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 1.5,
+          }}
+        >
+          <Typography
+            sx={{
+              fontSize: '0.6875rem',
+              fontWeight: 600,
+              letterSpacing: 0.6,
+              textTransform: 'uppercase',
+              color: 'text.secondary',
+              mb: 0.75,
+            }}
+          >
+            Duration
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1.5 }}>
+            {PERIOD_OPTIONS.map((option) => (
+              <Chip
+                key={option.value}
+                label={option.label}
+                onClick={() => selectPreset(option.value)}
+                color={periodType === option.value ? 'primary' : 'default'}
+                variant={periodType === option.value ? 'filled' : 'outlined'}
+                size="small"
+              />
+            ))}
+          </Box>
+          <Typography
+            sx={{
+              fontSize: '0.6875rem',
+              fontWeight: 600,
+              letterSpacing: 0.6,
+              textTransform: 'uppercase',
+              color: 'text.secondary',
+              mb: 0.75,
+            }}
+          >
+            Custom range
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <TextField
+              type="date"
+              size="small"
+              label="From"
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+              value={customStart}
+              onChange={(e) => handleCustomDate('start', e.target.value)}
+            />
+            <TextField
+              type="date"
+              size="small"
+              label="To"
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+              value={customEnd}
+              onChange={(e) => handleCustomDate('end', e.target.value)}
+            />
+          </Box>
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1.5 }}>
+            <TextField
+              select
+              size="small"
+              label="Account"
+              value={filterAccount}
+              onChange={(e) => setFilterAccount(e.target.value)}
+              sx={{ flex: '1 1 100%' }}
+            >
+              <MenuItem value="">All accounts</MenuItem>
+              {accounts
+                .filter((a) => a.status === 'Active')
+                .map((a) => (
+                  <MenuItem key={a.account_id} value={a.account_id}>
+                    {a.name} ({a.currency})
+                  </MenuItem>
+                ))}
+            </TextField>
+            <TextField
+              select
+              size="small"
+              label="Type"
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
+              sx={{ flex: '1 1 45%', minWidth: 120 }}
+            >
+              <MenuItem value="">All types</MenuItem>
+              <MenuItem value="Income">Income</MenuItem>
+              <MenuItem value="Expense">Expense</MenuItem>
+              <MenuItem value="Transfer Out">Transfer Out</MenuItem>
+            </TextField>
+            <TextField
+              select
+              size="small"
+              label="Status"
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              sx={{ flex: '1 1 45%', minWidth: 120 }}
+            >
+              <MenuItem value="">All statuses</MenuItem>
+              <MenuItem value="Cleared">Cleared</MenuItem>
+              <MenuItem value="Pending">Pending</MenuItem>
+              <MenuItem value="Reconciled">Reconciled</MenuItem>
+            </TextField>
+          </Box>
+          {filterActive && (
+            <Box sx={{ mt: 1.5, display: 'flex', justifyContent: 'flex-end' }}>
+              <Button
+                size="small"
+                onClick={() => {
+                  setPeriodType('month');
+                  setSelectedMonth(currentMonth);
+                  setCustomStart('');
+                  setCustomEnd('');
+                  setFilterAccount('');
+                  setFilterType('');
+                  setFilterStatus('');
+                }}
+                sx={{ textTransform: 'none' }}
+              >
+                Reset filters
+              </Button>
+            </Box>
+          )}
+        </Box>
+      </Collapse>
+
       {/* Period Navigation */}
       <Box sx={{ mb: { xs: 1.25, sm: 2 } }}>
+        {isCustom ? (
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 1.5,
+            }}
+          >
+            <Typography
+              variant="h6"
+              sx={{ textAlign: 'center', fontSize: { xs: '1rem', sm: '1.25rem' } }}
+            >
+              {periodDisplay}
+            </Typography>
+            <Button
+              size="small"
+              onClick={() => {
+                setPeriodType('month');
+                setSelectedMonth(currentMonth);
+              }}
+              startIcon={<TodayIcon sx={{ fontSize: 16 }} />}
+              sx={{ textTransform: 'none' }}
+            >
+              This month
+            </Button>
+          </Box>
+        ) : (
           <Box
             sx={{
               display: 'flex',
@@ -1988,57 +2263,6 @@ function Reports() {
               gap: { xs: 0.75, sm: 1.5 },
             }}
           >
-            {/* Period Type Selector — borderless underline tabs */}
-            <Box
-              sx={{ display: 'flex', justifyContent: 'center' }}
-            >
-              {PERIOD_OPTIONS.map((option, index) => (
-                <Fragment key={option.value}>
-                  {index > 0 && (
-                    <Divider
-                      orientation="vertical"
-                      flexItem
-                      sx={{ my: 0.75 }}
-                    />
-                  )}
-                  <Box
-                    onClick={() => setPeriodType(option.value)}
-                    sx={{
-                      px: { xs: 1.5, sm: 2.5 },
-                      py: { xs: 0.5, sm: 0.75 },
-                      fontSize: '0.875rem',
-                      cursor: 'pointer',
-                      WebkitTapHighlightColor: 'transparent',
-                      userSelect: 'none',
-                      fontWeight: periodType === option.value ? 600 : 400,
-                      color:
-                        periodType === option.value
-                          ? 'primary.main'
-                          : 'text.secondary',
-                      borderBottom: '2px solid',
-                      borderColor:
-                        periodType === option.value
-                          ? 'primary.main'
-                          : 'transparent',
-                      transition:
-                        'color 0.15s ease, border-color 0.15s ease',
-                      '@media (hover: hover)': {
-                        '&:hover': {
-                          color:
-                            periodType === option.value
-                              ? 'primary.main'
-                              : 'text.primary',
-                        },
-                      },
-                    }}
-                  >
-                    {option.label}
-                  </Box>
-                </Fragment>
-              ))}
-            </Box>
-
-            {/* Period Navigation */}
             <Box
               sx={{
                 display: 'flex',
@@ -2061,7 +2285,6 @@ function Reports() {
               </IconButton>
             </Box>
 
-            {/* Quick jump back to the current month */}
             {selectedMonth !== currentMonth && (
               <Box sx={{ display: 'flex', justifyContent: 'center' }}>
                 <Button
@@ -2075,6 +2298,7 @@ function Reports() {
               </Box>
             )}
           </Box>
+        )}
       </Box>
 
       <Divider sx={PAGE_DIVIDER_SX} />
@@ -2087,6 +2311,7 @@ function Reports() {
           placeholder="Filter by category…"
           value={reportSearch}
           onChange={(e) => setReportSearch(e.target.value)}
+          inputRef={searchInputRef}
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
@@ -2099,6 +2324,8 @@ function Reports() {
                   onClick={() => {
                     setReportSearch('');
                     setDebouncedReportSearch('');
+                    // Return focus so the user can keep typing right away
+                    searchInputRef.current?.focus();
                   }}
                   edge="end"
                   size="small"

@@ -39,6 +39,7 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import CloseIcon from '@mui/icons-material/Close';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import ReceiptIcon from '@mui/icons-material/Receipt';
@@ -1923,28 +1924,39 @@ function Transactions() {
         }}
         maxWidth="xs"
         fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: 2,
-            p: 1,
-          },
-        }}
+        PaperProps={{ sx: { borderRadius: 3 } }}
       >
-        <DialogTitle sx={{ textAlign: 'center', pb: 1 }}>
-          Delete {selectedItems.size} Item{selectedItems.size !== 1 ? 's' : ''}?
-        </DialogTitle>
-        <DialogContent sx={{ textAlign: 'center', pb: 2 }}>
+        <DialogContent sx={{ textAlign: 'center', pt: 3.5, pb: 1 }}>
           {bulkDeleteError && (
             <Alert
               severity="error"
-              sx={{ mb: 2 }}
+              sx={{ mb: 2, textAlign: 'left' }}
               onClose={() => setBulkDeleteError(null)}
             >
               {bulkDeleteError}
             </Alert>
           )}
+          <Box
+            sx={{
+              width: 56,
+              height: 56,
+              borderRadius: '50%',
+              bgcolor: 'error.light',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              mx: 'auto',
+              mb: 2,
+            }}
+          >
+            <DeleteOutlineIcon sx={{ fontSize: 28, color: 'error.main' }} />
+          </Box>
+          <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
+            Delete {selectedItems.size} item
+            {selectedItems.size !== 1 ? 's' : ''}?
+          </Typography>
           <Typography variant="body2" color="text.secondary">
-            This action cannot be undone.
+            This can&apos;t be undone.
             {(() => {
               const transferCount = Array.from(selectedItems).filter((id) =>
                 id.startsWith('transfer-')
@@ -1952,47 +1964,39 @@ function Transactions() {
               if (transferCount > 0) {
                 return ` Deleting ${transferCount} transfer${
                   transferCount !== 1 ? 's' : ''
-                } will also delete both associated transactions.`;
+                } also removes both linked transactions.`;
               }
               return '';
             })()}
           </Typography>
         </DialogContent>
-        <DialogActions sx={{ justifyContent: 'center', gap: 2, px: 3, pb: 3 }}>
+        <DialogActions sx={{ px: 3, pb: 3, pt: 1, gap: 1.5 }}>
           <Button
+            fullWidth
             onClick={() => {
               setBulkDeleteConfirm(false);
               setBulkDeleteError(null);
             }}
             disabled={isBulkDeleting}
             variant="outlined"
-            size="large"
-            sx={{
-              textTransform: 'none',
-              minWidth: 120,
-              py: 1.5,
-            }}
+            sx={{ textTransform: 'none', py: 1 }}
           >
             Cancel
           </Button>
           <Button
+            fullWidth
             onClick={handleBulkDelete}
             color="error"
             variant="contained"
             disabled={isBulkDeleting}
-            size="large"
             startIcon={
               isBulkDeleting ? (
-                <CircularProgress size={20} color="inherit" />
+                <CircularProgress size={18} color="inherit" />
               ) : null
             }
-            sx={{
-              textTransform: 'none',
-              minWidth: 120,
-              py: 1.5,
-            }}
+            sx={{ textTransform: 'none', py: 1 }}
           >
-            {isBulkDeleting ? 'Deleting...' : 'Delete'}
+            {isBulkDeleting ? 'Deleting…' : 'Delete'}
           </Button>
         </DialogActions>
       </Dialog>

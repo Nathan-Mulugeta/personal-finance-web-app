@@ -15,13 +15,13 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  DialogTitle,
   IconButton,
   Typography,
 } from '@mui/material';
 import ChecklistIcon from '@mui/icons-material/Checklist';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import CloseIcon from '@mui/icons-material/Close';
 import { format, parseISO, isToday } from 'date-fns';
 import { getTransactionsTotalLabel } from '../../utils/currencyConversion';
@@ -424,40 +424,63 @@ function CategoryTransactionsList(
       <Dialog
         open={bulkDeleteConfirm}
         onClose={() => !isBulkDeleting && setBulkDeleteConfirm(false)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}
       >
-        <DialogTitle>
-          Delete {selectedIds.size} transaction
-          {selectedIds.size !== 1 ? 's' : ''}?
-        </DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ textAlign: 'center', pt: 3.5, pb: 1 }}>
           {bulkDeleteError && (
-            <Alert severity="error" sx={{ mb: 2 }}>
+            <Alert severity="error" sx={{ mb: 2, textAlign: 'left' }}>
               {bulkDeleteError}
             </Alert>
           )}
+          <Box
+            sx={{
+              width: 56,
+              height: 56,
+              borderRadius: '50%',
+              bgcolor: 'error.light',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              mx: 'auto',
+              mb: 2,
+            }}
+          >
+            <DeleteOutlineIcon sx={{ fontSize: 28, color: 'error.main' }} />
+          </Box>
+          <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
+            Delete {selectedIds.size} transaction
+            {selectedIds.size !== 1 ? 's' : ''}?
+          </Typography>
           <Typography variant="body2" color="text.secondary">
             This can&apos;t be undone.
           </Typography>
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ px: 3, pb: 3, pt: 1, gap: 1.5 }}>
           <Button
+            fullWidth
+            variant="outlined"
             onClick={() => setBulkDeleteConfirm(false)}
             disabled={isBulkDeleting}
+            sx={{ textTransform: 'none', py: 1 }}
           >
             Cancel
           </Button>
           <Button
+            fullWidth
             color="error"
             variant="contained"
             onClick={handleBulkDelete}
             disabled={isBulkDeleting}
             startIcon={
               isBulkDeleting ? (
-                <CircularProgress size={20} color="inherit" />
+                <CircularProgress size={18} color="inherit" />
               ) : null
             }
+            sx={{ textTransform: 'none', py: 1 }}
           >
-            {isBulkDeleting ? 'Deleting...' : 'Delete'}
+            {isBulkDeleting ? 'Deleting…' : 'Delete'}
           </Button>
         </DialogActions>
       </Dialog>
