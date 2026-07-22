@@ -2,10 +2,14 @@ import { getCategoryDescendants } from './categoryHierarchy'
 import { convertAmountWithExchangeRates } from './currencyConversion'
 import { findBudgetForCategoryMonth } from './budgetMatching'
 
+// "Near budget" begins at this fraction of the monthly budget — shared by the
+// Home cue, the Reports insight, and the entry-time cue so they always agree.
+export const NEAR_BUDGET_THRESHOLD = 0.8
+
 /**
  * "YYYY-MM" for a Date (local time), matching how budgets store their month.
  */
-export function currentMonthKey(date = new Date()) {
+function currentMonthKey(date = new Date()) {
   const y = date.getFullYear()
   const m = String(date.getMonth() + 1).padStart(2, '0')
   return `${y}-${m}`
@@ -111,7 +115,7 @@ export function computeBudgetsNeedingAttention({
   exchangeRates,
   baseCurrency,
   monthKey = currentMonthKey(),
-  nearThreshold = 0.8,
+  nearThreshold = NEAR_BUDGET_THRESHOLD,
 }) {
   const results = []
   categories.forEach((cat) => {

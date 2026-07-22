@@ -6,7 +6,10 @@ import {
   formatCurrency,
   convertAmountWithExchangeRates,
 } from '../../utils/currencyConversion';
-import { computeCategoryBudgetStatus } from '../../utils/budgetStatus';
+import {
+  computeCategoryBudgetStatus,
+  NEAR_BUDGET_THRESHOLD,
+} from '../../utils/budgetStatus';
 import { selectBaseCurrency } from '../../store/selectors';
 
 /**
@@ -76,7 +79,8 @@ function BudgetInlineCue({
   const projected = status.spent + addition;
   const remaining = status.budgetAmount - projected;
   const over = projected > status.budgetAmount;
-  const near = !over && projected >= status.budgetAmount * 0.8;
+  const near =
+    !over && projected >= status.budgetAmount * NEAR_BUDGET_THRESHOLD;
 
   const color = over ? 'error.main' : near ? 'warning.main' : 'text.secondary';
   const message = over

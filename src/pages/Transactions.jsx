@@ -68,6 +68,13 @@ import {
   InlineFieldInput,
 } from '../components/common/InlineFieldEditor';
 import { editableTextSx } from '../components/common/inlineEditStyles';
+import {
+  rowCategoryTextSx,
+  rowNoteTextSx,
+  rowSubTextSx,
+  rowAmountTextSx,
+  tableAmountTextSx,
+} from '../components/common/transactionRowStyles';
 import AddTransferDialog from '../components/common/AddTransferDialog';
 import BulkEditTransactionsDialog from '../components/common/BulkEditTransactionsDialog';
 import { formatCurrency } from '../utils/currencyConversion';
@@ -106,7 +113,6 @@ const MobileTransactionRow = memo(function MobileTransactionRow({
   // no edit handler; otherwise stop propagation and edit the field in place.
   const startEdit = (field) =>
     selectionMode ? undefined : inline.start(field, transaction);
-  const quickCursor = selectionMode ? undefined : 'pointer';
   // Now uses the date field which contains full datetime (TIMESTAMPTZ)
   const dateDisplay = (() => {
     try {
@@ -124,7 +130,6 @@ const MobileTransactionRow = memo(function MobileTransactionRow({
   return (
     <Box
       onClick={() => {
-        if (inline.justClosed()) return;
         if (selectionMode) {
           onSelect(transaction.transaction_id, !isSelected);
         } else if (!isBulkDeleting) {
@@ -172,7 +177,7 @@ const MobileTransactionRow = memo(function MobileTransactionRow({
         >
           {inline.isEditing('category', transaction) ? (
             <Box sx={{ flex: 1, minWidth: 0, mr: 1 }}>
-              <InlineFieldInput transaction={transaction} field="category" onDone={inline.stop} textSx={{ fontSize: '0.8125rem', fontWeight: 500 }} />
+              <InlineFieldInput transaction={transaction} field="category" onDone={inline.stop} textSx={rowCategoryTextSx} />
             </Box>
           ) : (
             <Typography
@@ -180,13 +185,11 @@ const MobileTransactionRow = memo(function MobileTransactionRow({
               onClick={startEdit('category')}
               sx={[
                 {
-                  fontSize: '0.8125rem',
-                  fontWeight: 500,
+                  ...rowCategoryTextSx,
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
                   minWidth: 0,
-                  cursor: quickCursor,
                 },
                 !selectionMode && editableTextSx,
               ]}
@@ -199,38 +202,17 @@ const MobileTransactionRow = memo(function MobileTransactionRow({
               transaction={transaction}
               field="amount"
               onDone={inline.stop}
-              textSx={{
-                fontSize: '0.8125rem',
-                fontWeight: 600,
-                color:
-                  transaction.type === 'Income' ||
-                  transaction.type === 'Transfer In'
-                    ? 'google.green'
-                    : transaction.type === 'Expense' ||
-                      transaction.type === 'Transfer Out'
-                    ? 'google.red'
-                    : 'text.primary',
-              }}
+              textSx={rowAmountTextSx(transaction.type)}
             />
           ) : (
             <Typography
               variant="body2"
-              fontWeight={600}
               onClick={startEdit('amount')}
               sx={[
                 {
-                  fontSize: '0.8125rem',
-                  color:
-                    transaction.type === 'Income' ||
-                    transaction.type === 'Transfer In'
-                      ? 'google.green'
-                      : transaction.type === 'Expense' ||
-                        transaction.type === 'Transfer Out'
-                      ? 'google.red'
-                      : 'text.primary',
+                  ...rowAmountTextSx(transaction.type),
                   whiteSpace: 'nowrap',
                   flexShrink: 0,
-                  cursor: quickCursor,
                 },
                 !selectionMode && editableTextSx,
               ]}
@@ -250,15 +232,14 @@ const MobileTransactionRow = memo(function MobileTransactionRow({
         >
           {inline.isEditing('description', transaction) ? (
             <Box sx={{ flex: 1, minWidth: 0, mr: 1 }}>
-              <InlineFieldInput transaction={transaction} field="description" onDone={inline.stop} textSx={{ fontSize: '0.6875rem', color: 'text.secondary' }} prefix={`${getAccountName(transaction.account_id)} · `} />
+              <InlineFieldInput transaction={transaction} field="description" onDone={inline.stop} textSx={rowSubTextSx} prefix={`${getAccountName(transaction.account_id)} · `} />
             </Box>
           ) : (
             <Typography
               variant="body2"
               component="div"
               sx={{
-                fontSize: '0.6875rem',
-                color: 'text.secondary',
+                ...rowSubTextSx,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
@@ -273,7 +254,7 @@ const MobileTransactionRow = memo(function MobileTransactionRow({
                 <Box
                   component="span"
                   onClick={startEdit('description')}
-                  sx={[{ cursor: quickCursor }, !selectionMode && editableTextSx]}
+                  sx={[!selectionMode && editableTextSx]}
                 >
                   {description}
                 </Box>
@@ -282,7 +263,7 @@ const MobileTransactionRow = memo(function MobileTransactionRow({
                   component="span"
                   onClick={startEdit('description')}
                   sx={[
-                    { cursor: quickCursor, fontStyle: 'italic', opacity: 0.7 },
+                    { fontStyle: 'italic', opacity: 0.7 },
                     !selectionMode && editableTextSx,
                   ]}
                 >
@@ -462,6 +443,10 @@ function Transactions() {
   // One inline-edit state for the desktop table (rows are an inline map, so
   // they can't each hold hook state like the mobile rows do)
   const tableInline = useInlineEdit();
+  const tableStartEdit = (field, transaction) =>
+    selectionMode || isBulkDeleting
+      ? undefined
+      : tableInline.start(field, transaction);
   const {
     allTransactions,
     loading,
@@ -1761,7 +1746,6 @@ function Transactions() {
                         hover
                         selected={isSelected}
                         onClick={() => {
-                          if (tableInline.justClosed()) return;
                           if (selectionMode) {
                             handleItemSelect(
                               transaction.transaction_id,
@@ -1808,22 +1792,14 @@ function Transactions() {
                         )}
                         <TableCell>
                           {tableInline.isEditing('category', transaction) ? (
-                            <InlineFieldInput transaction={transaction} field="category" onDone={tableInline.stop} textSx={{ fontSize: '0.8125rem', fontWeight: 500 }} />
+                            <InlineFieldInput transaction={transaction} field="category" onDone={tableInline.stop} textSx={rowCategoryTextSx} />
                           ) : (
                             <Typography
                               variant="body2"
                               component="span"
-                              onClick={
-                                selectionMode || isBulkDeleting
-                                  ? undefined
-                                  : tableInline.start('category', transaction)
-                              }
+                              onClick={tableStartEdit('category', transaction)}
                               sx={[
-                                {
-                                  fontSize: '0.8125rem',
-                                  fontWeight: 500,
-                                  display: 'inline-block',
-                                },
+                                { ...rowCategoryTextSx, display: 'inline-block' },
                                 !(selectionMode || isBulkDeleting) && editableTextSx,
                               ]}
                             >
@@ -1844,21 +1820,16 @@ function Transactions() {
                         </TableCell>
                         <TableCell>
                           {tableInline.isEditing('description', transaction) ? (
-                            <InlineFieldInput transaction={transaction} field="description" onDone={tableInline.stop} textSx={{ fontSize: '0.8125rem', color: 'text.secondary' }} />
+                            <InlineFieldInput transaction={transaction} field="description" onDone={tableInline.stop} textSx={rowNoteTextSx} />
                           ) : (
                             <Typography
                               variant="body2"
                               component="span"
                               title={description || ''}
-                              onClick={
-                                selectionMode || isBulkDeleting
-                                  ? undefined
-                                  : tableInline.start('description', transaction)
-                              }
+                              onClick={tableStartEdit('description', transaction)}
                               sx={[
                                 {
-                                  fontSize: '0.8125rem',
-                                  color: 'text.secondary',
+                                  ...rowNoteTextSx,
                                   display: 'inline-block',
                                   overflow: 'hidden',
                                   textOverflow: 'ellipsis',
@@ -1892,18 +1863,7 @@ function Transactions() {
                                 transaction={transaction}
                                 field="amount"
                                 onDone={tableInline.stop}
-                                textSx={{
-                                  fontSize: '0.875rem',
-                                  fontWeight: 600,
-                                  color:
-                                    transaction.type === 'Income' ||
-                                    transaction.type === 'Transfer In'
-                                      ? 'google.green'
-                                      : transaction.type === 'Expense' ||
-                                        transaction.type === 'Transfer Out'
-                                      ? 'google.red'
-                                      : 'text.primary',
-                                }}
+                                textSx={tableAmountTextSx(transaction.type)}
                               />
                             </Box>
                           ) : (
@@ -1917,25 +1877,12 @@ function Transactions() {
                             >
                               <Typography
                                 variant="body2"
-                                fontWeight={600}
                                 component="span"
-                                onClick={
-                                  selectionMode || isBulkDeleting
-                                    ? undefined
-                                    : tableInline.start('amount', transaction)
-                                }
+                                onClick={tableStartEdit('amount', transaction)}
                                 sx={[
                                   {
-                                    fontSize: '0.875rem',
+                                    ...tableAmountTextSx(transaction.type),
                                     display: 'inline-block',
-                                    color:
-                                      transaction.type === 'Income' ||
-                                      transaction.type === 'Transfer In'
-                                        ? 'google.green'
-                                        : transaction.type === 'Expense' ||
-                                          transaction.type === 'Transfer Out'
-                                        ? 'google.red'
-                                        : 'text.primary',
                                   },
                                   !(selectionMode || isBulkDeleting) &&
                                     editableTextSx,

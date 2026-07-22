@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -13,16 +14,10 @@ import { splitMoney } from '../../utils/currencyConversion';
 import CategoryAutocomplete from './CategoryAutocomplete';
 import { editableTextSx } from './inlineEditStyles';
 
-// When any inline editor last closed. Shared across every hook instance (rows
-// hold their own state) so the click that dismissed an editor can be swallowed
-// by whichever row it lands on, instead of opening that row's full editor.
-let lastInlineCloseAt = 0;
-
 /**
  * Tracks which single field, on which transaction, is currently being edited
  * in place across a list. `start(field, txn)` returns a click handler (it stops
  * row propagation so the field-tap doesn't also open the full editor).
- * `justClosed()` is true briefly after closing, to swallow the dismissing click.
  */
 export function useInlineEdit() {
   const [editing, setEditing] = useState(null); // { id, field }
@@ -33,28 +28,71 @@ export function useInlineEdit() {
     },
     []
   );
-  const stop = useCallback(() => {
-    lastInlineCloseAt = Date.now();
-    setEditing(null);
-  }, []);
+  const stop = useCallback(() => setEditing(null), []);
   const isEditing = useCallback(
     (field, transaction) =>
       editing?.id === transaction.transaction_id && editing.field === field,
     [editing]
   );
-  const justClosed = useCallback(() => Date.now() - lastInlineCloseAt < 350, []);
-  return { editing, start, stop, isEditing, justClosed };
+  return { start, stop, isEditing };
+}
+
+// Swallow the click that follows an outside press, so dismissing an editor
+// never also activates whatever was underneath (a row, the budget cue, a
+// link…). One-shot and self-removing; the timeout drops it if no click follows
+// (e.g. the press was the start of a scroll).
+function swallowNextClick() {
+  const swallow = (event) => {
+    event.stopPropagation();
+    event.preventDefault();
+  };
+  document.addEventListener('click', swallow, { capture: true, once: true });
+  setTimeout(
+    () => document.removeEventListener('click', swallow, { capture: true }),
+    500
+  );
+}
+
+/**
+ * While mounted, a press anywhere outside `containerRef` (and outside the
+ * category dropdown, which is portalled to body) dismisses the editor via
+ * `onDismiss` AND swallows that press's click. Capture-phase on document, so it
+ * runs before any app handler can react.
+ */
+function useDismissOutside(containerRef, onDismiss) {
+  const dismissRef = useRef(onDismiss);
+  dismissRef.current = onDismiss;
+  useEffect(() => {
+    const onPointerDown = (event) => {
+      const root = containerRef.current;
+      if (!root || root.contains(event.target)) return;
+      if (
+        event.target instanceof Element &&
+        event.target.closest('.MuiAutocomplete-popper')
+      ) {
+        return; // picking an option is part of the editor
+      }
+      swallowNextClick();
+      dismissRef.current();
+    };
+    document.addEventListener('pointerdown', onPointerDown, true);
+    return () =>
+      document.removeEventListener('pointerdown', onPointerDown, true);
+  }, [containerRef]);
 }
 
 /**
  * The exact text span, made editable in place. It's a contentEditable — not a
  * form input — so it keeps the surrounding font size (dodging the touch 16px
  * rule and iOS auto-zoom) and stays inline, so neighbouring text (currency,
- * account prefix) doesn't move. Focuses with the caret at the end.
+ * account prefix) doesn't move. Focuses with the caret at the end. Pressing
+ * outside commits and swallows that press.
+ *
+ * `onCommit`/`onCancel` may fire more than once (Enter → trailing blur, outside
+ * press → trailing blur); the parent's save/resolve guard makes them one-shot.
  */
 function InlineTextEdit({ initialText, numeric, placeholder, textSx, onCommit, onCancel }) {
   const ref = useRef(null);
-  const doneRef = useRef(false);
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -69,16 +107,9 @@ function InlineTextEdit({ initialText, numeric, placeholder, textSx, onCommit, o
     sel.addRange(range);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const commit = () => {
-    if (doneRef.current) return;
-    doneRef.current = true;
-    onCommit(ref.current ? ref.current.textContent : '');
-  };
-  const cancel = () => {
-    if (doneRef.current) return;
-    doneRef.current = true;
-    onCancel();
-  };
+  const commit = () => onCommit(ref.current ? ref.current.textContent : '');
+
+  useDismissOutside(ref, commit);
 
   return (
     <Box
@@ -95,11 +126,10 @@ function InlineTextEdit({ initialText, numeric, placeholder, textSx, onCommit, o
           commit();
         } else if (e.key === 'Escape') {
           e.preventDefault();
-          cancel();
+          onCancel();
         }
       }}
       onBlur={commit}
-      onClick={(e) => e.stopPropagation()}
       sx={[
         {
           outline: 'none',
@@ -121,6 +151,41 @@ function InlineTextEdit({ initialText, numeric, placeholder, textSx, onCommit, o
 }
 
 /**
+ * The category editor: a bare autocomplete in the row. Saves on pick; pressing
+ * outside (or Escape) cancels and swallows that press.
+ */
+function InlineCategoryEdit({ transaction, categoryOptions, onPick, onCancel, textSx }) {
+  const wrapRef = useRef(null);
+  useDismissOutside(wrapRef, onCancel);
+  return (
+    // Stop the (portalled) option click from bubbling up the React tree to the
+    // row's own onClick, which would otherwise open the full edit modal.
+    <Box
+      ref={wrapRef}
+      onClick={(e) => e.stopPropagation()}
+      sx={{ width: '100%' }}
+    >
+      <CategoryAutocomplete
+        categories={categoryOptions}
+        leafOnly
+        value={transaction.category_id}
+        onChange={onPick}
+        onClose={onCancel}
+        autoFocus
+        openOnFocus
+        selectOnFocus
+        inline
+        textSx={textSx}
+        sx={{ width: '100%', minWidth: 120 }}
+        slotProps={{
+          popper: { sx: { zIndex: (theme) => theme.zIndex.modal + 3 } },
+        }}
+      />
+    </Box>
+  );
+}
+
+/**
  * Renders the in-place editor for one transaction field. Amount and description
  * become editable text (currency / account prefix stay put next to them);
  * category is a bare autocomplete that saves on pick. Saves fire-and-forget —
@@ -136,6 +201,8 @@ function InlineTextEdit({ initialText, numeric, placeholder, textSx, onCommit, o
 export function InlineFieldInput({ transaction, field, onDone, textSx, prefix }) {
   const dispatch = useDispatch();
   const { categories } = useSelector((state) => state.categories);
+  // One-shot guard: commit/cancel can each fire more than once (trailing blur,
+  // autocomplete change + close) — only the first resolution counts.
   const resolvedRef = useRef(false);
 
   const categoryOptions = useMemo(() => {
@@ -157,6 +224,8 @@ export function InlineFieldInput({ transaction, field, onDone, textSx, prefix })
     (updates) => {
       if (resolvedRef.current) return;
       resolvedRef.current = true;
+      // Fire-and-forget so the editor closes immediately (no race when the user
+      // jumps straight to another field); the middleware toasts the outcome.
       dispatch(
         updateTransaction({
           transactionId: transaction.transaction_id,
@@ -168,39 +237,20 @@ export function InlineFieldInput({ transaction, field, onDone, textSx, prefix })
     [dispatch, transaction.transaction_id, onDone]
   );
 
-  const handleCategory = (categoryId) => {
-    // A pick saves; clearing keeps the field open to search again
-    if (categoryId && categoryId !== transaction.category_id) {
-      save({ categoryId });
-    }
-  };
-
   if (field === 'category') {
     return (
-      // Stop the (portalled) option click from bubbling up to the row's own
-      // onClick, which would otherwise open the full edit modal.
-      <Box
-        onClick={(e) => e.stopPropagation()}
-        onMouseDown={(e) => e.stopPropagation()}
-        sx={{ width: '100%' }}
-      >
-        <CategoryAutocomplete
-          categories={categoryOptions}
-          leafOnly
-          value={transaction.category_id}
-          onChange={handleCategory}
-          onClose={resolve}
-          autoFocus
-          openOnFocus
-          selectOnFocus
-          inline
-          textSx={textSx}
-          sx={{ width: '100%', minWidth: 120 }}
-          slotProps={{
-            popper: { sx: { zIndex: (theme) => theme.zIndex.modal + 3 } },
-          }}
-        />
-      </Box>
+      <InlineCategoryEdit
+        transaction={transaction}
+        categoryOptions={categoryOptions}
+        textSx={textSx}
+        onCancel={resolve}
+        onPick={(categoryId) => {
+          // A pick saves; clearing keeps the field open to search again
+          if (categoryId && categoryId !== transaction.category_id) {
+            save({ categoryId });
+          }
+        }}
+      />
     );
   }
 

@@ -956,16 +956,9 @@ function Reports() {
     return null;
   };
 
-  // Format money, using the short "Br" symbol for ETB so it fits in tight rows.
-  // Ethiopia writes the symbol after the amount, e.g. "4,500.00 Br".
-  const fmt = (amount, currency) => {
-    if (currency !== 'ETB') return formatCurrency(amount, currency);
-    const num = new Intl.NumberFormat('en-US', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(amount);
-    return `${num} Br`;
-  };
+  // formatCurrency already renders ETB as "4,500.00 Br"; keep the short local
+  // alias for the dense call sites below.
+  const fmt = formatCurrency;
 
   // For a category in a single non-base currency (e.g. you budget & log an
   // income in USD while the base is ETB), show the ORIGINAL amount as the

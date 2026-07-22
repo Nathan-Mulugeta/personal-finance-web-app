@@ -44,6 +44,12 @@ import { bulkDeleteTransactions } from '../../store/slices/transactionsSlice';
 import EditTransactionDialog from './EditTransactionDialog';
 import { useInlineEdit, InlineFieldInput } from './InlineFieldEditor';
 import { editableTextSx } from './inlineEditStyles';
+import {
+  rowCategoryTextSx,
+  rowNoteTextSx,
+  rowSubTextSx,
+  rowAmountTextSx,
+} from './transactionRowStyles';
 import BulkEditTransactionsDialog from './BulkEditTransactionsDialog';
 
 const rowTapSx = {
@@ -56,11 +62,6 @@ const rowTapSx = {
   },
 };
 
-const amountColor = (type) => {
-  if (type === 'Income' || type === 'Transfer In') return 'google.green';
-  if (type === 'Expense' || type === 'Transfer Out') return 'google.red';
-  return 'text.primary';
-};
 
 const dateDisplay = (dateStr) => {
   try {
@@ -107,7 +108,6 @@ function CategoryTransactionsList(
   const inline = useInlineEdit();
   const startEdit = (field, txn) =>
     selectionMode ? undefined : inline.start(field, txn);
-  const quickCursor = selectionMode ? 'inherit' : 'pointer';
 
   // Let a parent-hosted toggle start multi-select (used when the resting
   // header is suppressed via showRestingHeader={false})
@@ -174,8 +174,6 @@ function CategoryTransactionsList(
   };
 
   const handleRowClick = (txn) => {
-    // Swallow the click that just dismissed an inline editor
-    if (inline.justClosed()) return;
     if (selectionMode) {
       toggleSelect(txn.transaction_id, !selectedIds.has(txn.transaction_id));
     } else {
@@ -390,14 +388,14 @@ function CategoryTransactionsList(
                     )}
                     <TableCell>
                       {inline.isEditing('category', txn) ? (
-                        <InlineFieldInput transaction={txn} field="category" onDone={inline.stop} textSx={{ fontSize: '0.8125rem', fontWeight: 500 }} />
+                        <InlineFieldInput transaction={txn} field="category" onDone={inline.stop} textSx={rowCategoryTextSx} />
                       ) : (
                         <Typography
                           variant="body2"
                           component="span"
                           onClick={startEdit('category', txn)}
                           sx={[
-                            { fontSize: '0.8125rem', fontWeight: 500, display: 'inline-block' },
+                            { ...rowCategoryTextSx, display: 'inline-block' },
                             !selectionMode && editableTextSx,
                           ]}
                         >
@@ -412,7 +410,7 @@ function CategoryTransactionsList(
                     </TableCell>
                     <TableCell>
                       {inline.isEditing('description', txn) ? (
-                        <InlineFieldInput transaction={txn} field="description" onDone={inline.stop} textSx={{ fontSize: '0.8125rem', color: 'text.secondary' }} />
+                        <InlineFieldInput transaction={txn} field="description" onDone={inline.stop} textSx={rowNoteTextSx} />
                       ) : (
                         <Typography
                           variant="body2"
@@ -421,8 +419,7 @@ function CategoryTransactionsList(
                           onClick={startEdit('description', txn)}
                           sx={[
                             {
-                              fontSize: '0.8125rem',
-                              color: 'text.secondary',
+                              ...rowNoteTextSx,
                               display: 'inline-block',
                               maxWidth: 280,
                               fontStyle: txn.description ? 'normal' : 'italic',
@@ -442,15 +439,14 @@ function CategoryTransactionsList(
                     </TableCell>
                     <TableCell align="right">
                       {inline.isEditing('amount', txn) ? (
-                        <InlineFieldInput transaction={txn} field="amount" onDone={inline.stop} textSx={{ fontSize: '0.8125rem', fontWeight: 600, color: amountColor(txn.type) }} />
+                        <InlineFieldInput transaction={txn} field="amount" onDone={inline.stop} textSx={rowAmountTextSx(txn.type)} />
                       ) : (
                         <Typography
                           variant="body2"
-                          fontWeight={600}
                           component="span"
                           onClick={startEdit('amount', txn)}
                           sx={[
-                            { fontSize: '0.8125rem', color: amountColor(txn.type), whiteSpace: 'nowrap', display: 'inline-block' },
+                            { ...rowAmountTextSx(txn.type), whiteSpace: 'nowrap', display: 'inline-block' },
                             !selectionMode && editableTextSx,
                           ]}
                         >
@@ -508,7 +504,7 @@ function CategoryTransactionsList(
                 >
                   {inline.isEditing('category', txn) ? (
                     <Box sx={{ flex: 1, minWidth: 0, mr: 1 }}>
-                      <InlineFieldInput transaction={txn} field="category" onDone={inline.stop} textSx={{ fontSize: '0.8125rem', fontWeight: 500 }} />
+                      <InlineFieldInput transaction={txn} field="category" onDone={inline.stop} textSx={rowCategoryTextSx} />
                     </Box>
                   ) : (
                     <Typography
@@ -516,7 +512,7 @@ function CategoryTransactionsList(
                       noWrap
                       onClick={startEdit('category', txn)}
                       sx={[
-                        { fontSize: '0.8125rem', fontWeight: 500, minWidth: 0, cursor: quickCursor },
+                        { ...rowCategoryTextSx, minWidth: 0 },
                         !selectionMode && editableTextSx,
                       ]}
                     >
@@ -524,19 +520,16 @@ function CategoryTransactionsList(
                     </Typography>
                   )}
                   {inline.isEditing('amount', txn) ? (
-                    <InlineFieldInput transaction={txn} field="amount" onDone={inline.stop} textSx={{ fontSize: '0.8125rem', fontWeight: 600, color: amountColor(txn.type) }} />
+                    <InlineFieldInput transaction={txn} field="amount" onDone={inline.stop} textSx={rowAmountTextSx(txn.type)} />
                   ) : (
                     <Typography
                       variant="body2"
-                      fontWeight={600}
                       onClick={startEdit('amount', txn)}
                       sx={[
                         {
-                          fontSize: '0.8125rem',
-                          color: amountColor(txn.type),
+                          ...rowAmountTextSx(txn.type),
                           whiteSpace: 'nowrap',
                           flexShrink: 0,
-                          cursor: quickCursor,
                         },
                         !selectionMode && editableTextSx,
                       ]}
@@ -555,13 +548,13 @@ function CategoryTransactionsList(
                 >
                   {inline.isEditing('description', txn) ? (
                     <Box sx={{ flex: 1, minWidth: 0, mr: 1 }}>
-                      <InlineFieldInput transaction={txn} field="description" onDone={inline.stop} textSx={{ fontSize: '0.6875rem', color: 'text.secondary' }} prefix={`${getAccountName(txn.account_id)} · `} />
+                      <InlineFieldInput transaction={txn} field="description" onDone={inline.stop} textSx={rowSubTextSx} prefix={`${getAccountName(txn.account_id)} · `} />
                     </Box>
                   ) : (
                     <Typography
                       variant="body2"
                       noWrap
-                      sx={{ fontSize: '0.6875rem', color: 'text.secondary', minWidth: 0, flex: 1 }}
+                      sx={{ ...rowSubTextSx, minWidth: 0, flex: 1 }}
                     >
                       {/* Account taps bubble to the row → full edit */}
                       <Box component="span">{getAccountName(txn.account_id)}</Box>
@@ -570,7 +563,7 @@ function CategoryTransactionsList(
                         <Box
                           component="span"
                           onClick={startEdit('description', txn)}
-                          sx={[{ cursor: quickCursor }, !selectionMode && editableTextSx]}
+                          sx={[!selectionMode && editableTextSx]}
                         >
                           {description}
                         </Box>
@@ -579,7 +572,7 @@ function CategoryTransactionsList(
                           component="span"
                           onClick={startEdit('description', txn)}
                           sx={[
-                            { cursor: quickCursor, fontStyle: 'italic', opacity: 0.7 },
+                            { fontStyle: 'italic', opacity: 0.7 },
                             !selectionMode && editableTextSx,
                           ]}
                         >
