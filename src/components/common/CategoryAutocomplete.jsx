@@ -1,5 +1,11 @@
 import { useRef, useEffect } from 'react';
-import { Autocomplete, TextField, Box, Typography } from '@mui/material';
+import {
+  Autocomplete,
+  TextField,
+  InputBase,
+  Box,
+  Typography,
+} from '@mui/material';
 
 /**
  * Searchable category dropdown component using MUI Autocomplete.
@@ -18,6 +24,8 @@ function CategoryAutocomplete({
   leafOnly = false, // Block parent categories that have subcategories (transactions post to leaves only)
   required = false,
   autoFocus = false, // Auto-focus the input on mount
+  inline = false, // Bare, borderless input that inherits the surrounding text style (for in-place editing)
+  textSx, // Font styling to match the text being replaced when inline
   inputRef: externalInputRef, // Optional external ref for parent components to access input
   ...props
 }) {
@@ -142,16 +150,47 @@ function CategoryAutocomplete({
       }
       disabled={disabled}
       fullWidth
-      renderInput={(params) => (
-        <TextField
-          {...params}
-          inputRef={inputRef}
-          label={label}
-          error={error}
-          helperText={helperText}
-          required={required}
-        />
-      )}
+      renderInput={(params) =>
+        inline ? (
+          // Bare input: no border/box/label, inherits the row text style so the
+          // field looks unchanged on entering edit mode — only a caret appears.
+          <InputBase
+            ref={params.InputProps.ref}
+            inputProps={{
+              ...params.inputProps,
+              // Opt out of the touch 16px rule so the input keeps the row's font
+              className: [params.inputProps?.className, 'inline-edit-input']
+                .filter(Boolean)
+                .join(' '),
+            }}
+            inputRef={inputRef}
+            autoFocus={autoFocus}
+            fullWidth
+            sx={[
+              {
+                p: 0,
+                color: 'inherit',
+                '& .MuiInputBase-input': {
+                  p: 0,
+                  height: 'auto',
+                  font: 'inherit',
+                  color: 'inherit',
+                },
+              },
+              textSx,
+            ]}
+          />
+        ) : (
+          <TextField
+            {...params}
+            inputRef={inputRef}
+            label={label}
+            error={error}
+            helperText={helperText}
+            required={required}
+          />
+        )
+      }
       renderOption={(props, option) => {
         const { key, ...otherProps } = props;
         const blockedParent = leafOnly && option.hasChildren;

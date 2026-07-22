@@ -14,7 +14,7 @@
    triggers that zoom. Scoped to coarse pointers so desktop keeps its designed
    input sizes; !important is needed to win over MUI's per-field font sizes. */
 @media (pointer: coarse) {
-  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not(.inline-edit-input),
   textarea,
   select {
     font-size: 16px !important;

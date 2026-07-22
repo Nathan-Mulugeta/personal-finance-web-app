@@ -10,6 +10,42 @@ export function currencyLabel(currency) {
   return (currency || '').toUpperCase() === 'ETB' ? 'Br' : currency
 }
 
+/**
+ * Break a money value into its editable number and its static currency text,
+ * keeping the currency in its natural position: after for birr ("170.00" + " Br"),
+ * before for symbol currencies ("$" + "170.00"). Concatenated it equals
+ * formatCurrency, so inline editing can keep the currency fixed while only the
+ * number is editable.
+ *
+ * @returns {{ prefix: string, number: string, suffix: string }}
+ */
+export function splitMoney(amount, currency, locale = 'en-US') {
+  const value = Number.isFinite(amount) ? amount : Number(amount) || 0
+  const number = new Intl.NumberFormat(locale, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value)
+  const code = (currency || '').toUpperCase()
+  if (code === 'ETB') return { prefix: '', number, suffix: ' Br' }
+  if (!/^[A-Z]{3}$/.test(code)) {
+    return { prefix: '', number, suffix: code ? ` ${code}` : '' }
+  }
+  let symbol = code
+  try {
+    symbol = new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: code,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    })
+      .format(0)
+      .replace(/[\d\s]/g, '')
+  } catch {
+    // keep the code as a fallback
+  }
+  return { prefix: symbol, number, suffix: '' }
+}
+
 export function formatCurrency(amount, currency = 'USD', locale = 'en-US') {
   const value = Number.isFinite(amount) ? amount : Number(amount) || 0
   const code = (currency || '').toUpperCase()

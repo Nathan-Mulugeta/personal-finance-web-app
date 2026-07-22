@@ -13,8 +13,8 @@ export const editableTextSx = (theme) => ({
   borderRadius: 1,
   px: 0.5,
   mx: -0.5,
-  py: 0.25,
-  my: -0.25,
+  // No vertical padding — it would add height to the contentEditable editor and
+  // grow the row on entering edit mode. Horizontal padding only.
   textDecorationLine: 'underline',
   textDecorationStyle: 'dotted',
   textDecorationColor: theme.palette.divider,

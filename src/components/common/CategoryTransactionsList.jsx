@@ -42,9 +42,7 @@ import {
 } from '../../store/selectors';
 import { bulkDeleteTransactions } from '../../store/slices/transactionsSlice';
 import EditTransactionDialog from './EditTransactionDialog';
-import TransactionQuickEditor, {
-  useTransactionQuickEdit,
-} from './TransactionQuickEditor';
+import { useInlineEdit, InlineFieldInput } from './InlineFieldEditor';
 import { editableTextSx } from './inlineEditStyles';
 import BulkEditTransactionsDialog from './BulkEditTransactionsDialog';
 
@@ -106,9 +104,9 @@ function CategoryTransactionsList(
   const [selectedIds, setSelectedIds] = useState(new Set());
   // Shared quick-editor for tap-to-edit category/amount/note on rows (both the
   // desktop table and mobile rows are inline maps, so one state serves all)
-  const qe = useTransactionQuickEdit();
-  const quickClick = (field, txn) =>
-    selectionMode ? undefined : qe.open(field, txn);
+  const inline = useInlineEdit();
+  const startEdit = (field, txn) =>
+    selectionMode ? undefined : inline.start(field, txn);
   const quickCursor = selectionMode ? 'inherit' : 'pointer';
 
   // Let a parent-hosted toggle start multi-select (used when the resting
@@ -176,6 +174,8 @@ function CategoryTransactionsList(
   };
 
   const handleRowClick = (txn) => {
+    // Swallow the click that just dismissed an inline editor
+    if (inline.justClosed()) return;
     if (selectionMode) {
       toggleSelect(txn.transaction_id, !selectedIds.has(txn.transaction_id));
     } else {
@@ -389,17 +389,21 @@ function CategoryTransactionsList(
                       </TableCell>
                     )}
                     <TableCell>
-                      <Typography
-                        variant="body2"
-                        component="span"
-                        onClick={quickClick('category', txn)}
-                        sx={[
-                          { fontSize: '0.8125rem', fontWeight: 500, display: 'inline-block' },
-                          !selectionMode && editableTextSx,
-                        ]}
-                      >
-                        {getCategoryDisplayName(txn.category_id)}
-                      </Typography>
+                      {inline.isEditing('category', txn) ? (
+                        <InlineFieldInput transaction={txn} field="category" onDone={inline.stop} textSx={{ fontSize: '0.8125rem', fontWeight: 500 }} />
+                      ) : (
+                        <Typography
+                          variant="body2"
+                          component="span"
+                          onClick={startEdit('category', txn)}
+                          sx={[
+                            { fontSize: '0.8125rem', fontWeight: 500, display: 'inline-block' },
+                            !selectionMode && editableTextSx,
+                          ]}
+                        >
+                          {getCategoryDisplayName(txn.category_id)}
+                        </Typography>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2" noWrap sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>
@@ -407,25 +411,29 @@ function CategoryTransactionsList(
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Typography
-                        variant="body2"
-                        noWrap
-                        component="span"
-                        onClick={quickClick('description', txn)}
-                        sx={[
-                          {
-                            fontSize: '0.8125rem',
-                            color: 'text.secondary',
-                            display: 'inline-block',
-                            maxWidth: 280,
-                            fontStyle: txn.description ? 'normal' : 'italic',
-                            opacity: txn.description ? 1 : 0.7,
-                          },
-                          !selectionMode && editableTextSx,
-                        ]}
-                      >
-                        {txn.description || 'Add note'}
-                      </Typography>
+                      {inline.isEditing('description', txn) ? (
+                        <InlineFieldInput transaction={txn} field="description" onDone={inline.stop} textSx={{ fontSize: '0.8125rem', color: 'text.secondary' }} />
+                      ) : (
+                        <Typography
+                          variant="body2"
+                          noWrap
+                          component="span"
+                          onClick={startEdit('description', txn)}
+                          sx={[
+                            {
+                              fontSize: '0.8125rem',
+                              color: 'text.secondary',
+                              display: 'inline-block',
+                              maxWidth: 280,
+                              fontStyle: txn.description ? 'normal' : 'italic',
+                              opacity: txn.description ? 1 : 0.7,
+                            },
+                            !selectionMode && editableTextSx,
+                          ]}
+                        >
+                          {txn.description || 'Add note'}
+                        </Typography>
+                      )}
                     </TableCell>
                     <TableCell sx={{ whiteSpace: 'nowrap' }}>
                       <Typography variant="body2" sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>
@@ -433,18 +441,22 @@ function CategoryTransactionsList(
                       </Typography>
                     </TableCell>
                     <TableCell align="right">
-                      <Typography
-                        variant="body2"
-                        fontWeight={600}
-                        component="span"
-                        onClick={quickClick('amount', txn)}
-                        sx={[
-                          { fontSize: '0.8125rem', color: amountColor(txn.type), whiteSpace: 'nowrap', display: 'inline-block' },
-                          !selectionMode && editableTextSx,
-                        ]}
-                      >
-                        {formatCurrency(Math.abs(txn.amount), txn.currency)}
-                      </Typography>
+                      {inline.isEditing('amount', txn) ? (
+                        <InlineFieldInput transaction={txn} field="amount" onDone={inline.stop} textSx={{ fontSize: '0.8125rem', fontWeight: 600, color: amountColor(txn.type) }} />
+                      ) : (
+                        <Typography
+                          variant="body2"
+                          fontWeight={600}
+                          component="span"
+                          onClick={startEdit('amount', txn)}
+                          sx={[
+                            { fontSize: '0.8125rem', color: amountColor(txn.type), whiteSpace: 'nowrap', display: 'inline-block' },
+                            !selectionMode && editableTextSx,
+                          ]}
+                        >
+                          {formatCurrency(Math.abs(txn.amount), txn.currency)}
+                        </Typography>
+                      )}
                     </TableCell>
                   </TableRow>
                 );
@@ -494,34 +506,44 @@ function CategoryTransactionsList(
                     gap: 1,
                   }}
                 >
-                  <Typography
-                    variant="body2"
-                    noWrap
-                    onClick={quickClick('category', txn)}
-                    sx={[
-                      { fontSize: '0.8125rem', fontWeight: 500, minWidth: 0, cursor: quickCursor },
-                      !selectionMode && editableTextSx,
-                    ]}
-                  >
-                    {getCategoryDisplayName(txn.category_id)}
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    fontWeight={600}
-                    onClick={quickClick('amount', txn)}
-                    sx={[
-                      {
-                        fontSize: '0.8125rem',
-                        color: amountColor(txn.type),
-                        whiteSpace: 'nowrap',
-                        flexShrink: 0,
-                        cursor: quickCursor,
-                      },
-                      !selectionMode && editableTextSx,
-                    ]}
-                  >
-                    {formatCurrency(Math.abs(txn.amount), txn.currency)}
-                  </Typography>
+                  {inline.isEditing('category', txn) ? (
+                    <Box sx={{ flex: 1, minWidth: 0, mr: 1 }}>
+                      <InlineFieldInput transaction={txn} field="category" onDone={inline.stop} textSx={{ fontSize: '0.8125rem', fontWeight: 500 }} />
+                    </Box>
+                  ) : (
+                    <Typography
+                      variant="body2"
+                      noWrap
+                      onClick={startEdit('category', txn)}
+                      sx={[
+                        { fontSize: '0.8125rem', fontWeight: 500, minWidth: 0, cursor: quickCursor },
+                        !selectionMode && editableTextSx,
+                      ]}
+                    >
+                      {getCategoryDisplayName(txn.category_id)}
+                    </Typography>
+                  )}
+                  {inline.isEditing('amount', txn) ? (
+                    <InlineFieldInput transaction={txn} field="amount" onDone={inline.stop} textSx={{ fontSize: '0.8125rem', fontWeight: 600, color: amountColor(txn.type) }} />
+                  ) : (
+                    <Typography
+                      variant="body2"
+                      fontWeight={600}
+                      onClick={startEdit('amount', txn)}
+                      sx={[
+                        {
+                          fontSize: '0.8125rem',
+                          color: amountColor(txn.type),
+                          whiteSpace: 'nowrap',
+                          flexShrink: 0,
+                          cursor: quickCursor,
+                        },
+                        !selectionMode && editableTextSx,
+                      ]}
+                    >
+                      {formatCurrency(Math.abs(txn.amount), txn.currency)}
+                    </Typography>
+                  )}
                 </Box>
                 <Box
                   sx={{
@@ -531,35 +553,41 @@ function CategoryTransactionsList(
                     gap: 1,
                   }}
                 >
-                  <Typography
-                    variant="body2"
-                    noWrap
-                    sx={{ fontSize: '0.6875rem', color: 'text.secondary', minWidth: 0, flex: 1 }}
-                  >
-                    {/* Account taps bubble to the row → full edit */}
-                    <Box component="span">{getAccountName(txn.account_id)}</Box>
-                    {' • '}
-                    {description ? (
-                      <Box
-                        component="span"
-                        onClick={quickClick('description', txn)}
-                        sx={[{ cursor: quickCursor }, !selectionMode && editableTextSx]}
-                      >
-                        {description}
-                      </Box>
-                    ) : (
-                      <Box
-                        component="span"
-                        onClick={quickClick('description', txn)}
-                        sx={[
-                          { cursor: quickCursor, fontStyle: 'italic', opacity: 0.7 },
-                          !selectionMode && editableTextSx,
-                        ]}
-                      >
-                        Add note
-                      </Box>
-                    )}
-                  </Typography>
+                  {inline.isEditing('description', txn) ? (
+                    <Box sx={{ flex: 1, minWidth: 0, mr: 1 }}>
+                      <InlineFieldInput transaction={txn} field="description" onDone={inline.stop} textSx={{ fontSize: '0.6875rem', color: 'text.secondary' }} prefix={`${getAccountName(txn.account_id)} · `} />
+                    </Box>
+                  ) : (
+                    <Typography
+                      variant="body2"
+                      noWrap
+                      sx={{ fontSize: '0.6875rem', color: 'text.secondary', minWidth: 0, flex: 1 }}
+                    >
+                      {/* Account taps bubble to the row → full edit */}
+                      <Box component="span">{getAccountName(txn.account_id)}</Box>
+                      {' • '}
+                      {description ? (
+                        <Box
+                          component="span"
+                          onClick={startEdit('description', txn)}
+                          sx={[{ cursor: quickCursor }, !selectionMode && editableTextSx]}
+                        >
+                          {description}
+                        </Box>
+                      ) : (
+                        <Box
+                          component="span"
+                          onClick={startEdit('description', txn)}
+                          sx={[
+                            { cursor: quickCursor, fontStyle: 'italic', opacity: 0.7 },
+                            !selectionMode && editableTextSx,
+                          ]}
+                        >
+                          Add note
+                        </Box>
+                      )}
+                    </Typography>
+                  )}
                   <Typography
                     variant="body2"
                     sx={{ fontSize: '0.6875rem', color: 'text.secondary', flexShrink: 0 }}
@@ -596,17 +624,6 @@ function CategoryTransactionsList(
         }}
         transaction={editingTransaction}
       />
-
-      {/* Tap-to-edit category/amount/note on a row */}
-      {qe.state?.transaction && (
-        <TransactionQuickEditor
-          transaction={qe.state.transaction}
-          field={qe.state.field}
-          anchorEl={qe.state.anchorEl}
-          open={!!qe.state}
-          onClose={qe.close}
-        />
-      )}
 
       {/* Bulk edit (all rows here are plain transactions) */}
       <BulkEditTransactionsDialog
