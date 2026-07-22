@@ -1709,7 +1709,7 @@ function Reports() {
                 flex: 1,
               }}
             >
-              {hasChildren && (
+              {hasChildren ? (
                 <ExpandMoreIcon
                   sx={{
                     fontSize: 18,
@@ -1720,7 +1720,12 @@ function Reports() {
                     transition: 'transform 0.15s ease-in-out',
                   }}
                 />
-              )}
+              ) : level === 0 ? (
+                // Spacer matching the expand chevron so top-level names align
+                // whether or not the category has subcategories (the desktop
+                // table does the same with a fixed-width box)
+                <Box sx={{ width: 18, mr: 0.5, flexShrink: 0 }} />
+              ) : null}
               <Typography
                 variant="body2"
                 noWrap
@@ -1796,7 +1801,9 @@ function Reports() {
               justifyContent: 'space-between',
               gap: 1,
               mt: 0.125,
-              pl: hasChildren ? 2.875 : 0,
+              // Sit under the name, which is offset by the chevron (or its
+              // matching spacer on top-level rows)
+              pl: hasChildren || level === 0 ? 2.875 : 0,
             }}
           >
             <Box
