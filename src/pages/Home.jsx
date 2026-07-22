@@ -451,10 +451,6 @@ function Home({ quickAddExpense = false }) {
 
       {error && <ErrorMessage error={error} onClose={() => dispatch(clearError())} />}
 
-      {/* Budget attention cue — shows only when a category is near/over budget,
-          and steps aside while searching so results get the room */}
-      {!searchQuery && <BudgetAttentionCue />}
-
       {/* Add Transaction Dialog */}
       <AddTransactionDialog
         open={addTransactionOpen}
@@ -575,6 +571,10 @@ function Home({ quickAddExpense = false }) {
           </Box>
         )}
       </Box>
+
+      {/* Budget attention cue — shows only when a category is near/over budget,
+          and steps aside while searching so results get the room */}
+      {!searchQuery && <BudgetAttentionCue />}
 
       {/* Hidden entirely when no shortcuts are configured; shortcuts can
           still be managed via the "Manage shortcuts" button below the
