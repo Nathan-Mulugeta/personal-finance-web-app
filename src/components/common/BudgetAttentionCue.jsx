@@ -54,7 +54,7 @@ function BudgetAttentionCue() {
     <Box
       onClick={() => navigate('/reports')}
       sx={{
-        mb: 2,
+        mb: 1.5,
         px: 1.5,
         py: 1.25,
         borderRadius: 2,

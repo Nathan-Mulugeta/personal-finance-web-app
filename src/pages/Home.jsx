@@ -331,7 +331,7 @@ function Home({ quickAddExpense = false }) {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          mb: { xs: 1.5, sm: 2, md: 3 },
+          mb: { xs: 1, sm: 2, md: 3 },
         }}
       >
         <Typography
@@ -451,8 +451,9 @@ function Home({ quickAddExpense = false }) {
 
       {error && <ErrorMessage error={error} onClose={() => dispatch(clearError())} />}
 
-      {/* Budget attention cue — shows only when a category is near/over budget */}
-      <BudgetAttentionCue />
+      {/* Budget attention cue — shows only when a category is near/over budget,
+          and steps aside while searching so results get the room */}
+      {!searchQuery && <BudgetAttentionCue />}
 
       {/* Add Transaction Dialog */}
       <AddTransactionDialog
@@ -499,7 +500,7 @@ function Home({ quickAddExpense = false }) {
       {/* Search Bar */}
       <Box
         sx={{
-          mb: { xs: 2, sm: 3 },
+          mb: { xs: 1.25, sm: 3 },
           p: { xs: 1.5, sm: 2 },
           border: '1px solid',
           borderColor: 'divider',
@@ -649,7 +650,7 @@ function Home({ quickAddExpense = false }) {
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
-              mb: 1.5,
+              mb: { xs: 0.75, sm: 1.5 },
             }}
           >
             <Typography

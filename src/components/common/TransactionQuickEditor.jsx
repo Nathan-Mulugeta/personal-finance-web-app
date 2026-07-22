@@ -102,11 +102,12 @@ function TransactionQuickEditor({ transaction, field, anchorEl, open, onClose })
   };
 
   const handleCategory = (categoryId) => {
-    if (!categoryId || categoryId === transaction.category_id) {
-      onClose();
-      return;
+    // Only act on an actual pick. Clearing the field (the × button or backspace)
+    // must keep the sheet open so the user can search and choose a new one —
+    // clearing is a normal step, not a cancel.
+    if (categoryId && categoryId !== transaction.category_id) {
+      apply({ categoryId });
     }
-    apply({ categoryId });
   };
 
   const handleAmountSave = () => {
@@ -163,6 +164,11 @@ function TransactionQuickEditor({ transaction, field, anchorEl, open, onClose })
           onChange={handleCategory}
           label="Category"
           autoFocus
+          openOnFocus
+          // The options popper must sit above the sheet/popover it opens inside
+          slotProps={{
+            popper: { sx: { zIndex: (theme) => theme.zIndex.modal + 3 } },
+          }}
         />
       )}
 
