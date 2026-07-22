@@ -1,7 +1,4 @@
 /**
- * Format currency amount
- */
-/**
  * Short standalone label for a currency (not an amount) — birr shows as "Br"
  * to match how amounts are written; everything else keeps its ISO code. Use
  * for currency group headers/badges that sit alongside amounts.
@@ -13,9 +10,10 @@ export function currencyLabel(currency) {
 /**
  * Break a money value into its editable number and its static currency text,
  * keeping the currency in its natural position: after for birr ("170.00" + " Br"),
- * before for symbol currencies ("$" + "170.00"). Concatenated it equals
- * formatCurrency, so inline editing can keep the currency fixed while only the
- * number is editable.
+ * before for symbol currencies ("$" + "170.00"). formatCurrency is built on
+ * this split, so inline editing (which keeps the currency fixed and edits only
+ * the number) can never disagree with how the display writes the amount.
+ * Expects a non-negative amount; formatCurrency handles the sign.
  *
  * @returns {{ prefix: string, number: string, suffix: string }}
  */
@@ -46,31 +44,21 @@ export function splitMoney(amount, currency, locale = 'en-US') {
   return { prefix: symbol, number, suffix: '' }
 }
 
+/**
+ * Format an amount with its currency: "4,500.00 Br" for birr (symbol after),
+ * each other currency in its own convention ("$1,200.00"), degrading to a plain
+ * number for a missing/invalid code instead of crashing. Built ON splitMoney so
+ * display and inline editing structurally cannot disagree about how a currency
+ * is written.
+ */
 export function formatCurrency(amount, currency = 'USD', locale = 'en-US') {
   const value = Number.isFinite(amount) ? amount : Number(amount) || 0
-  const code = (currency || '').toUpperCase()
-  const plain = () =>
-    new Intl.NumberFormat(locale, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(value)
-
-  // Birr is written after the amount as "Br" (e.g. "4,500.00 Br"). Every other
-  // currency keeps its own native convention (e.g. "$1,200.00").
-  if (code === 'ETB') return `${plain()} Br`
-
-  // A missing/invalid code (e.g. a transfer leg whose account can't be found)
-  // would make Intl throw — degrade to a plain number instead of crashing.
-  if (!/^[A-Z]{3}$/.test(code)) return code ? `${plain()} ${code}` : plain()
-
-  try {
-    return new Intl.NumberFormat(locale, {
-      style: 'currency',
-      currency: code,
-    }).format(value)
-  } catch {
-    return `${plain()} ${code}`
-  }
+  const { prefix, number, suffix } = splitMoney(
+    Math.abs(value),
+    currency,
+    locale
+  )
+  return `${value < 0 ? '-' : ''}${prefix}${number}${suffix}`
 }
 
 /**

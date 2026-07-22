@@ -2,9 +2,9 @@
 // editors both consume these, so entering edit mode can never drift from the
 // row it replaces — a mismatch here is exactly what causes visible jumps.
 
-// Green for money in, red for money out — the same read everywhere an amount
-// shows (rows, tables, editors).
-export const amountColor = (type) => {
+// Green for money in, red for money out — consumed via the amount sx helpers
+// below so every surface (rows, tables, editors) gets the same read.
+const amountColor = (type) => {
   if (type === 'Income' || type === 'Transfer In') return 'google.green';
   if (type === 'Expense' || type === 'Transfer Out') return 'google.red';
   return 'text.primary';

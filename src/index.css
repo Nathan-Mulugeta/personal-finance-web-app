@@ -12,7 +12,9 @@
 /* iOS Safari auto-zooms the page whenever it focuses an input whose font-size
    is under 16px. Force >=16px on touch devices so focusing any field never
    triggers that zoom. Scoped to coarse pointers so desktop keeps its designed
-   input sizes; !important is needed to win over MUI's per-field font sizes. */
+   input sizes; !important is needed to win over MUI's per-field font sizes.
+   .inline-edit-input opts out: it's the in-row category editor, which must keep
+   the row's small font so entering edit mode doesn't resize anything. */
 @media (pointer: coarse) {
   input:not([type='checkbox']):not([type='radio']):not([type='range']):not(.inline-edit-input),
   textarea,
