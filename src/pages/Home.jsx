@@ -331,7 +331,7 @@ function Home({ quickAddExpense = false }) {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          mb: { xs: 1, sm: 2, md: 3 },
+          mb: { xs: 1.5, sm: 2, md: 3 },
         }}
       >
         <Typography
@@ -498,26 +498,18 @@ function Home({ quickAddExpense = false }) {
       />
 
       {/* Search Bar */}
-      <Box
-        sx={{
-          mb: { xs: 1.25, sm: 3 },
-          p: { xs: 1.5, sm: 2 },
-          border: '1px solid',
-          borderColor: 'divider',
-          borderRadius: 1,
-          backgroundColor: 'background.paper',
-        }}
-      >
+      <Box sx={{ mb: { xs: 1, sm: 3 } }}>
         <TextField
           inputRef={searchInputRef}
           fullWidth
-          placeholder="Search transactions by category or description..."
+          size="small"
+          placeholder="Search transactions..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
-                <SearchIcon color="action" />
+                <SearchIcon color="action" sx={{ fontSize: 20 }} />
               </InputAdornment>
             ),
             endAdornment: searchQuery && (
@@ -526,7 +518,6 @@ function Home({ quickAddExpense = false }) {
                   onClick={handleClearSearch}
                   edge="end"
                   size="small"
-                  sx={{ mr: 0.5 }}
                 >
                   <ClearIcon fontSize="small" />
                 </IconButton>
@@ -535,8 +526,8 @@ function Home({ quickAddExpense = false }) {
           }}
           sx={{
             '& .MuiOutlinedInput-root': {
-              fontSize: { xs: '0.875rem', sm: '1rem' },
-              py: { xs: 0.5, sm: 1 },
+              borderRadius: 2,
+              fontSize: { xs: '0.875rem', sm: '0.9375rem' },
             },
           }}
           autoFocus
@@ -650,7 +641,7 @@ function Home({ quickAddExpense = false }) {
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
-              mb: { xs: 0.75, sm: 1.5 },
+              mb: { xs: 0.5, sm: 1.5 },
             }}
           >
             <Typography
@@ -706,7 +697,7 @@ function Home({ quickAddExpense = false }) {
                 size="small"
                 onClick={() => navigate('/transactions')}
                 endIcon={<ArrowForwardIcon sx={{ fontSize: 16 }} />}
-                sx={{ mt: 1, textTransform: 'none', color: 'text.secondary' }}
+                sx={{ mt: 0.5, textTransform: 'none', color: 'text.secondary' }}
               >
                 View all transactions
               </Button>

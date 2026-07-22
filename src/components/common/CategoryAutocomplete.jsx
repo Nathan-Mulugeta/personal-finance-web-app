@@ -38,10 +38,12 @@ function CategoryAutocomplete({
       // Small delay to ensure the dialog is fully mounted
       const timer = setTimeout(() => {
         inputRef.current?.focus();
+        // Inline editing pre-selects the text so you can type straight away
+        if (inline) inputRef.current?.select();
       }, 100);
       return () => clearTimeout(timer);
     }
-  }, [autoFocus, disabled]);
+  }, [autoFocus, disabled, inline]);
 
   // Filter categories by type if specified
   const baseFilteredCategories = filterByType
@@ -170,11 +172,15 @@ function CategoryAutocomplete({
               {
                 p: 0,
                 color: 'inherit',
+                lineHeight: 'inherit',
                 '& .MuiInputBase-input': {
                   p: 0,
                   height: 'auto',
-                  font: 'inherit',
+                  lineHeight: 'inherit',
                   color: 'inherit',
+                  // Apply the row's exact font to the input itself so the size
+                  // matches the text precisely (no drop on entering edit)
+                  ...textSx,
                 },
               },
               textSx,
