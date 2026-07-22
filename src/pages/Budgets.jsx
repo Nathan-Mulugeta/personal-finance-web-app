@@ -8,8 +8,6 @@ import {
   Badge,
   Box,
   Button,
-  Card,
-  CardContent,
   Chip,
   FormControl,
   Grid,
@@ -24,15 +22,12 @@ import {
   Collapse,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
-import EditIcon from '@mui/icons-material/Edit';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import AutorenewIcon from '@mui/icons-material/Autorenew';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
-import { fetchBudgets } from '../store/slices/budgetsSlice';
-import { fetchCategories } from '../store/slices/categoriesSlice';
 import { BUDGET_STATUSES } from '../lib/api/budgets';
 import EmptyState from '../components/common/EmptyState';
 import PageSkeleton from '../components/common/PageSkeleton';
@@ -55,13 +50,11 @@ import {
 } from 'date-fns';
 
 function Budgets() {
-  const { budgets, loading, backgroundLoading, isInitialized, error } =
-    useSelector((state) => state.budgets);
+  const { budgets, loading, error } = useSelector((state) => state.budgets);
   const { categories } = useSelector((state) => state.categories);
   const { allTransactions } = useSelector((state) => state.transactions);
   const { settings } = useSelector((state) => state.settings);
   const { exchangeRates } = useSelector((state) => state.exchangeRates);
-  const appInitialized = useSelector((state) => state.appInit.isInitialized);
 
   // Memoized O(1) lookup functions from selectors
   const categoryMap = useSelector(selectCategoryMap);
@@ -78,13 +71,6 @@ function Budgets() {
     status: 'Active',
   });
   const [expandedParents, setExpandedParents] = useState(new Set());
-
-  const categoriesInitialized = useSelector(
-    (state) => state.categories.isInitialized
-  );
-  const transactionsInitialized = useSelector(
-    (state) => state.transactions.isInitialized
-  );
 
   // Refresh data on navigation
   usePageRefresh({
@@ -346,14 +332,6 @@ function Budgets() {
       status: 'Active',
     });
   };
-
-  // Get category by ID (using memoized Map for O(1) lookup)
-  const getCategory = useCallback(
-    (categoryId) => {
-      return categoryMap.get(categoryId);
-    },
-    [categoryMap]
-  );
 
   // Organize budgets by category hierarchy
   const organizeBudgetsByCategory = useMemo(() => {

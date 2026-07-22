@@ -30,6 +30,7 @@ import ChatIcon from '@mui/icons-material/Chat';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import AddTransactionDialog from '../components/common/AddTransactionDialog';
 import CategoryTransactionsList from '../components/common/CategoryTransactionsList';
+import BudgetAttentionCue from '../components/common/BudgetAttentionCue';
 import { getTransactionsTotalLabel } from '../utils/currencyConversion';
 import BatchTransactionDialog from '../components/common/BatchTransactionDialog';
 import AddTransferDialog from '../components/common/AddTransferDialog';
@@ -449,6 +450,9 @@ function Home({ quickAddExpense = false }) {
       </Box>
 
       {error && <ErrorMessage error={error} onClose={() => dispatch(clearError())} />}
+
+      {/* Budget attention cue — shows only when a category is near/over budget */}
+      <BudgetAttentionCue />
 
       {/* Add Transaction Dialog */}
       <AddTransactionDialog

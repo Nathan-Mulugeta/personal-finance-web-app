@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, Fragment } from 'react';
+import { useState, useMemo, Fragment } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -32,20 +32,18 @@ import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import {
-  fetchAccounts,
   createAccount,
   updateAccount,
   deleteAccount,
   clearError,
   swapAccountOrder,
 } from '../store/slices/accountsSlice';
-import { fetchSettings } from '../store/slices/settingsSlice';
 import { accountSchema } from '../schemas/accountSchema';
 import { ACCOUNT_TYPES, ACCOUNT_STATUSES } from '../lib/api/accounts';
 import PageSkeleton from '../components/common/PageSkeleton';
 import EmptyState from '../components/common/EmptyState';
 import ErrorMessage from '../components/common/ErrorMessage';
-import { formatCurrency } from '../utils/currencyConversion';
+import { formatCurrency, currencyLabel } from '../utils/currencyConversion';
 import { usePageRefresh } from '../hooks/usePageRefresh';
 import { getOutlinedStatusChipSx } from '../utils/chipStyles';
 import { useAutoDismissError } from '../hooks/useAutoDismissError';
@@ -54,12 +52,9 @@ function Accounts() {
   const dispatch = useDispatch();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const { accounts, loading, backgroundLoading, error } = useSelector(
-    (state) => state.accounts
-  );
+  const { accounts, loading, error } = useSelector((state) => state.accounts);
   const { settings } = useSelector((state) => state.settings);
   const { exchangeRates } = useSelector((state) => state.exchangeRates);
-  const appInitialized = useSelector((state) => state.appInit.isInitialized);
   const [openDialog, setOpenDialog] = useState(false);
   const [editingAccount, setEditingAccount] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -535,7 +530,7 @@ function Accounts() {
                     <Typography
                       sx={{ fontSize: '1.0625rem', fontWeight: 600 }}
                     >
-                      {group.currency}
+                      {currencyLabel(group.currency)}
                     </Typography>
                     <Typography
                       variant="caption"

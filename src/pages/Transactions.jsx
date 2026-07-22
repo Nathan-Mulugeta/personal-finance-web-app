@@ -11,7 +11,6 @@ import {
   Box,
   Button,
   Checkbox,
-  Chip,
   CircularProgress,
   Dialog,
   DialogTitle,
@@ -64,6 +63,10 @@ import ErrorMessage from '../components/common/ErrorMessage';
 import EmptyState from '../components/common/EmptyState';
 import AddTransactionDialog from '../components/common/AddTransactionDialog';
 import EditTransactionDialog from '../components/common/EditTransactionDialog';
+import TransactionQuickEditor, {
+  useTransactionQuickEdit,
+} from '../components/common/TransactionQuickEditor';
+import { editableTextSx } from '../components/common/inlineEditStyles';
 import AddTransferDialog from '../components/common/AddTransferDialog';
 import BulkEditTransactionsDialog from '../components/common/BulkEditTransactionsDialog';
 import { formatCurrency } from '../utils/currencyConversion';
@@ -97,6 +100,11 @@ const MobileTransactionRow = memo(function MobileTransactionRow({
   onEdit,
 }) {
   const description = transaction.description || '';
+  const qe = useTransactionQuickEdit();
+  // In selection mode, field taps must bubble to the row (toggle select), so
+  // no quick-edit handler; otherwise stop propagation and open the editor.
+  const quickClick = (field) => (selectionMode ? undefined : qe.open(field));
+  const quickCursor = selectionMode ? undefined : 'pointer';
   // Now uses the date field which contains full datetime (TIMESTAMPTZ)
   const dateDisplay = (() => {
     try {
@@ -112,6 +120,7 @@ const MobileTransactionRow = memo(function MobileTransactionRow({
   })();
 
   return (
+    <>
     <Box
       onClick={() => {
         if (selectionMode) {
@@ -161,40 +170,45 @@ const MobileTransactionRow = memo(function MobileTransactionRow({
         >
           <Typography
             variant="body2"
-            sx={{
-              fontSize: '0.8125rem',
-              fontWeight: 500,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              minWidth: 0,
-              flex: 1,
-            }}
+            onClick={quickClick('category')}
+            sx={[
+              {
+                fontSize: '0.8125rem',
+                fontWeight: 500,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                minWidth: 0,
+                cursor: quickCursor,
+              },
+              !selectionMode && editableTextSx,
+            ]}
           >
             {getCategoryDisplayName(transaction.category_id)}
           </Typography>
           <Typography
             variant="body2"
             fontWeight={600}
-            sx={{
-              fontSize: '0.8125rem',
-              color:
-                transaction.type === 'Income' ||
-                transaction.type === 'Transfer In'
-                  ? 'google.green'
-                  : transaction.type === 'Expense' ||
-                    transaction.type === 'Transfer Out'
-                  ? 'google.red'
-                  : 'text.primary',
-              whiteSpace: 'nowrap',
-              flexShrink: 0,
-            }}
+            onClick={quickClick('amount')}
+            sx={[
+              {
+                fontSize: '0.8125rem',
+                color:
+                  transaction.type === 'Income' ||
+                  transaction.type === 'Transfer In'
+                    ? 'google.green'
+                    : transaction.type === 'Expense' ||
+                      transaction.type === 'Transfer Out'
+                    ? 'google.red'
+                    : 'text.primary',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+                cursor: quickCursor,
+              },
+              !selectionMode && editableTextSx,
+            ]}
           >
-            {transaction.currency}{' '}
-            {new Intl.NumberFormat('en-US', {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            }).format(Math.abs(transaction.amount))}
+            {formatCurrency(Math.abs(transaction.amount), transaction.currency)}
           </Typography>
         </Box>
         <Box
@@ -219,8 +233,29 @@ const MobileTransactionRow = memo(function MobileTransactionRow({
               flex: 1,
             }}
           >
-            {getAccountName(transaction.account_id)}
-            {description && ` • ${description}`}
+            {/* Account name taps bubble to the row → full edit */}
+            <Box component="span">{getAccountName(transaction.account_id)}</Box>
+            {' • '}
+            {description ? (
+              <Box
+                component="span"
+                onClick={quickClick('description')}
+                sx={[{ cursor: quickCursor }, !selectionMode && editableTextSx]}
+              >
+                {description}
+              </Box>
+            ) : (
+              <Box
+                component="span"
+                onClick={quickClick('description')}
+                sx={[
+                  { cursor: quickCursor, fontStyle: 'italic', opacity: 0.7 },
+                  !selectionMode && editableTextSx,
+                ]}
+              >
+                Add note
+              </Box>
+            )}
           </Typography>
           <Typography
             variant="body2"
@@ -235,6 +270,14 @@ const MobileTransactionRow = memo(function MobileTransactionRow({
         </Box>
       </Box>
     </Box>
+    <TransactionQuickEditor
+      transaction={transaction}
+      field={qe.state?.field}
+      anchorEl={qe.state?.anchorEl}
+      open={!!qe.state}
+      onClose={qe.close}
+    />
+    </>
   );
 });
 
@@ -309,25 +352,15 @@ const MobileTransferRow = memo(function MobileTransferRow({
             }}
           >
             <SwapHorizIcon
-              sx={{ fontSize: 14, color: 'primary.main', flexShrink: 0 }}
+              sx={{ fontSize: 15, color: 'text.secondary', flexShrink: 0 }}
             />
             <Typography
               variant="body2"
-              fontWeight={600}
-              sx={{ fontSize: '0.8125rem', flexShrink: 0 }}
+              noWrap
+              sx={{ fontSize: '0.8125rem', fontWeight: 500, minWidth: 0 }}
             >
               Transfer
             </Typography>
-            <Chip
-              label={transfer.exchangeRate ? 'Multi' : 'Same'}
-              size="small"
-              sx={{
-                height: 16,
-                fontSize: '0.5625rem',
-                '& .MuiChip-label': { px: 0.5 },
-                flexShrink: 0,
-              }}
-            />
           </Box>
           <Typography
             variant="body2"
@@ -339,11 +372,10 @@ const MobileTransferRow = memo(function MobileTransferRow({
               flexShrink: 0,
             }}
           >
-            {getAccountCurrency(transferOut?.account_id)}{' '}
-            {new Intl.NumberFormat('en-US', {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            }).format(Math.abs(transferOut?.amount || 0))}
+            {formatCurrency(
+              Math.abs(transferOut?.amount || 0),
+              getAccountCurrency(transferOut?.account_id)
+            )}
           </Typography>
         </Box>
         <Box
@@ -371,12 +403,10 @@ const MobileTransferRow = memo(function MobileTransferRow({
             {getAccountName(transferOut?.account_id)} →{' '}
             {getAccountName(transferIn?.account_id)}
             {transfer.exchangeRate &&
-              ` • ${getAccountCurrency(
-                transferIn?.account_id
-              )} ${new Intl.NumberFormat('en-US', {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              }).format(Math.abs(transferIn?.amount || 0))}`}
+              ` • ${formatCurrency(
+                Math.abs(transferIn?.amount || 0),
+                getAccountCurrency(transferIn?.account_id)
+              )}`}
           </Typography>
           <Typography
             variant="body2"
@@ -403,6 +433,9 @@ function Transactions() {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   // Matches the md breakpoint previously used for the CSS card/table switch
   const isDesktopView = useMediaQuery(theme.breakpoints.up('md'));
+  // One shared quick-editor for the desktop table (rows are an inline map, so
+  // they can't each hold hook state like the mobile rows do)
+  const tableQe = useTransactionQuickEdit();
   const {
     allTransactions,
     loading,
@@ -1571,33 +1604,18 @@ function Transactions() {
                             sx={{
                               display: 'flex',
                               alignItems: 'center',
-                              gap: 0.75,
-                              flexWrap: 'wrap',
+                              gap: 0.5,
                             }}
                           >
                             <SwapHorizIcon
-                              sx={{ fontSize: 18, color: 'primary.main' }}
+                              sx={{ fontSize: 16, color: 'text.secondary' }}
                             />
                             <Typography
                               variant="body2"
-                              fontWeight={600}
-                              sx={{ fontSize: '0.875rem' }}
+                              sx={{ fontSize: '0.8125rem', fontWeight: 500 }}
                             >
                               Transfer
                             </Typography>
-                            <Chip
-                              label={
-                                transfer.exchangeRate
-                                  ? 'Multi-Currency'
-                                  : 'Same Currency'
-                              }
-                              size="small"
-                              sx={{
-                                height: 20,
-                                fontSize: '0.6875rem',
-                                '& .MuiChip-label': { px: 0.75 },
-                              }}
-                            />
                           </Box>
                         </TableCell>
                         <TableCell>
@@ -1653,22 +1671,13 @@ function Transactions() {
                           >
                             <Typography
                               variant="body2"
-                              sx={{
-                                fontSize: '0.75rem',
-                                color: 'text.secondary',
-                              }}
-                            >
-                              {getAccountCurrency(transferOut?.account_id)}
-                            </Typography>
-                            <Typography
-                              variant="body2"
                               fontWeight={600}
                               sx={{ fontSize: '0.875rem', color: 'google.red' }}
                             >
-                              {new Intl.NumberFormat('en-US', {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                              }).format(Math.abs(transferOut?.amount || 0))}
+                              {formatCurrency(
+                                Math.abs(transferOut?.amount || 0),
+                                getAccountCurrency(transferOut?.account_id)
+                              )}
                             </Typography>
                             {transfer.exchangeRate && (
                               <>
@@ -1683,25 +1692,16 @@ function Transactions() {
                                 </Typography>
                                 <Typography
                                   variant="body2"
-                                  sx={{
-                                    fontSize: '0.75rem',
-                                    color: 'text.secondary',
-                                  }}
-                                >
-                                  {getAccountCurrency(transferIn?.account_id)}
-                                </Typography>
-                                <Typography
-                                  variant="body2"
                                   fontWeight={600}
                                   sx={{
                                     fontSize: '0.875rem',
                                     color: 'google.green',
                                   }}
                                 >
-                                  {new Intl.NumberFormat('en-US', {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2,
-                                  }).format(Math.abs(transferIn?.amount || 0))}
+                                  {formatCurrency(
+                                    Math.abs(transferIn?.amount || 0),
+                                    getAccountCurrency(transferIn?.account_id)
+                                  )}
                                 </Typography>
                               </>
                             )}
@@ -1782,10 +1782,20 @@ function Transactions() {
                         <TableCell>
                           <Typography
                             variant="body2"
-                            sx={{
-                              fontSize: '0.8125rem',
-                              fontWeight: 500,
-                            }}
+                            component="span"
+                            onClick={
+                              selectionMode || isBulkDeleting
+                                ? undefined
+                                : tableQe.open('category', transaction)
+                            }
+                            sx={[
+                              {
+                                fontSize: '0.8125rem',
+                                fontWeight: 500,
+                                display: 'inline-block',
+                              },
+                              !(selectionMode || isBulkDeleting) && editableTextSx,
+                            ]}
                           >
                             {getCategoryDisplayName(transaction.category_id)}
                           </Typography>
@@ -1804,17 +1814,29 @@ function Transactions() {
                         <TableCell>
                           <Typography
                             variant="body2"
-                            sx={{
-                              fontSize: '0.8125rem',
-                              color: 'text.secondary',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                              maxWidth: 300,
-                            }}
+                            component="span"
                             title={description || ''}
+                            onClick={
+                              selectionMode || isBulkDeleting
+                                ? undefined
+                                : tableQe.open('description', transaction)
+                            }
+                            sx={[
+                              {
+                                fontSize: '0.8125rem',
+                                color: 'text.secondary',
+                                display: 'inline-block',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                maxWidth: 300,
+                                fontStyle: description ? 'normal' : 'italic',
+                                opacity: description ? 1 : 0.7,
+                              },
+                              !(selectionMode || isBulkDeleting) && editableTextSx,
+                            ]}
                           >
-                            {description || '-'}
+                            {description || 'Add note'}
                           </Typography>
                         </TableCell>
                         <TableCell sx={{ whiteSpace: 'nowrap' }}>
@@ -1839,32 +1861,34 @@ function Transactions() {
                           >
                             <Typography
                               variant="body2"
-                              sx={{
-                                fontSize: '0.75rem',
-                                color: 'text.secondary',
-                              }}
-                            >
-                              {transaction.currency}
-                            </Typography>
-                            <Typography
-                              variant="body2"
                               fontWeight={600}
-                              sx={{
-                                fontSize: '0.875rem',
-                                color:
-                                  transaction.type === 'Income' ||
-                                  transaction.type === 'Transfer In'
-                                    ? 'google.green'
-                                    : transaction.type === 'Expense' ||
-                                      transaction.type === 'Transfer Out'
-                                    ? 'google.red'
-                                    : 'text.primary',
-                              }}
+                              component="span"
+                              onClick={
+                                selectionMode || isBulkDeleting
+                                  ? undefined
+                                  : tableQe.open('amount', transaction)
+                              }
+                              sx={[
+                                {
+                                  fontSize: '0.875rem',
+                                  display: 'inline-block',
+                                  color:
+                                    transaction.type === 'Income' ||
+                                    transaction.type === 'Transfer In'
+                                      ? 'google.green'
+                                      : transaction.type === 'Expense' ||
+                                        transaction.type === 'Transfer Out'
+                                      ? 'google.red'
+                                      : 'text.primary',
+                                },
+                                !(selectionMode || isBulkDeleting) &&
+                                  editableTextSx,
+                              ]}
                             >
-                              {new Intl.NumberFormat('en-US', {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                              }).format(Math.abs(transaction.amount))}
+                              {formatCurrency(
+                                Math.abs(transaction.amount),
+                                transaction.currency
+                              )}
                             </Typography>
                           </Box>
                         </TableCell>
@@ -1897,6 +1921,17 @@ function Transactions() {
         onClose={handleCloseEditDialog}
         transaction={editingTransaction}
       />
+
+      {/* Quick-edit for the desktop table (mobile rows carry their own) */}
+      {tableQe.state?.transaction && (
+        <TransactionQuickEditor
+          transaction={tableQe.state.transaction}
+          field={tableQe.state.field}
+          anchorEl={tableQe.state.anchorEl}
+          open={!!tableQe.state}
+          onClose={tableQe.close}
+        />
+      )}
 
       {/* Create Transfer Dialog */}
       <AddTransferDialog

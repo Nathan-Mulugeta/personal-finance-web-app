@@ -37,8 +37,14 @@ import ClearIcon from '@mui/icons-material/Clear';
 import ArrowDropUpIcon from '@mui/icons-material/ArrowDropUp';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import FilterListIcon from '@mui/icons-material/FilterList';
+import CloseIcon from '@mui/icons-material/Close';
 import BudgetDialog from '../components/common/BudgetDialog';
 import CategoryTransactionsList from '../components/common/CategoryTransactionsList';
+import {
+  editableUnderlineSx,
+  editableAmountBoxSx,
+} from '../components/common/inlineEditStyles';
+import { computeBudgetsNeedingAttention } from '../utils/budgetStatus';
 import { usePageRefresh } from '../hooks/usePageRefresh';
 import PageSkeleton from '../components/common/PageSkeleton';
 import ErrorMessage from '../components/common/ErrorMessage';
@@ -1198,8 +1204,32 @@ function Reports() {
     if (parts.length === 0 && expense > 0) {
       parts.push(`Spent ${formatCurrency(expense, baseCurrency)}`);
     }
+    // Over-budget count — same computation as the Home cue (every budgeted
+    // expense category, parents and subcategories) so the two never disagree.
+    // Budgets are monthly, so this is anchored to the selected month.
+    const overBudget = computeBudgetsNeedingAttention({
+      categories,
+      budgets,
+      transactions: allTransactions,
+      exchangeRates,
+      baseCurrency,
+      monthKey: selectedMonth,
+    }).filter((b) => b.over).length;
+    if (overBudget > 0) {
+      parts.push(`${overBudget} over budget`);
+    }
     return parts.length ? parts.join(' · ') : null;
-  }, [incomeTotals, expenseTotals, baseCurrency, periodWord]);
+  }, [
+    incomeTotals,
+    expenseTotals,
+    baseCurrency,
+    periodWord,
+    categories,
+    budgets,
+    allTransactions,
+    exchangeRates,
+    selectedMonth,
+  ]);
 
   const modalTransactions = useMemo(
     () => getTransactionsForModal(),
@@ -1377,11 +1407,7 @@ function Reports() {
               }}
               role="button"
               aria-label={budget > 0 ? 'Edit budget' : 'Set budget'}
-              sx={{
-                display: 'inline-block',
-                cursor: 'pointer',
-                '&:hover': { textDecoration: 'underline' },
-              }}
+              sx={[{ display: 'inline-block' }, editableAmountBoxSx]}
             >
               {budget > 0 ? (
                 <Box
@@ -1417,7 +1443,10 @@ function Reports() {
               ) : (
                 <Typography
                   variant="caption"
-                  sx={{ fontSize: '0.75rem', color: 'primary.main' }}
+                  sx={[
+                    { fontSize: '0.75rem', color: 'primary.main' },
+                    editableUnderlineSx,
+                  ]}
                 >
                   Set budget
                 </Typography>
@@ -1805,7 +1834,9 @@ function Reports() {
                       minWidth: 0,
                     }}
                   >
-                    Plan {budgetMoney.primary}
+                    <Box component="span" sx={editableUnderlineSx}>
+                      Plan {budgetMoney.primary}
+                    </Box>
                     {budgetLabel}
                   </Typography>
                   {/* Circular button-style affordance so it reads as a control,
@@ -1836,7 +1867,10 @@ function Reports() {
                 <Typography
                   variant="caption"
                   noWrap
-                  sx={{ fontSize: '0.6875rem', color: 'primary.main' }}
+                  sx={[
+                    { fontSize: '0.6875rem', color: 'primary.main' },
+                    editableUnderlineSx,
+                  ]}
                 >
                   Set budget
                 </Typography>
@@ -2727,36 +2761,70 @@ function Reports() {
         maxWidth="md"
         fullWidth
         fullScreen={isMobile}
+        PaperProps={{ sx: { borderRadius: { xs: 0, sm: 3 } } }}
       >
-        <DialogTitle sx={{ pb: 1 }}>
-          Transactions - {periodDisplay}
-          {selectedCategoryForModal && (
-            <Typography variant="body2" color="text.secondary">
-              {
+        <DialogTitle
+          sx={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: 1,
+            py: 1.5,
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+          }}
+        >
+          <Box sx={{ minWidth: 0 }}>
+            <Typography
+              sx={{ fontSize: '1.0625rem', fontWeight: 600, lineHeight: 1.25 }}
+              noWrap
+            >
+              {(selectedCategoryForModal &&
                 categories.find(
                   (c) => c.category_id === selectedCategoryForModal.categoryId
-                )?.name
-              }
+                )?.name) ||
+                'Transactions'}
             </Typography>
-          )}
+            <Typography variant="caption" color="text.secondary">
+              {periodDisplay}
+            </Typography>
+          </Box>
+          <IconButton
+            onClick={() => setTransactionModalOpen(false)}
+            size="small"
+            edge="end"
+            aria-label="Close"
+            sx={{ mt: -0.5, mr: -0.5 }}
+          >
+            <CloseIcon fontSize="small" />
+          </IconButton>
         </DialogTitle>
         <DialogContent sx={{ p: { xs: 1, sm: 2 } }}>
           <CategoryTransactionsList transactions={modalTransactions} />
         </DialogContent>
-        <DialogActions sx={{ justifyContent: 'space-between' }}>
+        <DialogActions
+          sx={{
+            px: { xs: 1.5, sm: 2 },
+            py: 1.5,
+            borderTop: '1px solid',
+            borderColor: 'divider',
+          }}
+        >
           <Button
-            startIcon={<EditIcon sx={{ fontSize: 18 }} />}
+            fullWidth
+            variant="outlined"
+            startIcon={<EditOutlinedIcon sx={{ fontSize: 18 }} />}
             onClick={() =>
               selectedCategoryForModal &&
               handleOpenBudgetDialog(selectedCategoryForModal.categoryId)
             }
+            sx={{ textTransform: 'none' }}
           >
             {selectedCategoryForModal &&
             findBudgetForCategory(selectedCategoryForModal.categoryId)
               ? 'Edit budget'
               : 'Add budget'}
           </Button>
-          <Button onClick={() => setTransactionModalOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
 

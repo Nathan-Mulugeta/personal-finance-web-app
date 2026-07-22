@@ -1,11 +1,40 @@
 /**
  * Format currency amount
  */
+/**
+ * Short standalone label for a currency (not an amount) — birr shows as "Br"
+ * to match how amounts are written; everything else keeps its ISO code. Use
+ * for currency group headers/badges that sit alongside amounts.
+ */
+export function currencyLabel(currency) {
+  return (currency || '').toUpperCase() === 'ETB' ? 'Br' : currency
+}
+
 export function formatCurrency(amount, currency = 'USD', locale = 'en-US') {
-  return new Intl.NumberFormat(locale, {
-    style: 'currency',
-    currency: currency,
-  }).format(amount)
+  const value = Number.isFinite(amount) ? amount : Number(amount) || 0
+  const code = (currency || '').toUpperCase()
+  const plain = () =>
+    new Intl.NumberFormat(locale, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value)
+
+  // Birr is written after the amount as "Br" (e.g. "4,500.00 Br"). Every other
+  // currency keeps its own native convention (e.g. "$1,200.00").
+  if (code === 'ETB') return `${plain()} Br`
+
+  // A missing/invalid code (e.g. a transfer leg whose account can't be found)
+  // would make Intl throw — degrade to a plain number instead of crashing.
+  if (!/^[A-Z]{3}$/.test(code)) return code ? `${plain()} ${code}` : plain()
+
+  try {
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: code,
+    }).format(value)
+  } catch {
+    return `${plain()} ${code}`
+  }
 }
 
 /**

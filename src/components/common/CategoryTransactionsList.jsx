@@ -32,13 +32,20 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import CloseIcon from '@mui/icons-material/Close';
 import { format, parseISO, isToday } from 'date-fns';
-import { getTransactionsTotalLabel } from '../../utils/currencyConversion';
+import {
+  getTransactionsTotalLabel,
+  formatCurrency,
+} from '../../utils/currencyConversion';
 import {
   selectAccountNameGetter,
   selectCategoryDisplayNameGetter,
 } from '../../store/selectors';
 import { bulkDeleteTransactions } from '../../store/slices/transactionsSlice';
 import EditTransactionDialog from './EditTransactionDialog';
+import TransactionQuickEditor, {
+  useTransactionQuickEdit,
+} from './TransactionQuickEditor';
+import { editableTextSx } from './inlineEditStyles';
 import BulkEditTransactionsDialog from './BulkEditTransactionsDialog';
 
 const rowTapSx = {
@@ -97,6 +104,12 @@ function CategoryTransactionsList(
 
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
+  // Shared quick-editor for tap-to-edit category/amount/note on rows (both the
+  // desktop table and mobile rows are inline maps, so one state serves all)
+  const qe = useTransactionQuickEdit();
+  const quickClick = (field, txn) =>
+    selectionMode ? undefined : qe.open(field, txn);
+  const quickCursor = selectionMode ? 'inherit' : 'pointer';
 
   // Let a parent-hosted toggle start multi-select (used when the resting
   // header is suppressed via showRestingHeader={false})
@@ -376,7 +389,15 @@ function CategoryTransactionsList(
                       </TableCell>
                     )}
                     <TableCell>
-                      <Typography variant="body2" sx={{ fontSize: '0.8125rem', fontWeight: 500 }}>
+                      <Typography
+                        variant="body2"
+                        component="span"
+                        onClick={quickClick('category', txn)}
+                        sx={[
+                          { fontSize: '0.8125rem', fontWeight: 500, display: 'inline-block' },
+                          !selectionMode && editableTextSx,
+                        ]}
+                      >
                         {getCategoryDisplayName(txn.category_id)}
                       </Typography>
                     </TableCell>
@@ -389,9 +410,21 @@ function CategoryTransactionsList(
                       <Typography
                         variant="body2"
                         noWrap
-                        sx={{ fontSize: '0.8125rem', color: 'text.secondary', maxWidth: 280 }}
+                        component="span"
+                        onClick={quickClick('description', txn)}
+                        sx={[
+                          {
+                            fontSize: '0.8125rem',
+                            color: 'text.secondary',
+                            display: 'inline-block',
+                            maxWidth: 280,
+                            fontStyle: txn.description ? 'normal' : 'italic',
+                            opacity: txn.description ? 1 : 0.7,
+                          },
+                          !selectionMode && editableTextSx,
+                        ]}
                       >
-                        {txn.description || '—'}
+                        {txn.description || 'Add note'}
                       </Typography>
                     </TableCell>
                     <TableCell sx={{ whiteSpace: 'nowrap' }}>
@@ -403,13 +436,14 @@ function CategoryTransactionsList(
                       <Typography
                         variant="body2"
                         fontWeight={600}
-                        sx={{ fontSize: '0.8125rem', color: amountColor(txn.type), whiteSpace: 'nowrap' }}
+                        component="span"
+                        onClick={quickClick('amount', txn)}
+                        sx={[
+                          { fontSize: '0.8125rem', color: amountColor(txn.type), whiteSpace: 'nowrap', display: 'inline-block' },
+                          !selectionMode && editableTextSx,
+                        ]}
                       >
-                        {txn.currency}{' '}
-                        {new Intl.NumberFormat('en-US', {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        }).format(Math.abs(txn.amount))}
+                        {formatCurrency(Math.abs(txn.amount), txn.currency)}
                       </Typography>
                     </TableCell>
                   </TableRow>
@@ -463,25 +497,30 @@ function CategoryTransactionsList(
                   <Typography
                     variant="body2"
                     noWrap
-                    sx={{ fontSize: '0.8125rem', fontWeight: 500, minWidth: 0, flex: 1 }}
+                    onClick={quickClick('category', txn)}
+                    sx={[
+                      { fontSize: '0.8125rem', fontWeight: 500, minWidth: 0, cursor: quickCursor },
+                      !selectionMode && editableTextSx,
+                    ]}
                   >
                     {getCategoryDisplayName(txn.category_id)}
                   </Typography>
                   <Typography
                     variant="body2"
                     fontWeight={600}
-                    sx={{
-                      fontSize: '0.8125rem',
-                      color: amountColor(txn.type),
-                      whiteSpace: 'nowrap',
-                      flexShrink: 0,
-                    }}
+                    onClick={quickClick('amount', txn)}
+                    sx={[
+                      {
+                        fontSize: '0.8125rem',
+                        color: amountColor(txn.type),
+                        whiteSpace: 'nowrap',
+                        flexShrink: 0,
+                        cursor: quickCursor,
+                      },
+                      !selectionMode && editableTextSx,
+                    ]}
                   >
-                    {txn.currency}{' '}
-                    {new Intl.NumberFormat('en-US', {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    }).format(Math.abs(txn.amount))}
+                    {formatCurrency(Math.abs(txn.amount), txn.currency)}
                   </Typography>
                 </Box>
                 <Box
@@ -497,8 +536,29 @@ function CategoryTransactionsList(
                     noWrap
                     sx={{ fontSize: '0.6875rem', color: 'text.secondary', minWidth: 0, flex: 1 }}
                   >
-                    {getAccountName(txn.account_id)}
-                    {description && ` • ${description}`}
+                    {/* Account taps bubble to the row → full edit */}
+                    <Box component="span">{getAccountName(txn.account_id)}</Box>
+                    {' • '}
+                    {description ? (
+                      <Box
+                        component="span"
+                        onClick={quickClick('description', txn)}
+                        sx={[{ cursor: quickCursor }, !selectionMode && editableTextSx]}
+                      >
+                        {description}
+                      </Box>
+                    ) : (
+                      <Box
+                        component="span"
+                        onClick={quickClick('description', txn)}
+                        sx={[
+                          { cursor: quickCursor, fontStyle: 'italic', opacity: 0.7 },
+                          !selectionMode && editableTextSx,
+                        ]}
+                      >
+                        Add note
+                      </Box>
+                    )}
                   </Typography>
                   <Typography
                     variant="body2"
@@ -536,6 +596,17 @@ function CategoryTransactionsList(
         }}
         transaction={editingTransaction}
       />
+
+      {/* Tap-to-edit category/amount/note on a row */}
+      {qe.state?.transaction && (
+        <TransactionQuickEditor
+          transaction={qe.state.transaction}
+          field={qe.state.field}
+          anchorEl={qe.state.anchorEl}
+          open={!!qe.state}
+          onClose={qe.close}
+        />
+      )}
 
       {/* Bulk edit (all rows here are plain transactions) */}
       <BulkEditTransactionsDialog

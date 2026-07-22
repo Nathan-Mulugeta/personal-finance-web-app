@@ -34,6 +34,7 @@ import {
   TRANSACTION_STATUSES,
 } from '../../lib/api/transactions';
 import CategoryAutocomplete from './CategoryAutocomplete';
+import BudgetInlineCue from './BudgetInlineCue';
 import AccountAutocomplete from './AccountAutocomplete';
 import { flattenCategoryTree } from '../../utils/categoryHierarchy';
 import { useKeyboardAwareHeight } from '../../hooks/useKeyboardAwareHeight';
@@ -351,6 +352,13 @@ function EditTransactionDialog({ open, onClose, transaction }) {
                   error={!!errors.amount}
                   helperText={errors.amount?.message}
                   inputProps={{ step: '0.01', min: '0.01' }}
+                />
+                <BudgetInlineCue
+                  categoryId={watchedCategoryId}
+                  type={watchedType}
+                  amount={watch('amount')}
+                  amountCurrency={watch('currency')}
+                  excludeTransactionId={transaction?.transaction_id}
                 />
               </Grid>
               <Grid item xs={12} sm={6}>
