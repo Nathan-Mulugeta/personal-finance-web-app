@@ -7,14 +7,9 @@ import {
 } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
-  Alert,
   Box,
   Button,
   Checkbox,
-  CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
   IconButton,
   Table,
   TableBody,
@@ -41,8 +36,13 @@ import {
   selectCategoryDisplayNameGetter,
   selectShowBudgetOnRows,
 } from '../../store/selectors';
-import { bulkDeleteTransactions } from '../../store/slices/transactionsSlice';
+import {
+  bulkDeleteTransactions,
+  deleteTransaction,
+} from '../../store/slices/transactionsSlice';
 import EditTransactionDialog from './EditTransactionDialog';
+import SwipeToDelete from './SwipeToDelete';
+import ConfirmDeleteDialog from './ConfirmDeleteDialog';
 import { useInlineEdit, InlineFieldInput } from './InlineFieldEditor';
 import { editableTextSx } from './inlineEditStyles';
 import {
@@ -127,6 +127,10 @@ function CategoryTransactionsList(
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [bulkDeleteError, setBulkDeleteError] = useState(null);
+  // Single-row delete (swipe on mobile, hover icon on desktop) → confirm modal
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
 
   const ids = useMemo(
     () => transactions.map((t) => t.transaction_id),
@@ -186,6 +190,24 @@ function CategoryTransactionsList(
     } else {
       setEditingTransaction(txn);
       setEditOpen(true);
+    }
+  };
+
+  const handleSingleDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      await dispatch(
+        deleteTransaction(deleteTarget.transaction_id)
+      ).unwrap();
+      setDeleteTarget(null);
+    } catch (err) {
+      setDeleteError(
+        err?.message || 'Failed to delete transaction. Please try again.'
+      );
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -350,6 +372,7 @@ function CategoryTransactionsList(
                 <TableCell>Description</TableCell>
                 <TableCell sx={{ whiteSpace: 'nowrap' }}>Date</TableCell>
                 <TableCell align="right">Amount</TableCell>
+                <TableCell padding="none" sx={{ width: 36 }} />
               </TableRow>
             </TableHead>
             <TableBody>
@@ -372,6 +395,8 @@ function CategoryTransactionsList(
                           ? 'action.selected'
                           : 'action.hover',
                       },
+                      // Reveal the trailing delete icon only on row hover
+                      '&:hover .row-delete-btn': { opacity: 1 },
                       '& td': {
                         borderBottom: '1px solid',
                         borderColor: 'divider',
@@ -411,7 +436,7 @@ function CategoryTransactionsList(
                           </Typography>
                           <RowBudgetBadge
                             transaction={txn}
-                            statusMap={budgetByCategoryId}
+                            status={budgetByCategoryId.get(txn.category_id)}
                             enabled={showBudgetOnRows}
                             sx={{ flexShrink: 0 }}
                           />
@@ -469,6 +494,27 @@ function CategoryTransactionsList(
                         </Typography>
                       )}
                     </TableCell>
+                    <TableCell padding="none" align="right">
+                      {!selectionMode && (
+                        <IconButton
+                          size="small"
+                          aria-label="Delete transaction"
+                          className="row-delete-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteTarget(txn);
+                          }}
+                          sx={{
+                            color: 'text.disabled',
+                            opacity: 0,
+                            transition: 'opacity 0.15s',
+                            '&:hover': { color: 'google.red' },
+                          }}
+                        >
+                          <DeleteOutlineIcon sx={{ fontSize: 18 }} />
+                        </IconButton>
+                      )}
+                    </TableCell>
                   </TableRow>
                 );
               })}
@@ -481,8 +527,12 @@ function CategoryTransactionsList(
           const isSelected = selectedIds.has(txn.transaction_id);
           const description = txn.description || '';
           return (
-            <Box
+            <SwipeToDelete
               key={txn.transaction_id}
+              onSwipe={() => setDeleteTarget(txn)}
+              disabled={selectionMode}
+            >
+            <Box
               onClick={() => handleRowClick(txn)}
               sx={{
                 py: 1,
@@ -598,7 +648,7 @@ function CategoryTransactionsList(
                   )}
                   <RowBudgetBadge
                     transaction={txn}
-                    statusMap={budgetByCategoryId}
+                    status={budgetByCategoryId.get(txn.category_id)}
                     enabled={showBudgetOnRows}
                     sx={{ flexShrink: 0 }}
                   />
@@ -611,6 +661,7 @@ function CategoryTransactionsList(
                 </Box>
               </Box>
             </Box>
+            </SwipeToDelete>
           );
         })}
       </Box>
@@ -648,70 +699,30 @@ function CategoryTransactionsList(
         transferCount={0}
       />
 
+      {/* Single-row delete (swipe / hover icon) */}
+      <ConfirmDeleteDialog
+        open={!!deleteTarget}
+        onClose={() => {
+          setDeleteTarget(null);
+          setDeleteError(null);
+        }}
+        onConfirm={handleSingleDelete}
+        title="Delete this transaction?"
+        isDeleting={isDeleting}
+        error={deleteError}
+      />
+
       {/* Bulk delete confirmation */}
-      <Dialog
+      <ConfirmDeleteDialog
         open={bulkDeleteConfirm}
-        onClose={() => !isBulkDeleting && setBulkDeleteConfirm(false)}
-        maxWidth="xs"
-        fullWidth
-        PaperProps={{ sx: { borderRadius: 3 } }}
-      >
-        <DialogContent sx={{ textAlign: 'center', pt: 3.5, pb: 1 }}>
-          {bulkDeleteError && (
-            <Alert severity="error" sx={{ mb: 2, textAlign: 'left' }}>
-              {bulkDeleteError}
-            </Alert>
-          )}
-          <Box
-            sx={{
-              width: 56,
-              height: 56,
-              borderRadius: '50%',
-              bgcolor: 'error.light',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              mx: 'auto',
-              mb: 2,
-            }}
-          >
-            <DeleteOutlineIcon sx={{ fontSize: 28, color: 'error.main' }} />
-          </Box>
-          <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
-            Delete {selectedIds.size} transaction
-            {selectedIds.size !== 1 ? 's' : ''}?
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            This can&apos;t be undone.
-          </Typography>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 3, pt: 1, gap: 1.5 }}>
-          <Button
-            fullWidth
-            variant="outlined"
-            onClick={() => setBulkDeleteConfirm(false)}
-            disabled={isBulkDeleting}
-            sx={{ textTransform: 'none', py: 1 }}
-          >
-            Cancel
-          </Button>
-          <Button
-            fullWidth
-            color="error"
-            variant="contained"
-            onClick={handleBulkDelete}
-            disabled={isBulkDeleting}
-            startIcon={
-              isBulkDeleting ? (
-                <CircularProgress size={18} color="inherit" />
-              ) : null
-            }
-            sx={{ textTransform: 'none', py: 1 }}
-          >
-            {isBulkDeleting ? 'Deleting…' : 'Delete'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onClose={() => setBulkDeleteConfirm(false)}
+        onConfirm={handleBulkDelete}
+        title={`Delete ${selectedIds.size} transaction${
+          selectedIds.size !== 1 ? 's' : ''
+        }?`}
+        isDeleting={isBulkDeleting}
+        error={bulkDeleteError}
+      />
     </Box>
   );
 }

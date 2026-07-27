@@ -8,16 +8,17 @@ import BudgetStatusInline from './BudgetStatusInline';
  * scanning transactions. Renders nothing when disabled, for non-expense rows,
  * for other months, or for categories without a direct budget.
  *
- * `statusMap` is `byCategoryId` from useBudgetStatusMap — computed once by the
- * list and passed in, so it isn't recomputed per row.
+ * `status` is the already-resolved status for this row's category (from
+ * `useBudgetStatusMap().byCategoryId.get(categoryId)`, or undefined). Callers
+ * resolve it so memoized rows only re-render when their own status changes.
  *
  * @param {Object} transaction
- * @param {Map<string, object>} statusMap - byCategoryId from useBudgetStatusMap
+ * @param {Object|undefined} status - resolved budget status for the category
  * @param {boolean} enabled - the ShowBudgetOnRows setting
  * @param {object} [sx]
  */
-export default function RowBudgetBadge({ transaction, statusMap, enabled, sx }) {
-  if (!enabled || !statusMap) return null;
+export default function RowBudgetBadge({ transaction, status, enabled, sx }) {
+  if (!enabled || !status) return null;
   if (transaction.type !== 'Expense') return null;
 
   let inMonth = false;
@@ -27,9 +28,6 @@ export default function RowBudgetBadge({ transaction, statusMap, enabled, sx }) 
     inMonth = false;
   }
   if (!inMonth) return null;
-
-  const status = statusMap.get(transaction.category_id);
-  if (!status) return null;
 
   return <BudgetStatusInline status={status} variant="badge" sx={sx} />;
 }

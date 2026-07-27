@@ -1,13 +1,15 @@
-import { Box, Grid, Typography } from '@mui/material';
+import { Fragment } from 'react';
+import { Box, Divider, Typography } from '@mui/material';
 
 /**
  * A compact at-a-glance summary: N equal columns, each a small label, a coloured
- * value, and an optional trend badge + sub-caption. Shared by the Reports mobile
- * summary and the Budgets overview so the "Income / Expenses / Net" read is
- * identical and dense (no wide blank gaps).
+ * value, and an optional sub-caption. A per-tile trend badge (`delta`) sits
+ * inline next to the label — so a tile without one (e.g. Net, which has no prior
+ * period) still lines its value and sub-caption up with the others. Shared by
+ * the Reports mobile summary and the Budgets overview so the read is identical.
  *
  * Values and sub-captions are pre-formatted strings; `delta` is a pre-rendered
- * node (e.g. a trend badge) so each caller keeps its own formatting rules.
+ * node so each caller keeps its own formatting rules.
  *
  * @param {Array<{
  *   label: string,
@@ -16,52 +18,91 @@ import { Box, Grid, Typography } from '@mui/material';
  *   sub?: string,          // caption under the value (e.g. "of 4,500 Br")
  *   delta?: React.ReactNode
  * }>} tiles
- * @param {object} [sx] - forwarded to the Grid container
+ * @param {boolean} [dividers] - vertical rule between columns
+ * @param {'left'|'center'} [align] - text alignment within each tile
+ * @param {object} [sx] - forwarded to the flex container
  */
-export default function SummaryTiles({ tiles, sx }) {
+export default function SummaryTiles({
+  tiles,
+  dividers = false,
+  align = 'left',
+  sx,
+}) {
   if (!tiles?.length) return null;
-  const columns = Math.max(1, Math.round(12 / tiles.length));
+  const center = align === 'center';
   return (
-    <Grid container spacing={{ xs: 1.5, md: 3 }} sx={sx}>
-      {tiles.map((tile) => (
-        <Grid item xs={columns} key={tile.label} sx={{ minWidth: 0 }}>
-          <Typography
-            variant="caption"
-            sx={{
-              fontSize: { xs: '0.6875rem', md: '0.8125rem' },
-              color: 'text.secondary',
-            }}
-          >
-            {tile.label}
-          </Typography>
-          <Typography
-            noWrap
-            sx={{
-              fontSize: { xs: '0.9375rem', md: '1.375rem' },
-              fontWeight: 600,
-              color: tile.valueColor || 'text.primary',
-            }}
-          >
-            {tile.value}
-          </Typography>
-          {tile.delta && (
-            <Box sx={{ fontSize: '0.6875rem', mt: 0.25 }}>{tile.delta}</Box>
+    <Box
+      sx={[
+        {
+          display: 'flex',
+          alignItems: 'stretch',
+          gap: dividers ? 0 : { xs: 1.5, md: 3 },
+        },
+        sx,
+      ]}
+    >
+      {tiles.map((tile, i) => (
+        <Fragment key={tile.label}>
+          {dividers && i > 0 && (
+            <Divider
+              orientation="vertical"
+              flexItem
+              sx={{ mx: { xs: 1, md: 2 } }}
+            />
           )}
-          {tile.sub && (
-            <Typography
-              noWrap
-              variant="caption"
+          <Box
+            sx={{ flex: 1, minWidth: 0, textAlign: center ? 'center' : 'left' }}
+          >
+            <Box
               sx={{
-                fontSize: { xs: '0.625rem', md: '0.75rem' },
-                color: 'text.secondary',
-                display: 'block',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.5,
+                minWidth: 0,
+                justifyContent: center ? 'center' : 'flex-start',
               }}
             >
-              {tile.sub}
+              <Typography
+                variant="caption"
+                sx={{
+                  fontSize: { xs: '0.6875rem', md: '0.8125rem' },
+                  color: 'text.secondary',
+                }}
+              >
+                {tile.label}
+              </Typography>
+              {tile.delta && (
+                <Box sx={{ fontSize: '0.6875rem', display: 'flex', minWidth: 0 }}>
+                  {tile.delta}
+                </Box>
+              )}
+            </Box>
+            <Typography
+              noWrap
+              sx={{
+                fontSize: { xs: '0.9375rem', md: '1.375rem' },
+                fontWeight: 600,
+                color: tile.valueColor || 'text.primary',
+              }}
+            >
+              {tile.value}
             </Typography>
-          )}
-        </Grid>
+            {tile.sub && (
+              <Typography
+                noWrap
+                variant="caption"
+                sx={{
+                  fontSize: { xs: '0.625rem', md: '0.75rem' },
+                  color: 'text.secondary',
+                  display: 'block',
+                }}
+              >
+                {tile.sub}
+              </Typography>
+            )}
+          </Box>
+        </Fragment>
       ))}
-    </Grid>
+    </Box>
   );
 }

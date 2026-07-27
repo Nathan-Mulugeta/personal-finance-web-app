@@ -2429,63 +2429,14 @@ function Reports() {
                 },
               ];
 
-              // Desktop: three columns with dividers
-              if (isDesktopView) {
-                return (
-                  <Box sx={{ display: 'flex', gap: 4 }}>
-                    {tiles.map((tile, index) => (
-                      <Fragment key={tile.label}>
-                        {index > 0 && (
-                          <Divider orientation="vertical" flexItem />
-                        )}
-                        <Box sx={{ flex: 1, minWidth: 0 }}>
-                          <Typography
-                            variant="caption"
-                            sx={{
-                              fontSize: '0.8125rem',
-                              color: 'text.secondary',
-                            }}
-                          >
-                            {tile.label}
-                          </Typography>
-                          <Typography
-                            noWrap
-                            sx={{
-                              fontSize: '1.375rem',
-                              fontWeight: 600,
-                              color: tile.color,
-                            }}
-                          >
-                            {fmt(tile.value, baseCurrency)}
-                          </Typography>
-                          {tile.delta && (
-                            <Box sx={{ fontSize: '0.75rem', mt: 0.25 }}>
-                              {renderDelta(tile.delta, { label: true })}
-                            </Box>
-                          )}
-                          <Typography
-                            noWrap
-                            variant="caption"
-                            sx={{
-                              fontSize: '0.75rem',
-                              color: 'text.secondary',
-                              display: 'block',
-                            }}
-                          >
-                            Plan: {fmt(tile.plan, baseCurrency)}
-                          </Typography>
-                        </Box>
-                      </Fragment>
-                    ))}
-                  </Box>
-                );
-              }
-
-              // Mobile: three compact columns (matching the Budgets overview),
-              // so the row reads as a dense summary instead of a sparse list
-              // with wide blank gaps between label and amount.
+              // Income / Expenses / Net as centered columns with vertical
+              // dividers; each trend badge rides next to its label so Net (which
+              // has no prior-period delta) still lines its value and plan up with
+              // the others.
               return (
                 <SummaryTiles
+                  dividers
+                  align="center"
                   tiles={tiles.map((tile) => ({
                     label: tile.label,
                     value: fmt(tile.value, baseCurrency),
@@ -2503,6 +2454,11 @@ function Reports() {
               <Typography
                 sx={{
                   mt: { xs: 1.25, sm: 1.5 },
+                  // On mobile, a hairline sets the summary apart from the tiles;
+                  // desktop keeps just the spacing.
+                  pt: { xs: 1.25, sm: 0 },
+                  borderTop: { xs: '1px solid', sm: 'none' },
+                  borderColor: 'divider',
                   textAlign: 'center',
                   fontSize: { xs: '0.75rem', md: '0.8125rem' },
                   color: 'text.secondary',

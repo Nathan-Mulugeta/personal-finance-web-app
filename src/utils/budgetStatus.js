@@ -1,6 +1,9 @@
 import { getCategoryDescendants } from './categoryHierarchy'
 import { convertAmountWithExchangeRates } from './currencyConversion'
-import { findBudgetForCategoryMonth } from './budgetMatching'
+import {
+  findBudgetForCategoryMonth,
+  budgetAppliesToMonth,
+} from './budgetMatching'
 
 // "Near budget" begins at this fraction of the monthly budget — shared by the
 // Home cue, the Reports insight, and the entry-time cue so they always agree.
@@ -151,4 +154,81 @@ export function computeAllBudgetStatuses({
  */
 export function computeBudgetsNeedingAttention(params) {
   return computeAllBudgetStatuses(params).filter((s) => s.over || s.near)
+}
+
+/**
+ * Budget status for PARENT categories that have no budget of their own but whose
+ * children do — the aggregated view the Reports page shows. Budget is the sum of
+ * self+descendant active budgets applying this month (converted to base
+ * currency); spend already rolls up descendants. This lets a parent be found by
+ * a budget search even though the budget lives on its children.
+ *
+ * Excludes parents that have a direct budget (those are already in
+ * `computeAllBudgetStatuses`), so there's no overlap.
+ *
+ * @returns {Array<{categoryId, name, budgetAmount, currency, spent, remaining, pct, over, near, aggregated}>}
+ */
+export function computeAggregatedParentStatuses({
+  categories,
+  budgets,
+  transactions,
+  exchangeRates,
+  baseCurrency,
+  monthKey = currentMonthKey(),
+  nearThreshold = NEAR_BUDGET_THRESHOLD,
+}) {
+  const results = []
+  categories.forEach((cat) => {
+    if (cat.type !== 'Expense' || cat.status !== 'Active') return
+    const descendants = getCategoryDescendants(cat.category_id, categories)
+    if (descendants.length === 0) return
+    // A direct budget means it's already covered by computeAllBudgetStatuses.
+    if (findBudgetForCategoryMonth(budgets, cat.category_id, monthKey)) return
+
+    // Sum the descendants' budgets that apply this month, in base currency.
+    const descendantIds = new Set(descendants.map((d) => d.category_id))
+    let budgetAmount = 0
+    let hasBudget = false
+    budgets.forEach((budget) => {
+      if (!descendantIds.has(budget.category_id)) return
+      if (budget.status !== 'Active') return
+      if (!budgetAppliesToMonth(budget, monthKey)) return
+      const amount = parseFloat(budget.amount || 0)
+      if (!(amount > 0)) return
+      hasBudget = true
+      const currency = budget.currency || baseCurrency
+      const converted = convertAmountWithExchangeRates(
+        amount,
+        currency,
+        baseCurrency,
+        exchangeRates
+      )
+      budgetAmount += converted !== null ? converted : amount
+    })
+    if (!hasBudget || !(budgetAmount > 0)) return
+
+    const spent = spentForCategoryMonth({
+      categoryId: cat.category_id,
+      categories,
+      transactions,
+      exchangeRates,
+      targetCurrency: baseCurrency,
+      monthKey,
+    })
+    const pct = budgetAmount > 0 ? spent / budgetAmount : 0
+    results.push({
+      categoryId: cat.category_id,
+      name: cat.name,
+      budgetAmount,
+      currency: baseCurrency,
+      spent,
+      remaining: budgetAmount - spent,
+      pct,
+      over: spent > budgetAmount,
+      near: pct >= nearThreshold && pct < 1,
+      aggregated: true,
+    })
+  })
+  results.sort((a, b) => b.pct - a.pct)
+  return results
 }

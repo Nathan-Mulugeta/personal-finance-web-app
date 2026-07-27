@@ -1,6 +1,9 @@
 import { useMemo } from 'react';
 import { useSelector } from 'react-redux';
-import { computeAllBudgetStatuses } from '../utils/budgetStatus';
+import {
+  computeAllBudgetStatuses,
+  computeAggregatedParentStatuses,
+} from '../utils/budgetStatus';
 import { selectBaseCurrency } from '../store/selectors';
 
 /**
@@ -9,10 +12,11 @@ import { selectBaseCurrency } from '../store/selectors';
  * search all read from — so they can never disagree.
  *
  * @returns {{
- *   all: Array,                       // every budgeted expense category, worst-first
+ *   all: Array,                       // every directly-budgeted expense category, worst-first
  *   byCategoryId: Map<string, object>,// quick lookup for a transaction row
  *   over: Array,                      // exceeded budget
  *   near: Array,                      // >= NEAR_BUDGET_THRESHOLD, not over
+ *   searchable: Array,                // `all` + parents whose budget rolls up from children
  * }}
  */
 export function useBudgetStatusMap() {
@@ -36,13 +40,28 @@ export function useBudgetStatusMap() {
     [categories, budgets, allTransactions, exchangeRates, baseCurrency]
   );
 
+  // Parents whose budget aggregates from their children — search-only, so the
+  // cue and row badge (which read `all`/`byCategoryId`) don't double-count.
+  const aggregatedParents = useMemo(
+    () =>
+      computeAggregatedParentStatuses({
+        categories,
+        budgets,
+        transactions: allTransactions,
+        exchangeRates,
+        baseCurrency,
+      }),
+    [categories, budgets, allTransactions, exchangeRates, baseCurrency]
+  );
+
   return useMemo(
     () => ({
       all,
       byCategoryId: new Map(all.map((s) => [s.categoryId, s])),
       over: all.filter((s) => s.over),
       near: all.filter((s) => s.near),
+      searchable: [...all, ...aggregatedParents].sort((a, b) => b.pct - a.pct),
     }),
-    [all]
+    [all, aggregatedParents]
   );
 }

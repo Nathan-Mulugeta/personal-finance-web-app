@@ -5,6 +5,7 @@ import {
   selectAccountCurrencyGetter,
   selectCategoryDisplayNameGetter,
   selectFilteredTransactions,
+  selectShowBudgetOnRows,
 } from '../store/selectors';
 import {
   Badge,
@@ -49,6 +50,7 @@ import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import ChecklistIcon from '@mui/icons-material/Checklist';
 import {
   bulkDeleteTransactions as bulkDeleteTransactionsThunk,
+  deleteTransaction,
   removeDeletedTransactions,
   filterTransactions,
   clearError,
@@ -77,6 +79,10 @@ import {
 } from '../components/common/transactionRowStyles';
 import AddTransferDialog from '../components/common/AddTransferDialog';
 import BulkEditTransactionsDialog from '../components/common/BulkEditTransactionsDialog';
+import SwipeToDelete from '../components/common/SwipeToDelete';
+import ConfirmDeleteDialog from '../components/common/ConfirmDeleteDialog';
+import RowBudgetBadge from '../components/common/RowBudgetBadge';
+import { useBudgetStatusMap } from '../hooks/useBudgetStatusMap';
 import { formatCurrency } from '../utils/currencyConversion';
 import {
   format,
@@ -104,8 +110,11 @@ const MobileTransactionRow = memo(function MobileTransactionRow({
   isBulkDeleting,
   getCategoryDisplayName,
   getAccountName,
+  budgetStatus,
+  showBudgetOnRows,
   onSelect,
   onEdit,
+  onDelete,
 }) {
   const description = transaction.description || '';
   const inline = useInlineEdit();
@@ -128,6 +137,10 @@ const MobileTransactionRow = memo(function MobileTransactionRow({
   })();
 
   return (
+    <SwipeToDelete
+      onSwipe={() => onDelete(transaction)}
+      disabled={selectionMode || isBulkDeleting}
+    >
     <Box
       onClick={() => {
         if (selectionMode) {
@@ -272,6 +285,12 @@ const MobileTransactionRow = memo(function MobileTransactionRow({
               )}
             </Typography>
           )}
+          <RowBudgetBadge
+            transaction={transaction}
+            status={budgetStatus}
+            enabled={showBudgetOnRows}
+            sx={{ flexShrink: 0 }}
+          />
           <Typography
             variant="body2"
             sx={{
@@ -285,6 +304,7 @@ const MobileTransactionRow = memo(function MobileTransactionRow({
         </Box>
       </Box>
     </Box>
+    </SwipeToDelete>
   );
 });
 
@@ -463,6 +483,13 @@ function Transactions() {
   const getAccountName = useSelector(selectAccountNameGetter);
   const getAccountCurrency = useSelector(selectAccountCurrencyGetter);
   const getCategoryDisplayName = useSelector(selectCategoryDisplayNameGetter);
+  // Per-row budget badge (F1)
+  const showBudgetOnRows = useSelector(selectShowBudgetOnRows);
+  const { byCategoryId: budgetByCategoryId } = useBudgetStatusMap();
+  // Single-row delete (swipe on mobile, hover icon on desktop)
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
   const [openTransferDialog, setOpenTransferDialog] = useState(false);
   const [addTransactionOpen, setAddTransactionOpen] = useState(false);
   const [showTransfers, setShowTransfers] = useState(true);
@@ -567,6 +594,24 @@ function Transactions() {
       console.error('Error deleting transfer:', err);
     } finally {
       setIsDeletingTransfer(false);
+    }
+  };
+
+  const handleSingleDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      await dispatch(deleteTransaction(deleteTarget.transaction_id)).unwrap();
+      // Re-apply filters so the deleted row leaves the current view
+      dispatch(filterTransactions(filters));
+      setDeleteTarget(null);
+    } catch (err) {
+      setDeleteError(
+        err?.message || 'Failed to delete transaction. Please try again.'
+      );
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -1507,8 +1552,11 @@ function Transactions() {
                     isBulkDeleting={isBulkDeleting}
                     getCategoryDisplayName={getCategoryDisplayName}
                     getAccountName={getAccountName}
+                    budgetStatus={budgetByCategoryId.get(transaction.category_id)}
+                    showBudgetOnRows={showBudgetOnRows}
                     onSelect={handleItemSelect}
                     onEdit={handleEditTransaction}
+                    onDelete={setDeleteTarget}
                   />
                 );
               }
@@ -1551,6 +1599,7 @@ function Transactions() {
                   <TableCell>Description</TableCell>
                   <TableCell sx={{ whiteSpace: 'nowrap' }}>Date</TableCell>
                   <TableCell align="right">Amount</TableCell>
+                  <TableCell padding="none" sx={{ width: 36 }} />
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1718,6 +1767,7 @@ function Transactions() {
                             )}
                           </Box>
                         </TableCell>
+                        <TableCell padding="none" />
                       </TableRow>
                     );
                   } else {
@@ -1766,6 +1816,7 @@ function Transactions() {
                               ? 'action.selected'
                               : 'action.hover',
                           },
+                          '&:hover .row-delete-btn': { opacity: 1 },
                           '& td': {
                             borderBottom: '1px solid',
                             borderColor: 'divider',
@@ -1794,17 +1845,25 @@ function Transactions() {
                           {tableInline.isEditing('category', transaction) ? (
                             <InlineFieldInput transaction={transaction} field="category" onDone={tableInline.stop} textSx={rowCategoryTextSx} />
                           ) : (
-                            <Typography
-                              variant="body2"
-                              component="span"
-                              onClick={tableStartEdit('category', transaction)}
-                              sx={[
-                                { ...rowCategoryTextSx, display: 'inline-block' },
-                                !(selectionMode || isBulkDeleting) && editableTextSx,
-                              ]}
-                            >
-                              {getCategoryDisplayName(transaction.category_id)}
-                            </Typography>
+                            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, minWidth: 0 }}>
+                              <Typography
+                                variant="body2"
+                                component="span"
+                                onClick={tableStartEdit('category', transaction)}
+                                sx={[
+                                  { ...rowCategoryTextSx, display: 'inline-block' },
+                                  !(selectionMode || isBulkDeleting) && editableTextSx,
+                                ]}
+                              >
+                                {getCategoryDisplayName(transaction.category_id)}
+                              </Typography>
+                              <RowBudgetBadge
+                                transaction={transaction}
+                                status={budgetByCategoryId.get(transaction.category_id)}
+                                enabled={showBudgetOnRows}
+                                sx={{ flexShrink: 0 }}
+                              />
+                            </Box>
                           )}
                         </TableCell>
                         <TableCell>
@@ -1896,6 +1955,27 @@ function Transactions() {
                             </Box>
                           )}
                         </TableCell>
+                        <TableCell padding="none" align="right">
+                          {!(selectionMode || isBulkDeleting) && (
+                            <IconButton
+                              size="small"
+                              aria-label="Delete transaction"
+                              className="row-delete-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteTarget(transaction);
+                              }}
+                              sx={{
+                                color: 'text.disabled',
+                                opacity: 0,
+                                transition: 'opacity 0.15s',
+                                '&:hover': { color: 'google.red' },
+                              }}
+                            >
+                              <DeleteOutlineIcon sx={{ fontSize: 18 }} />
+                            </IconButton>
+                          )}
+                        </TableCell>
                       </TableRow>
                     );
                   }
@@ -1941,93 +2021,45 @@ function Transactions() {
         transferCount={selectedTransferCount}
       />
 
+      {/* Single-row delete (swipe on mobile, hover icon on desktop) */}
+      <ConfirmDeleteDialog
+        open={!!deleteTarget}
+        onClose={() => {
+          setDeleteTarget(null);
+          setDeleteError(null);
+        }}
+        onConfirm={handleSingleDelete}
+        title="Delete this transaction?"
+        isDeleting={isDeleting}
+        error={deleteError}
+      />
+
       {/* Bulk Delete Confirmation Dialog */}
-      <Dialog
+      <ConfirmDeleteDialog
         open={bulkDeleteConfirm}
         onClose={() => {
-          if (!isBulkDeleting) {
-            setBulkDeleteConfirm(false);
-            setBulkDeleteError(null);
-          }
+          setBulkDeleteConfirm(false);
+          setBulkDeleteError(null);
         }}
-        maxWidth="xs"
-        fullWidth
-        PaperProps={{ sx: { borderRadius: 3 } }}
-      >
-        <DialogContent sx={{ textAlign: 'center', pt: 3.5, pb: 1 }}>
-          {bulkDeleteError && (
-            <Alert
-              severity="error"
-              sx={{ mb: 2, textAlign: 'left' }}
-              onClose={() => setBulkDeleteError(null)}
-            >
-              {bulkDeleteError}
-            </Alert>
-          )}
-          <Box
-            sx={{
-              width: 56,
-              height: 56,
-              borderRadius: '50%',
-              bgcolor: 'error.light',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              mx: 'auto',
-              mb: 2,
-            }}
-          >
-            <DeleteOutlineIcon sx={{ fontSize: 28, color: 'error.main' }} />
-          </Box>
-          <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
-            Delete {selectedItems.size} item
-            {selectedItems.size !== 1 ? 's' : ''}?
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            This can&apos;t be undone.
-            {(() => {
-              const transferCount = Array.from(selectedItems).filter((id) =>
-                id.startsWith('transfer-')
-              ).length;
-              if (transferCount > 0) {
-                return ` Deleting ${transferCount} transfer${
-                  transferCount !== 1 ? 's' : ''
-                } also removes both linked transactions.`;
-              }
-              return '';
-            })()}
-          </Typography>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 3, pt: 1, gap: 1.5 }}>
-          <Button
-            fullWidth
-            onClick={() => {
-              setBulkDeleteConfirm(false);
-              setBulkDeleteError(null);
-            }}
-            disabled={isBulkDeleting}
-            variant="outlined"
-            sx={{ textTransform: 'none', py: 1 }}
-          >
-            Cancel
-          </Button>
-          <Button
-            fullWidth
-            onClick={handleBulkDelete}
-            color="error"
-            variant="contained"
-            disabled={isBulkDeleting}
-            startIcon={
-              isBulkDeleting ? (
-                <CircularProgress size={18} color="inherit" />
-              ) : null
-            }
-            sx={{ textTransform: 'none', py: 1 }}
-          >
-            {isBulkDeleting ? 'Deleting…' : 'Delete'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onConfirm={handleBulkDelete}
+        title={`Delete ${selectedItems.size} item${
+          selectedItems.size !== 1 ? 's' : ''
+        }?`}
+        description={(() => {
+          const transferCount = Array.from(selectedItems).filter((id) =>
+            id.startsWith('transfer-')
+          ).length;
+          const base = "This can't be undone.";
+          if (transferCount > 0) {
+            return `${base} Deleting ${transferCount} transfer${
+              transferCount !== 1 ? 's' : ''
+            } also removes both linked transactions.`;
+          }
+          return base;
+        })()}
+        isDeleting={isBulkDeleting}
+        error={bulkDeleteError}
+      />
 
       {/* Delete Transfer Confirmation Dialog */}
       <Dialog

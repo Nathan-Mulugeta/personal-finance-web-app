@@ -14,11 +14,13 @@ const MAX_MATCHES = 5;
  */
 export default function BudgetSearchHint({ query }) {
   const navigate = useNavigate();
-  const { all } = useBudgetStatusMap();
+  // `searchable` includes parent categories whose budget rolls up from their
+  // children, so searching a parent still surfaces its aggregated budget.
+  const { searchable } = useBudgetStatusMap();
 
   const q = (query || '').trim().toLowerCase();
   if (!q) return null;
-  const matches = all
+  const matches = searchable
     .filter((s) => s.name.toLowerCase().includes(q))
     .slice(0, MAX_MATCHES);
   if (matches.length === 0) return null;
