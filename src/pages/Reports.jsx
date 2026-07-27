@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, Fragment } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import {
   Box,
@@ -40,6 +41,7 @@ import FilterListIcon from '@mui/icons-material/FilterList';
 import CloseIcon from '@mui/icons-material/Close';
 import BudgetDialog from '../components/common/BudgetDialog';
 import CategoryTransactionsList from '../components/common/CategoryTransactionsList';
+import SummaryTiles from '../components/common/SummaryTiles';
 import {
   editableUnderlineSx,
   editableAmountBoxSx,
@@ -150,6 +152,13 @@ function Reports() {
   const [expandedCategories, setExpandedCategories] = useState(new Set());
   const [reportSearch, setReportSearch] = useState('');
   const searchInputRef = useRef(null);
+  // Arriving from the Home budget cue (or anywhere) with a category name in
+  // navigation state pre-fills the search, filtering the report to it.
+  const location = useLocation();
+  useEffect(() => {
+    const seed = location.state?.categorySearch;
+    if (seed) setReportSearch(seed);
+  }, [location.state]);
   // Debounced copy drives the (expensive) filtering so typing stays smooth
   const [debouncedReportSearch, setDebouncedReportSearch] = useState('');
   useEffect(() => {
@@ -2472,72 +2481,22 @@ function Reports() {
                 );
               }
 
-              // Mobile: stacked rows — label left, amount + delta right, so a
-              // long amount gets the full width instead of a squeezed column
+              // Mobile: three compact columns (matching the Budgets overview),
+              // so the row reads as a dense summary instead of a sparse list
+              // with wide blank gaps between label and amount.
               return (
-                <Box>
-                  {tiles.map((tile, index) => (
-                    <Box
-                      key={tile.label}
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: 1.5,
-                        py: 1.25,
-                        borderTop: index > 0 ? '1px solid' : 'none',
-                        borderColor: 'divider',
-                      }}
-                    >
-                      <Typography
-                        sx={{
-                          fontSize: '1.0625rem',
-                          fontWeight: 600,
-                          color: 'text.primary',
-                          flexShrink: 0,
-                        }}
-                      >
-                        {tile.label}
-                      </Typography>
-                      <Box sx={{ textAlign: 'right', minWidth: 0 }}>
-                        <Box
-                          sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'flex-end',
-                            gap: 0.75,
-                          }}
-                        >
-                          {tile.delta && (
-                            <Box sx={{ fontSize: '0.75rem' }}>
-                              {renderDelta(tile.delta)}
-                            </Box>
-                          )}
-                          <Typography
-                            noWrap
-                            sx={{
-                              fontSize: '1.3125rem',
-                              fontWeight: 700,
-                              color: tile.color,
-                            }}
-                          >
-                            {fmt(tile.value, baseCurrency)}
-                          </Typography>
-                        </Box>
-                        {tile.plan > 0 && (
-                          <Typography
-                            sx={{
-                              fontSize: '0.6875rem',
-                              color: 'text.secondary',
-                            }}
-                          >
-                            Plan {fmt(tile.plan, baseCurrency)}
-                          </Typography>
-                        )}
-                      </Box>
-                    </Box>
-                  ))}
-                </Box>
+                <SummaryTiles
+                  tiles={tiles.map((tile) => ({
+                    label: tile.label,
+                    value: fmt(tile.value, baseCurrency),
+                    valueColor: tile.color,
+                    sub:
+                      tile.plan > 0
+                        ? `Plan ${fmt(tile.plan, baseCurrency)}`
+                        : undefined,
+                    delta: tile.delta ? renderDelta(tile.delta) : undefined,
+                  }))}
+                />
               );
             })()}
             {insight && (

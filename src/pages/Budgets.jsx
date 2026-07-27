@@ -33,6 +33,7 @@ import EmptyState from '../components/common/EmptyState';
 import PageSkeleton from '../components/common/PageSkeleton';
 import ErrorMessage from '../components/common/ErrorMessage';
 import BudgetDialog from '../components/common/BudgetDialog';
+import SummaryTiles from '../components/common/SummaryTiles';
 import { budgetAppliesToMonth } from '../utils/budgetMatching';
 import { getStatusChipSx } from '../utils/chipStyles';
 import { usePageRefresh } from '../hooks/usePageRefresh';
@@ -549,97 +550,53 @@ function Budgets() {
       {/* Overview tiles — compact at-a-glance summary */}
       {filteredBudgets.length > 0 && (
         <Box sx={{ mb: { xs: 2, sm: 3 } }}>
-          <Grid container spacing={{ xs: 1.5, md: 3 }}>
-            <Grid item xs={4} md={4}>
-              <Typography
-                variant="caption"
-                sx={{ fontSize: { xs: '0.6875rem', md: '0.8125rem' }, color: 'text.secondary' }}
-              >
-                Income
-              </Typography>
-              <Typography
-                noWrap
-                sx={{
-                  fontSize: { xs: '0.9375rem', md: '1.375rem' },
-                  fontWeight: 600,
-                  color: 'google.green',
-                }}
-              >
-                {formatCurrency(budgetStats.income.totalActual, budgetStats.baseCurrency)}
-              </Typography>
-              <Typography
-                noWrap
-                variant="caption"
-                sx={{
-                  fontSize: { xs: '0.625rem', md: '0.75rem' },
-                  color: 'text.secondary',
-                  display: 'block',
-                }}
-              >
-                of {formatCurrency(budgetStats.income.totalBudget, budgetStats.baseCurrency)}
-              </Typography>
-            </Grid>
-            <Grid item xs={4} md={4}>
-              <Typography
-                variant="caption"
-                sx={{ fontSize: { xs: '0.6875rem', md: '0.8125rem' }, color: 'text.secondary' }}
-              >
-                Expenses
-              </Typography>
-              <Typography
-                noWrap
-                sx={{
-                  fontSize: { xs: '0.9375rem', md: '1.375rem' },
-                  fontWeight: 600,
-                  color: 'google.red',
-                }}
-              >
-                {formatCurrency(budgetStats.expense.totalActual, budgetStats.baseCurrency)}
-              </Typography>
-              <Typography
-                noWrap
-                variant="caption"
-                sx={{
-                  fontSize: { xs: '0.625rem', md: '0.75rem' },
-                  color: 'text.secondary',
-                  display: 'block',
-                }}
-              >
-                of {formatCurrency(budgetStats.expense.totalBudget, budgetStats.baseCurrency)}
-              </Typography>
-            </Grid>
-            <Grid item xs={4} md={4}>
-              <Typography
-                variant="caption"
-                sx={{ fontSize: { xs: '0.6875rem', md: '0.8125rem' }, color: 'text.secondary' }}
-              >
-                Net
-              </Typography>
-              <Typography
-                noWrap
-                sx={{
-                  fontSize: { xs: '0.9375rem', md: '1.375rem' },
-                  fontWeight: 600,
-                  color: budgetStats.income.totalActual - budgetStats.expense.totalActual >= 0
+          <SummaryTiles
+            tiles={[
+              {
+                label: 'Income',
+                value: formatCurrency(
+                  budgetStats.income.totalActual,
+                  budgetStats.baseCurrency
+                ),
+                valueColor: 'google.green',
+                sub: `of ${formatCurrency(
+                  budgetStats.income.totalBudget,
+                  budgetStats.baseCurrency
+                )}`,
+              },
+              {
+                label: 'Expenses',
+                value: formatCurrency(
+                  budgetStats.expense.totalActual,
+                  budgetStats.baseCurrency
+                ),
+                valueColor: 'google.red',
+                sub: `of ${formatCurrency(
+                  budgetStats.expense.totalBudget,
+                  budgetStats.baseCurrency
+                )}`,
+              },
+              {
+                label: 'Net',
+                value: formatCurrency(
+                  budgetStats.income.totalActual -
+                    budgetStats.expense.totalActual,
+                  budgetStats.baseCurrency
+                ),
+                valueColor:
+                  budgetStats.income.totalActual -
+                    budgetStats.expense.totalActual >=
+                  0
                     ? 'google.green'
                     : 'google.red',
-                }}
-              >
-                {formatCurrency(budgetStats.income.totalActual - budgetStats.expense.totalActual, budgetStats.baseCurrency)}
-              </Typography>
-              <Typography
-                noWrap
-                variant="caption"
-                sx={{
-                  fontSize: { xs: '0.625rem', md: '0.75rem' },
-                  color: 'text.secondary',
-                  display: 'block',
-                }}
-              >
-                of {formatCurrency(budgetStats.income.totalBudget - budgetStats.expense.totalBudget, budgetStats.baseCurrency)}
-              </Typography>
-            </Grid>
-          </Grid>
+                sub: `of ${formatCurrency(
+                  budgetStats.income.totalBudget -
+                    budgetStats.expense.totalBudget,
+                  budgetStats.baseCurrency
+                )}`,
+              },
+            ]}
+          />
         </Box>
       )}
 

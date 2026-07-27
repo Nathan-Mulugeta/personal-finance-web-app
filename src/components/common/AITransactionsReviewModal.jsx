@@ -29,6 +29,7 @@ import {
   getParentCategoryIds,
 } from '../../utils/categoryHierarchy';
 import { batchCreateTransactions } from '../../store/slices/transactionsSlice';
+import { selectPrefixReceiptMerchant } from '../../store/selectors';
 import { format } from 'date-fns';
 import { formatCurrency } from '../../utils/currencyConversion';
 import { useAutoDismissError } from '../../hooks/useAutoDismissError';
@@ -58,6 +59,7 @@ function AITransactionsReviewModal({
   const { categories } = useSelector((state) => state.categories);
   const { accounts } = useSelector((state) => state.accounts);
   const { settings } = useSelector((state) => state.settings);
+  const prefixMerchant = useSelector(selectPrefixReceiptMerchant);
 
   // Get default account from settings
   const defaultAccountId = useMemo(() => {
@@ -94,6 +96,13 @@ function AITransactionsReviewModal({
   // Initialize state when modal opens
   useEffect(() => {
     if (open && parsedData) {
+      // Prefix the store name onto each item ("Walmart · Milk") for receipts,
+      // when enabled — so a scanned line reads back with where it came from.
+      const merchant = (parsedData.merchant || '').trim();
+      const withMerchant = (desc) =>
+        isReceipt && prefixMerchant && merchant && desc
+          ? `${merchant} · ${desc}`
+          : desc;
       // Initialize transactions with tax toggle (default ON for receipts)
       // Store base amount (pre-tax) and calculate display amount based on applyTax
       const initialTransactions = (parsedData.transactions || []).map(
@@ -111,7 +120,7 @@ function AITransactionsReviewModal({
 
           return {
             id: `ai_${Date.now()}_${index}`,
-            description: txn.description || '',
+            description: withMerchant(txn.description || ''),
             baseAmount: baseAmount, // Store original pre-tax amount
             amount: displayAmount, // Display amount (with or without tax)
             categoryId: txn.suggestedCategoryId || '',
@@ -135,7 +144,7 @@ function AITransactionsReviewModal({
       setSelectedAccountId(defaultAccountId);
       setError(null);
     }
-  }, [open, parsedData, isReceipt, defaultAccountId]);
+  }, [open, parsedData, isReceipt, defaultAccountId, prefixMerchant]);
 
   // Calculate totals (using display amounts which include tax if applyTax is true)
   const totals = useMemo(() => {

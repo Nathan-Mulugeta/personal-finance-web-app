@@ -10,6 +10,11 @@ import {
   computeCategoryBudgetStatus,
   NEAR_BUDGET_THRESHOLD,
 } from '../../utils/budgetStatus';
+import {
+  BUDGET_OVER_COLOR,
+  BUDGET_NEAR_COLOR,
+  BUDGET_HEALTHY_COLOR,
+} from './BudgetStatusInline';
 import { selectBaseCurrency } from '../../store/selectors';
 
 /**
@@ -82,7 +87,11 @@ function BudgetInlineCue({
   const near =
     !over && projected >= status.budgetAmount * NEAR_BUDGET_THRESHOLD;
 
-  const color = over ? 'error.main' : near ? 'warning.main' : 'text.secondary';
+  const color = over
+    ? BUDGET_OVER_COLOR
+    : near
+    ? BUDGET_NEAR_COLOR
+    : BUDGET_HEALTHY_COLOR;
   const message = over
     ? `Over budget by ${formatCurrency(
         projected - status.budgetAmount,

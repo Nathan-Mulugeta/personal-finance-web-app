@@ -177,6 +177,24 @@ export const selectBaseCurrency = createSelector(
 );
 
 /**
+ * Whether to show the per-row budget badge (F1). Defaults on — an explicit
+ * 'false' is the only thing that turns it off, so a fresh install shows it.
+ */
+export const selectShowBudgetOnRows = createSelector(
+  [selectSettingsMap],
+  (settingsMap) => settingsMap.get('ShowBudgetOnRows') !== 'false'
+);
+
+/**
+ * Whether scanned receipt items get the store name prefixed onto their
+ * description ("Walmart · Milk"). Defaults on; only an explicit 'false' disables.
+ */
+export const selectPrefixReceiptMerchant = createSelector(
+  [selectSettingsMap],
+  (settingsMap) => settingsMap.get('PrefixReceiptMerchant') !== 'false'
+);
+
+/**
  * Get default account ID from settings
  */
 export const selectDefaultAccountId = createSelector(

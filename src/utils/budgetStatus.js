@@ -101,14 +101,14 @@ export function computeCategoryBudgetStatus({
 }
 
 /**
- * All expense categories that need attention this month — near or over their
- * budget — sorted worst-first. Returns [] when everything is healthy, so the
- * Home cue can render nothing and keep Home minimal.
+ * Budget status for EVERY active expense category that has a budget this month
+ * (healthy, near, and over alike), sorted worst-first. The single source the
+ * Home cue, the row badge and the budget search all read from.
  *
  * @param {number} nearThreshold - fraction (0-1) at which "near" begins (0.8 = 80%)
  * @returns {Array<{categoryId, name, budgetAmount, currency, spent, remaining, pct, over, near}>}
  */
-export function computeBudgetsNeedingAttention({
+export function computeAllBudgetStatuses({
   categories,
   budgets,
   transactions,
@@ -130,15 +130,25 @@ export function computeBudgetsNeedingAttention({
       monthKey,
     })
     if (!status) return
-    const near = status.pct >= nearThreshold
-    if (!near && !status.over) return
     results.push({
       categoryId: cat.category_id,
       name: cat.name,
       ...status,
-      near: near && !status.over,
+      // "Near" = approaching the limit, strictly under it. A category sitting
+      // exactly at 100% (a fixed expense like rent whose spend equals its
+      // budget every month) is neither near nor over — it's not actionable, so
+      // it stays out of the attention cue.
+      near: status.pct >= nearThreshold && status.pct < 1,
     })
   })
   results.sort((a, b) => b.pct - a.pct)
   return results
+}
+
+/**
+ * The subset of computeAllBudgetStatuses that needs attention — near or over.
+ * Returns [] when everything is healthy, so the Home cue renders nothing.
+ */
+export function computeBudgetsNeedingAttention(params) {
+  return computeAllBudgetStatuses(params).filter((s) => s.over || s.near)
 }

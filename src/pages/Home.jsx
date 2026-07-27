@@ -31,6 +31,7 @@ import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import AddTransactionDialog from '../components/common/AddTransactionDialog';
 import CategoryTransactionsList from '../components/common/CategoryTransactionsList';
 import BudgetAttentionCue from '../components/common/BudgetAttentionCue';
+import BudgetSearchHint from '../components/common/BudgetSearchHint';
 import { getTransactionsTotalLabel } from '../utils/currencyConversion';
 import BatchTransactionDialog from '../components/common/BatchTransactionDialog';
 import AddTransferDialog from '../components/common/AddTransferDialog';
@@ -623,6 +624,9 @@ function Home({ quickAddExpense = false }) {
       {/* Search Results — same look and functionality as the Transactions page */}
       {debouncedSearchQuery && (
         <Box>
+          {/* If the query matches budgeted categories, show their budget status
+              here so you can check a budget without opening Reports */}
+          <BudgetSearchHint query={debouncedSearchQuery} />
           <CategoryTransactionsList
             ref={searchSelectRef}
             transactions={searchResults}

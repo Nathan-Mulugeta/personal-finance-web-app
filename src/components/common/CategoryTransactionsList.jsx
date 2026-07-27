@@ -39,6 +39,7 @@ import {
 import {
   selectAccountNameGetter,
   selectCategoryDisplayNameGetter,
+  selectShowBudgetOnRows,
 } from '../../store/selectors';
 import { bulkDeleteTransactions } from '../../store/slices/transactionsSlice';
 import EditTransactionDialog from './EditTransactionDialog';
@@ -51,6 +52,8 @@ import {
   rowAmountTextSx,
 } from './transactionRowStyles';
 import BulkEditTransactionsDialog from './BulkEditTransactionsDialog';
+import { useBudgetStatusMap } from '../../hooks/useBudgetStatusMap';
+import RowBudgetBadge from './RowBudgetBadge';
 
 const rowTapSx = {
   cursor: 'pointer',
@@ -100,6 +103,10 @@ function CategoryTransactionsList(
   const isDesktopView = useMediaQuery(theme.breakpoints.up('md'));
   const getAccountName = useSelector(selectAccountNameGetter);
   const getCategoryDisplayName = useSelector(selectCategoryDisplayNameGetter);
+  // Per-row budget badge (F1): one lookup map for the whole list, gated by the
+  // Settings toggle. RowBudgetBadge decides per row whether it applies.
+  const showBudgetOnRows = useSelector(selectShowBudgetOnRows);
+  const { byCategoryId: budgetByCategoryId } = useBudgetStatusMap();
 
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -390,17 +397,25 @@ function CategoryTransactionsList(
                       {inline.isEditing('category', txn) ? (
                         <InlineFieldInput transaction={txn} field="category" onDone={inline.stop} textSx={rowCategoryTextSx} />
                       ) : (
-                        <Typography
-                          variant="body2"
-                          component="span"
-                          onClick={startEdit('category', txn)}
-                          sx={[
-                            { ...rowCategoryTextSx, display: 'inline-block' },
-                            !selectionMode && editableTextSx,
-                          ]}
-                        >
-                          {getCategoryDisplayName(txn.category_id)}
-                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, minWidth: 0 }}>
+                          <Typography
+                            variant="body2"
+                            component="span"
+                            onClick={startEdit('category', txn)}
+                            sx={[
+                              { ...rowCategoryTextSx, display: 'inline-block' },
+                              !selectionMode && editableTextSx,
+                            ]}
+                          >
+                            {getCategoryDisplayName(txn.category_id)}
+                          </Typography>
+                          <RowBudgetBadge
+                            transaction={txn}
+                            statusMap={budgetByCategoryId}
+                            enabled={showBudgetOnRows}
+                            sx={{ flexShrink: 0 }}
+                          />
+                        </Box>
                       )}
                     </TableCell>
                     <TableCell>
@@ -581,6 +596,12 @@ function CategoryTransactionsList(
                       )}
                     </Typography>
                   )}
+                  <RowBudgetBadge
+                    transaction={txn}
+                    statusMap={budgetByCategoryId}
+                    enabled={showBudgetOnRows}
+                    sx={{ flexShrink: 0 }}
+                  />
                   <Typography
                     variant="body2"
                     sx={{ fontSize: '0.6875rem', color: 'text.secondary', flexShrink: 0 }}

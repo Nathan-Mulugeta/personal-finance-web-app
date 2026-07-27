@@ -1,157 +1,121 @@
-import { useMemo } from 'react';
-import { useSelector } from 'react-redux';
+import { Fragment, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Box, Typography } from '@mui/material';
-import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
-import { formatCurrency } from '../../utils/currencyConversion';
-import { computeBudgetsNeedingAttention } from '../../utils/budgetStatus';
-import { selectBaseCurrency } from '../../store/selectors';
+import { useBudgetStatusMap } from '../../hooks/useBudgetStatusMap';
+import BudgetStatusInline, {
+  BUDGET_OVER_COLOR,
+  BUDGET_NEAR_COLOR,
+} from './BudgetStatusInline';
 
-const MAX_SHOWN = 4;
+const COLLAPSED_PER_COLUMN = 3;
 
 /**
- * Home cue that surfaces ONLY the expense categories near or over their budget
- * this month, worst-first. Renders nothing when everything is healthy, so Home
- * stays minimal — it appears only when there's a decision to influence.
- * Tapping anywhere jumps to the Reports page for the full picture.
+ * Home cue for this month's budgets. When both an Over and a Near group exist it
+ * shows them as two compact columns (Over left, Near right) so both are glance-
+ * able without eating vertical space. When only one group has entries it takes
+ * the full width instead of leaving an empty column. Expands in place to the
+ * full set; renders nothing when everything is healthy. Tapping a category opens
+ * Reports pre-filtered to it.
  */
 function BudgetAttentionCue() {
   const navigate = useNavigate();
-  const { categories } = useSelector((state) => state.categories);
-  const { budgets } = useSelector((state) => state.budgets);
-  const allTransactions = useSelector(
-    (state) => state.transactions.allTransactions
-  );
-  const { exchangeRates } = useSelector((state) => state.exchangeRates);
-  const baseCurrency = useSelector(selectBaseCurrency);
+  const { over, near } = useBudgetStatusMap();
+  const [expanded, setExpanded] = useState(false);
 
-  const items = useMemo(
-    () =>
-      computeBudgetsNeedingAttention({
-        categories,
-        budgets,
-        transactions: allTransactions,
-        exchangeRates,
-        baseCurrency,
-      }),
-    [categories, budgets, allTransactions, exchangeRates, baseCurrency]
+  const groups = [];
+  if (over.length) groups.push({ title: 'Over budget', items: over, tone: BUDGET_OVER_COLOR });
+  if (near.length) groups.push({ title: 'Near budget', items: near, tone: BUDGET_NEAR_COLOR });
+  if (groups.length === 0) return null;
+
+  const hidden = groups.reduce(
+    (n, g) => n + Math.max(0, g.items.length - COLLAPSED_PER_COLUMN),
+    0
   );
 
-  if (items.length === 0) return null;
+  const openCategory = (name) =>
+    navigate('/reports', { state: { categorySearch: name } });
 
-  const shown = items.slice(0, MAX_SHOWN);
-  const overCount = items.filter((i) => i.over).length;
-  const nearCount = items.length - overCount;
-  // A little breakdown up top: how many are over, and how many are just near.
-  const headline =
-    overCount > 0
-      ? `${overCount} over budget${
-          nearCount > 0 ? ` · ${nearCount} near` : ''
-        } this month`
-      : `${nearCount} near budget this month`;
+  const column = ({ title, items, tone }) => {
+    const shown = expanded ? items : items.slice(0, COLLAPSED_PER_COLUMN);
+    return (
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Typography
+          sx={{
+            fontSize: '0.625rem',
+            fontWeight: 700,
+            textTransform: 'uppercase',
+            letterSpacing: 0.5,
+            color: tone,
+            pb: 0.5,
+            mb: 0.5,
+            // Rule under the header so it reads as a heading, not another row
+            borderBottom: '2px solid',
+            borderColor: tone,
+          }}
+        >
+          {title} · {items.length}
+        </Typography>
+        {shown.map((item) => (
+          <Box
+            key={item.categoryId}
+            onClick={() => openCategory(item.name)}
+            sx={{
+              py: 0.5,
+              cursor: 'pointer',
+              '&:not(:last-of-type)': {
+                borderBottom: '1px solid',
+                borderColor: 'divider',
+              },
+            }}
+          >
+            <Typography
+              noWrap
+              sx={{ fontSize: '0.8125rem', fontWeight: 500, minWidth: 0 }}
+            >
+              {item.name}
+            </Typography>
+            <BudgetStatusInline status={item} variant="badge" />
+          </Box>
+        ))}
+      </Box>
+    );
+  };
 
   return (
     <Box
-      onClick={() => navigate('/reports')}
       sx={{
         mb: 1,
         px: 1.5,
         py: 1,
         borderRadius: 2,
-        cursor: 'pointer',
         border: '1px solid',
         borderColor: 'divider',
-        transition: 'border-color 0.15s ease',
-        '@media (hover: hover)': {
-          '&:hover': { borderColor: 'text.disabled' },
-        },
       }}
     >
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 0.75,
-          mb: 1,
-        }}
-      >
-        <WarningAmberRoundedIcon
-          sx={{
-            fontSize: 18,
-            display: 'block',
-            color: overCount > 0 ? 'error.main' : 'warning.main',
-          }}
-        />
-        <Typography
-          variant="body2"
-          sx={{
-            fontWeight: 600,
-            lineHeight: 1,
-            color: 'text.primary',
-          }}
-        >
-          {headline}
-        </Typography>
+      <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+        {groups.map((group, i) => (
+          <Fragment key={group.title}>
+            {i > 0 && (
+              <Box sx={{ width: '1px', alignSelf: 'stretch', bgcolor: 'divider' }} />
+            )}
+            {column(group)}
+          </Fragment>
+        ))}
       </Box>
 
-      <Box>
-        {shown.map((item) => {
-          const color = item.over ? 'error.main' : 'warning.main';
-          const detail = item.over
-            ? `over by ${formatCurrency(
-                item.spent - item.budgetAmount,
-                item.currency
-              )}`
-            : `${formatCurrency(item.remaining, item.currency)} left`;
-          return (
-            <Box
-              key={item.categoryId}
-              sx={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'baseline',
-                gap: 1,
-                py: 0.75,
-                // A full-width rule ties each name on the left to its figures
-                // on the right, and separates one category from the next.
-                '&:not(:last-of-type)': {
-                  borderBottom: '1px solid',
-                  borderColor: 'divider',
-                },
-              }}
-            >
-              <Typography
-                variant="body2"
-                noWrap
-                sx={{ fontSize: '0.8125rem', fontWeight: 500, minWidth: 0 }}
-              >
-                {item.name}
-              </Typography>
-              <Typography
-                variant="body2"
-                sx={{
-                  fontSize: '0.75rem',
-                  color,
-                  whiteSpace: 'nowrap',
-                  flexShrink: 0,
-                }}
-              >
-                <Box component="span" sx={{ fontWeight: 700 }}>
-                  {Math.round(item.pct * 100)}%
-                </Box>{' '}
-                · {detail}
-              </Typography>
-            </Box>
-          );
-        })}
-      </Box>
-
-      {items.length > MAX_SHOWN && (
+      {(hidden > 0 || expanded) && (
         <Typography
-          variant="caption"
-          sx={{ display: 'block', mt: 1, color: 'text.secondary' }}
+          onClick={() => setExpanded((v) => !v)}
+          sx={{
+            mt: 0.75,
+            fontSize: '0.75rem',
+            fontWeight: 500,
+            color: 'text.secondary',
+            cursor: 'pointer',
+            textAlign: 'center',
+          }}
         >
-          +{items.length - MAX_SHOWN} more · View in Reports
+          {expanded ? 'Show less' : `Show ${hidden} more`}
         </Typography>
       )}
     </Box>

@@ -13,6 +13,7 @@ import {
   InputLabel,
   MenuItem,
   Select,
+  Switch,
   TextField,
   Typography,
   Alert,
@@ -23,8 +24,6 @@ import {
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { AI_PROVIDER_LINKS } from '../lib/api/aiParsing';
 import { updateSettings } from '../store/slices/settingsSlice';
-import { fetchCategories } from '../store/slices/categoriesSlice';
-import { fetchAccounts } from '../store/slices/accountsSlice';
 import PageSkeleton from '../components/common/PageSkeleton';
 import ErrorMessage from '../components/common/ErrorMessage';
 import CategoryAutocomplete from '../components/common/CategoryAutocomplete';
@@ -36,13 +35,9 @@ function Settings() {
   const dispatch = useDispatch();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const { settings, loading, backgroundLoading, isInitialized, error } =
-    useSelector((state) => state.settings);
+  const { settings, loading, error } = useSelector((state) => state.settings);
   const { categories } = useSelector((state) => state.categories);
   const { accounts } = useSelector((state) => state.accounts);
-  const categoriesInitialized = useSelector(
-    (state) => state.categories.isInitialized
-  );
   const [isRefreshing, setIsRefreshing] = useState(false);
   // Per-setting focused editing
   const [editing, setEditing] = useState(null); // active setting config
@@ -95,6 +90,13 @@ function Settings() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  // Boolean toggle settings persist as 'true'/'false' strings; the store is the
+  // single source, so the Switch reflects whatever the save resolves to.
+  const toggleSetting = (row) => {
+    const next = !row.checked;
+    dispatch(updateSettings({ [row.key]: next ? 'true' : 'false' }));
   };
 
   // Get setting value helper
@@ -217,6 +219,25 @@ function Settings() {
                 desc: 'For receipt scanning and natural-language entry',
                 value: apiKey ? `••••${apiKey.slice(-4)}` : 'Not set',
               },
+              {
+                key: 'PrefixReceiptMerchant',
+                type: 'toggle',
+                label: 'Merchant in receipt items',
+                desc: 'Prefix scanned items with the store name (“Walmart · Milk”)',
+                checked: getSettingValue('PrefixReceiptMerchant') !== 'false',
+              },
+            ],
+          },
+          {
+            label: 'Display',
+            rows: [
+              {
+                key: 'ShowBudgetOnRows',
+                type: 'toggle',
+                label: 'Budget status on rows',
+                desc: 'Show a category’s month-to-date budget beside its transactions',
+                checked: getSettingValue('ShowBudgetOnRows') !== 'false',
+              },
             ],
           },
           {
@@ -282,7 +303,9 @@ function Settings() {
             {section.rows.map((row) => (
               <Box
                 key={row.key}
-                onClick={() => openEditor(row)}
+                onClick={() =>
+                  row.type === 'toggle' ? toggleSetting(row) : openEditor(row)
+                }
                 sx={{
                   display: 'flex',
                   alignItems: 'center',
@@ -314,34 +337,44 @@ function Settings() {
                     {row.desc}
                   </Typography>
                 </Box>
-                <Box
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 0.25,
-                    minWidth: 0,
-                    maxWidth: '55%',
-                    flexShrink: 0,
-                  }}
-                >
-                  <Typography
-                    noWrap
+                {row.type === 'toggle' ? (
+                  <Switch
+                    checked={row.checked}
+                    onChange={() => toggleSetting(row)}
+                    onClick={(e) => e.stopPropagation()}
+                    edge="end"
+                    sx={{ flexShrink: 0 }}
+                  />
+                ) : (
+                  <Box
                     sx={{
-                      fontSize: '0.875rem',
-                      fontWeight: 500,
-                      textAlign: 'right',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 0.25,
                       minWidth: 0,
-                      color: isUnset(row.value)
-                        ? 'text.disabled'
-                        : 'text.primary',
+                      maxWidth: '55%',
+                      flexShrink: 0,
                     }}
                   >
-                    {row.value}
-                  </Typography>
-                  <ChevronRightIcon
-                    sx={{ fontSize: 18, color: 'text.disabled', flexShrink: 0 }}
-                  />
-                </Box>
+                    <Typography
+                      noWrap
+                      sx={{
+                        fontSize: '0.875rem',
+                        fontWeight: 500,
+                        textAlign: 'right',
+                        minWidth: 0,
+                        color: isUnset(row.value)
+                          ? 'text.disabled'
+                          : 'text.primary',
+                      }}
+                    >
+                      {row.value}
+                    </Typography>
+                    <ChevronRightIcon
+                      sx={{ fontSize: 18, color: 'text.disabled', flexShrink: 0 }}
+                    />
+                  </Box>
+                )}
               </Box>
             ))}
           </Box>

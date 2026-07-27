@@ -40,6 +40,7 @@ const palettes = {
       redBg: '#fce8e6',
       yellow: '#e37400',
       yellowBg: '#fef7e0',
+      orange: '#e8710a', // warm orange — near-budget cue (easier than yellow)
       blue: '#1a73e8',
       blueBg: '#e8f0fe',
       gray: '#5f6368',
@@ -87,6 +88,7 @@ const palettes = {
       redBg: 'rgba(242, 139, 130, 0.16)',
       yellow: '#fdd663',
       yellowBg: 'rgba(253, 214, 99, 0.16)',
+      orange: '#f6a35c', // warm orange — near-budget cue (dark)
       blue: '#8ab4f8',
       blueBg: 'rgba(138, 180, 248, 0.16)',
       gray: '#9aa0a6',
