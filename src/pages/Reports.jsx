@@ -2472,8 +2472,8 @@ function Reports() {
                 />
               );
             })()}
-            {(savingsRate !== null || attentionCount > 0) && (
-              <Box
+            {savingsRate !== null && (
+              <Typography
                 sx={{
                   mt: { xs: 1.25, sm: 1.5 },
                   // On mobile, a hairline sets the summary apart from the tiles;
@@ -2482,49 +2482,22 @@ function Reports() {
                   borderTop: { xs: '1px solid', sm: 'none' },
                   borderColor: 'divider',
                   textAlign: 'center',
+                  fontSize: { xs: '0.8125rem', md: '0.875rem' },
+                  fontWeight: 600,
+                  color: savingsRate >= 0 ? 'google.green' : 'google.red',
                 }}
               >
-                {savingsRate !== null && (
-                  <Typography
-                    sx={{
-                      fontSize: { xs: '0.8125rem', md: '0.875rem' },
-                      fontWeight: 600,
-                      color: savingsRate >= 0 ? 'google.green' : 'google.red',
-                    }}
-                  >
-                    {savingsRate >= 0
-                      ? `You kept ${savingsRate}% of income`
-                      : `You spent ${Math.abs(savingsRate)}% over income`}
-                  </Typography>
-                )}
-                {attentionCount > 0 && (
-                  <Box sx={{ mt: 1 }}>
-                    <Chip
-                      size="small"
-                      label={
-                        attentionOnly
-                          ? 'Showing off-budget'
-                          : `Off budget only · ${attentionCount}`
-                      }
-                      onClick={() => setAttentionOnly((v) => !v)}
-                      onDelete={
-                        attentionOnly ? () => setAttentionOnly(false) : undefined
-                      }
-                      color={attentionOnly ? 'primary' : 'default'}
-                      variant={attentionOnly ? 'filled' : 'outlined'}
-                    />
-                  </Box>
-                )}
-              </Box>
+                {savingsRate >= 0
+                  ? `You kept ${savingsRate}% of income`
+                  : `You spent ${Math.abs(savingsRate)}% over income`}
+              </Typography>
             )}
       </Box>
 
-      <Divider sx={PAGE_DIVIDER_SX} />
-
-      {/* Biggest expense changes vs the previous period — a fast "what moved?" */}
+      {/* Biggest expense changes vs the previous period — an overview insight,
+          grouped with the summary above the divider */}
       {biggestMovers.length > 0 && (
-        <>
-          <Box sx={{ mb: { xs: 2.5, sm: 3 } }}>
+          <Box sx={{ mt: { xs: 1.5, sm: 2 }, mb: { xs: 2.5, sm: 3 } }}>
             <Box
               onClick={() => setMoversExpanded((v) => !v)}
               sx={{
@@ -2603,8 +2576,34 @@ function Reports() {
             </Box>
             </Collapse>
           </Box>
-          <Divider sx={PAGE_DIVIDER_SX} />
-        </>
+      )}
+
+      <Divider sx={PAGE_DIVIDER_SX} />
+
+      {/* Off-budget filter — a control for the category sections below */}
+      {attentionCount > 0 && (
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            mb: { xs: 1.5, sm: 2 },
+          }}
+        >
+          <Chip
+            size="small"
+            label={
+              attentionOnly
+                ? 'Showing off-budget'
+                : `Off budget only · ${attentionCount}`
+            }
+            onClick={() => setAttentionOnly((v) => !v)}
+            onDelete={
+              attentionOnly ? () => setAttentionOnly(false) : undefined
+            }
+            color={attentionOnly ? 'primary' : 'default'}
+            variant={attentionOnly ? 'filled' : 'outlined'}
+          />
+        </Box>
       )}
 
       {/* Income Budget vs Actual Section */}
