@@ -10,130 +10,144 @@ import {
   DialogActions,
   Typography,
   Alert,
-  useMediaQuery,
-  useTheme,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import CameraAltIcon from '@mui/icons-material/CameraAlt';
 import PhotoLibraryIcon from '@mui/icons-material/PhotoLibrary';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import { parseReceipt, isAIConfigured } from '../../lib/api/aiParsing';
-import { useAutoDismissError } from '../../hooks/useAutoDismissError';
+import { compressImage } from '../../utils/imageCompression';
 
 /**
  * Receipt Capture Dialog
- * Allows users to capture a receipt photo via camera or select from gallery.
- * Sends the image to AI for parsing and returns structured transaction data.
+ * A compact modal to add a receipt photo (camera or gallery), downscale it, and
+ * send it to the AI for parsing. The captured image is kept, so a scan can be
+ * retried or cancelled without re-uploading. Returns structured transaction
+ * data via onParsed.
  */
 function ReceiptCaptureDialog({ open, onClose, onParsed }) {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-
-  // Get categories and settings from Redux
   const { categories } = useSelector((state) => state.categories);
   const { settings } = useSelector((state) => state.settings);
 
-  // Get AI API key from settings
   const aiApiKey = useMemo(() => {
     const groqSetting = settings.find((s) => s.setting_key === 'GroqAPIKey');
-    const legacySetting = settings.find(
-      (s) => s.setting_key === 'GeminiAPIKey'
-    );
+    const legacySetting = settings.find((s) => s.setting_key === 'GeminiAPIKey');
     return groqSetting?.setting_value || legacySetting?.setting_value || '';
   }, [settings]);
 
-  // State
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [error, setError] = useState(null);
-  const [previewImage, setPreviewImage] = useState(null);
-
-  // Auto-dismiss error after 8 seconds
-  useAutoDismissError(setError, error);
-
-  // Refs
-  const cameraInputRef = useRef(null);
-  const galleryInputRef = useRef(null);
-
-  // Reset state on close
-  const handleClose = () => {
-    if (!isProcessing) {
-      setPreviewImage(null);
-      setError(null);
-      onClose();
-    }
-  };
-
-  // Convert file to base64
-  const fileToBase64 = (file) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = (error) => reject(error);
-    });
-  };
-
-  // Handle image selection
-  const handleImageSelected = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    // Reset input so same file can be selected again
-    event.target.value = '';
-
-    try {
-      setError(null);
-      setIsProcessing(true);
-
-      // Convert to base64 for preview and API
-      const base64 = await fileToBase64(file);
-      setPreviewImage(base64);
-
-      // Prepare categories for AI
-      const activeCategories = categories
+  // Categories the AI is allowed to choose from
+  const activeCategories = useMemo(
+    () =>
+      categories
         .filter((cat) => cat.status === 'Active')
         .map((cat) => ({
           category_id: cat.category_id,
           name: cat.name,
           type: cat.type,
           parent_category_id: cat.parent_category_id,
-        }));
+        })),
+    [categories],
+  );
 
-      // Check if AI is configured
-      if (!isAIConfigured(aiApiKey)) {
-        setError('AI API key not configured. Please add your API key in Settings.');
-        setIsProcessing(false);
-        return;
-      }
+  // The captured image is held (as a data URL) so a failed/cancelled scan can be
+  // retried without re-uploading.
+  const [capturedImage, setCapturedImage] = useState(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState(null);
 
-      // Call AI parsing API
-      const result = await parseReceipt(base64, activeCategories, aiApiKey);
+  const cameraInputRef = useRef(null);
+  const galleryInputRef = useRef(null);
+  const abortRef = useRef(null);
 
+  const runScan = async (image) => {
+    if (!isAIConfigured(aiApiKey)) {
+      setError('AI API key not configured. Please add your API key in Settings.');
+      return;
+    }
+    setError(null);
+    setIsProcessing(true);
+    const controller = new AbortController();
+    abortRef.current = controller;
+    try {
+      const result = await parseReceipt(
+        image,
+        activeCategories,
+        aiApiKey,
+        controller.signal,
+      );
+      if (controller.signal.aborted) return;
       if (result.success) {
-        // Pass parsed data to parent
-        onParsed({
-          ...result,
-          type: 'receipt',
-        });
-        handleClose();
+        onParsed({ ...result, type: 'receipt' });
+        reset();
+        onClose();
       } else {
         setError(result.error || 'Failed to parse receipt');
       }
     } catch (err) {
+      // A cancel isn't a failure — just fall back to the retry view.
+      if (err?.name === 'AbortError' || controller.signal.aborted) return;
       console.error('Error processing receipt:', err);
       setError(err?.message || 'Failed to process receipt. Please try again.');
     } finally {
+      if (abortRef.current === controller) abortRef.current = null;
       setIsProcessing(false);
     }
   };
 
-  // Open camera
-  const handleCameraClick = () => {
-    cameraInputRef.current?.click();
+  const handleImageSelected = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    event.target.value = ''; // let the same file be picked again
+
+    if (!isAIConfigured(aiApiKey)) {
+      setError('AI API key not configured. Please add your API key in Settings.');
+      return;
+    }
+
+    try {
+      const dataUrl = await compressImage(file);
+      setCapturedImage(dataUrl);
+      runScan(dataUrl);
+    } catch {
+      setError('Could not read that image. Please try another.');
+    }
   };
 
-  // Open gallery
-  const handleGalleryClick = () => {
-    galleryInputRef.current?.click();
+  const reset = () => {
+    setCapturedImage(null);
+    setError(null);
+    setIsProcessing(false);
   };
+
+  const cancelScan = () => {
+    abortRef.current?.abort();
+  };
+
+  const chooseDifferent = () => {
+    abortRef.current?.abort();
+    reset();
+  };
+
+  const handleClose = () => {
+    abortRef.current?.abort();
+    reset();
+    onClose();
+  };
+
+  const options = [
+    {
+      key: 'camera',
+      icon: CameraAltIcon,
+      label: 'Take Photo',
+      onClick: () => cameraInputRef.current?.click(),
+    },
+    {
+      key: 'gallery',
+      icon: PhotoLibraryIcon,
+      label: 'Gallery',
+      onClick: () => galleryInputRef.current?.click(),
+    },
+  ];
 
   return (
     <Dialog
@@ -141,18 +155,9 @@ function ReceiptCaptureDialog({ open, onClose, onParsed }) {
       onClose={handleClose}
       maxWidth="xs"
       fullWidth
-      fullScreen={isMobile}
-      PaperProps={{
-        sx: isMobile
-          ? {
-              display: 'flex',
-              flexDirection: 'column',
-              height: '100%',
-            }
-          : {},
-      }}
+      PaperProps={{ sx: { borderRadius: 3 } }}
     >
-      <DialogTitle>Scan Receipt</DialogTitle>
+      <DialogTitle sx={{ pb: 0.5 }}>Scan Receipt</DialogTitle>
 
       <DialogContent>
         {error && (
@@ -178,91 +183,154 @@ function ReceiptCaptureDialog({ open, onClose, onParsed }) {
           style={{ display: 'none' }}
         />
 
-        {/* Processing state */}
         {isProcessing ? (
+          /* Analyzing */
           <Box
             sx={{
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
-              py: 4,
+              py: 3,
             }}
           >
-            {previewImage && (
+            {capturedImage && (
               <Box
                 component="img"
-                src={previewImage}
+                src={capturedImage}
                 alt="Receipt preview"
                 sx={{
                   maxWidth: '100%',
-                  maxHeight: 200,
+                  maxHeight: 180,
                   objectFit: 'contain',
-                  borderRadius: 1,
+                  borderRadius: 2,
                   mb: 2,
                   opacity: 0.7,
                 }}
               />
             )}
-            <CircularProgress size={40} sx={{ mb: 2 }} />
-            <Typography color="text.secondary">
-              Analyzing receipt...
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            <CircularProgress size={36} sx={{ mb: 2 }} />
+            <Typography color="text.secondary">Analyzing receipt…</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
               This may take a few seconds
             </Typography>
           </Box>
-        ) : (
-          /* Capture options */
-          <Box sx={{ py: 2 }}>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 3, textAlign: 'center' }}>
-              Take a photo of your receipt or select an image from your device
-            </Typography>
-
+        ) : capturedImage ? (
+          /* Scan finished without success (failed or cancelled) — offer retry */
+          <Box sx={{ pt: 1 }}>
             <Box
+              component="img"
+              src={capturedImage}
+              alt="Receipt preview"
               sx={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 2,
+                display: 'block',
+                maxWidth: '100%',
+                maxHeight: 200,
+                objectFit: 'contain',
+                borderRadius: 2,
+                mx: 'auto',
+                mb: 2,
               }}
-            >
+            />
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
               <Button
                 variant="contained"
-                size="large"
-                startIcon={<CameraAltIcon />}
-                onClick={handleCameraClick}
-                sx={{
-                  py: 2,
-                  fontSize: '1rem',
-                }}
+                startIcon={<RefreshIcon />}
+                onClick={() => runScan(capturedImage)}
+                sx={{ py: 1.25, textTransform: 'none' }}
               >
-                Take Photo
+                Retry scan
               </Button>
-
               <Button
-                variant="outlined"
-                size="large"
-                startIcon={<PhotoLibraryIcon />}
-                onClick={handleGalleryClick}
-                sx={{
-                  py: 2,
-                  fontSize: '1rem',
-                }}
+                variant="text"
+                onClick={chooseDifferent}
+                sx={{ textTransform: 'none' }}
               >
-                Choose from Gallery
+                Choose a different photo
               </Button>
+            </Box>
+          </Box>
+        ) : (
+          /* Capture options — two modern tiles */
+          <Box sx={{ pt: 1 }}>
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ mb: 2, textAlign: 'center' }}
+            >
+              Add a receipt to pull out its transactions automatically
+            </Typography>
+
+            <Box sx={{ display: 'flex', gap: 1.5 }}>
+              {options.map(({ key, icon: Icon, label, onClick }) => (
+                <Box
+                  key={key}
+                  onClick={onClick}
+                  role="button"
+                  tabIndex={0}
+                  sx={{
+                    flex: 1,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 1.25,
+                    py: 2.5,
+                    px: 1,
+                    borderRadius: 2.5,
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    cursor: 'pointer',
+                    textAlign: 'center',
+                    WebkitTapHighlightColor: 'transparent',
+                    transition:
+                      'border-color 0.15s ease, background-color 0.15s ease',
+                    '@media (hover: hover)': {
+                      '&:hover': {
+                        borderColor: 'primary.main',
+                        backgroundColor: 'action.hover',
+                      },
+                    },
+                    '&:active': { backgroundColor: 'action.selected' },
+                  }}
+                >
+                  <Box
+                    sx={{
+                      width: 52,
+                      height: 52,
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'primary.main',
+                      bgcolor: (t) => alpha(t.palette.primary.main, 0.12),
+                    }}
+                  >
+                    <Icon />
+                  </Box>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    {label}
+                  </Typography>
+                </Box>
+              ))}
             </Box>
           </Box>
         )}
       </DialogContent>
 
-      <DialogActions sx={{ p: 2, borderTop: '1px solid', borderColor: 'divider' }}>
-        <Button onClick={handleClose} disabled={isProcessing}>
-          Cancel
-        </Button>
+      <DialogActions
+        sx={{ p: 2, borderTop: '1px solid', borderColor: 'divider' }}
+      >
+        {isProcessing ? (
+          <Button onClick={cancelScan} sx={{ textTransform: 'none' }}>
+            Cancel scan
+          </Button>
+        ) : (
+          <Button onClick={handleClose} sx={{ textTransform: 'none' }}>
+            Cancel
+          </Button>
+        )}
       </DialogActions>
     </Dialog>
   );
 }
 
 export default ReceiptCaptureDialog;
-

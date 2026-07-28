@@ -243,13 +243,16 @@ async function callAIWithRetry(
   imageBase64 = null,
   mimeType = null,
   parseType = 'text',
+  signal = undefined,
 ) {
   const { maxRetries, baseDelayMs } = AI_RETRY_CONFIG;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      return await callAI(apiKey, prompt, imageBase64, mimeType, parseType);
+      return await callAI(apiKey, prompt, imageBase64, mimeType, parseType, signal);
     } catch (error) {
+      // A user-initiated cancel is final — never retry it.
+      if (error?.name === 'AbortError') throw error;
       if (!isRetryableError(error) || attempt === maxRetries) {
         throw error;
       }
@@ -364,6 +367,7 @@ async function callAI(
   imageBase64 = null,
   mimeType = null,
   parseType = 'text',
+  signal = undefined,
 ) {
   const provider = detectProvider(apiKey);
   const isText = parseType === 'text';
@@ -412,6 +416,7 @@ async function callAI(
         max_tokens: 4096,
         response_format: buildResponseSchema(parseType),
       }),
+      signal,
     });
 
     if (!response.ok) {
@@ -463,6 +468,7 @@ async function callAI(
           maxOutputTokens: 4096,
         },
       }),
+      signal,
     });
 
     if (!response.ok) {
@@ -534,9 +540,10 @@ function formatError(error) {
  * @param {string} base64Image - Base64 encoded image (with or without data URL prefix)
  * @param {Array} categories - Array of category objects with category_id, name, type
  * @param {string} apiKey - AI provider API key from settings
+ * @param {AbortSignal} [signal] - cancels the in-flight request
  * @returns {Promise<Object>} Parsed transactions and receipt info
  */
-export async function parseReceipt(base64Image, categories, apiKey) {
+export async function parseReceipt(base64Image, categories, apiKey, signal) {
   if (!apiKey) {
     throw new Error(
       'AI API key not configured. Please add your API key in Settings.',
@@ -565,6 +572,7 @@ export async function parseReceipt(base64Image, categories, apiKey) {
       imageData,
       mimeType,
       'receipt',
+      signal,
     );
 
     return {
@@ -573,6 +581,9 @@ export async function parseReceipt(base64Image, categories, apiKey) {
       ...result,
     };
   } catch (error) {
+    // Let a cancel propagate as-is so the caller can tell it apart from a
+    // genuine failure (and not show an error for it).
+    if (error?.name === 'AbortError') throw error;
     console.error('Error parsing receipt:', error);
     throw new Error(formatError(error));
   }
