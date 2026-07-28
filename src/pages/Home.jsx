@@ -6,6 +6,7 @@ import {
   Button,
   Box,
   Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -656,7 +657,12 @@ function Home({ quickAddExpense = false }) {
               title="No matching transactions"
               subtitle="Try a different search term"
             />
-          ) : null}
+          ) : (
+            /* Debounce gap — results are on the way */
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+              <CircularProgress size={24} />
+            </Box>
+          )}
         </Box>
       )}
 
