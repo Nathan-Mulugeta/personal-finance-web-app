@@ -1100,6 +1100,48 @@ function Reports() {
     [expenseReportDataFull, debouncedReportSearch]
   );
 
+  // "Off budget only" filter — expenses over their budget, income short of plan
+  const [attentionOnly, setAttentionOnly] = useState(false);
+  const attentionCount = useMemo(
+    () =>
+      expenseReportData.filter((i) => i.budget > 0 && i.actual > i.budget)
+        .length +
+      incomeReportData.filter((i) => i.budget > 0 && i.actual < i.budget).length,
+    [expenseReportData, incomeReportData]
+  );
+  const incomeReportShown = useMemo(
+    () =>
+      attentionOnly
+        ? incomeReportData.filter((i) => i.budget > 0 && i.actual < i.budget)
+        : incomeReportData,
+    [attentionOnly, incomeReportData]
+  );
+  const expenseReportShown = useMemo(
+    () =>
+      attentionOnly
+        ? expenseReportData.filter((i) => i.budget > 0 && i.actual > i.budget)
+        : expenseReportData,
+    [attentionOnly, expenseReportData]
+  );
+
+  // Biggest expense changes vs the previous period — the "what moved?" cue.
+  // Only meaningful once there's prior-period data to compare against.
+  const biggestMovers = useMemo(() => {
+    const hasPrior = expenseReportDataFull.some(
+      (i) => (i.previousActual || 0) > 0
+    );
+    if (!hasPrior) return [];
+    return expenseReportDataFull
+      .map((i) => ({
+        categoryId: i.category.category_id,
+        name: i.category.name,
+        delta: i.actual - (i.previousActual || 0),
+      }))
+      .filter((m) => Math.abs(m.delta) >= 1)
+      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+      .slice(0, 3);
+  }, [expenseReportDataFull]);
+
   const incomeTotals = useMemo(
     () => calculateSectionTotals(incomeReportData),
     [incomeReportData]
@@ -1116,6 +1158,13 @@ function Reports() {
     const previousSavings =
       (incomeTotals.previousActual || 0) - (expenseTotals.previousActual || 0);
     return { plannedSavings, actualSavings, previousSavings };
+  }, [incomeTotals, expenseTotals]);
+
+  // Share of income kept — the one number that says how the period went
+  const savingsRate = useMemo(() => {
+    const income = incomeTotals.actual;
+    if (!(income > 0)) return null;
+    return Math.round(((income - expenseTotals.actual) / income) * 100);
   }, [incomeTotals, expenseTotals]);
 
   // Period-over-period delta. `goodWhen` decides the color: for income (and
@@ -1625,7 +1674,7 @@ function Reports() {
 
   // Render a category as a dense list row with a progress bar (mobile view).
   // Parent rows expand/collapse on tap; leaf rows open the transaction modal.
-  const renderMobileCategoryRow = (item, type, level = 0) => {
+  const renderMobileCategoryRow = (item, type, level = 0, sectionActual = 0) => {
     const {
       category,
       budget,
@@ -1647,6 +1696,11 @@ function Reports() {
       type === 'Income' ? 'up' : 'down'
     );
     const overBudget = type === 'Expense' && budget > 0 && actual > budget;
+    // Share of total spending (top-level expense rows) — "where the money goes"
+    const share =
+      type === 'Expense' && level === 0 && sectionActual > 0 && actual > 0
+        ? Math.round((actual / sectionActual) * 100)
+        : null;
     // Original-currency-first money displays (see getMoneyDisplay)
     const actualMoney = getMoneyDisplay(actual, actualOriginalAmounts);
     const budgetMoney = getMoneyDisplay(budget, budgetOriginalAmounts);
@@ -1762,6 +1816,20 @@ function Reports() {
                     '& .MuiChip-label': { lineHeight: 1, px: 0.5 },
                   }}
                 />
+              )}
+              {share !== null && (
+                <Typography
+                  component="span"
+                  sx={{
+                    ml: 0.75,
+                    fontSize: '0.6875rem',
+                    color: 'text.secondary',
+                    flexShrink: 0,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {share}%
+                </Typography>
               )}
             </Box>
             <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
@@ -1919,7 +1987,8 @@ function Reports() {
                 renderMobileCategoryRow(
                   { category: child, ...data },
                   type,
-                  level + 1
+                  level + 1,
+                  sectionActual
                 )
               )}
             <Box
@@ -2070,7 +2139,9 @@ function Reports() {
           </Typography>
         ) : (
           <Box sx={{ mt: 0.5 }}>
-            {reportData.map((item) => renderMobileCategoryRow(item, type))}
+            {reportData.map((item) =>
+              renderMobileCategoryRow(item, type, 0, totals.actual)
+            )}
           </Box>
         )}
       </Box>
@@ -2453,8 +2524,8 @@ function Reports() {
                 />
               );
             })()}
-            {insight && (
-              <Typography
+            {(savingsRate !== null || insight || attentionCount > 0) && (
+              <Box
                 sx={{
                   mt: { xs: 1.25, sm: 1.5 },
                   // On mobile, a hairline sets the summary apart from the tiles;
@@ -2463,16 +2534,120 @@ function Reports() {
                   borderTop: { xs: '1px solid', sm: 'none' },
                   borderColor: 'divider',
                   textAlign: 'center',
-                  fontSize: { xs: '0.75rem', md: '0.8125rem' },
-                  color: 'text.secondary',
                 }}
               >
-                {insight}
-              </Typography>
+                {savingsRate !== null && (
+                  <Typography
+                    sx={{
+                      fontSize: { xs: '0.8125rem', md: '0.875rem' },
+                      fontWeight: 600,
+                      color: savingsRate >= 0 ? 'google.green' : 'google.red',
+                    }}
+                  >
+                    {savingsRate >= 0
+                      ? `You kept ${savingsRate}% of income`
+                      : `You spent ${Math.abs(savingsRate)}% over income`}
+                  </Typography>
+                )}
+                {insight && (
+                  <Typography
+                    sx={{
+                      mt: savingsRate !== null ? 0.25 : 0,
+                      fontSize: { xs: '0.75rem', md: '0.8125rem' },
+                      color: 'text.secondary',
+                    }}
+                  >
+                    {insight}
+                  </Typography>
+                )}
+                {attentionCount > 0 && (
+                  <Box sx={{ mt: 1 }}>
+                    <Chip
+                      size="small"
+                      label={
+                        attentionOnly
+                          ? 'Showing off-budget'
+                          : `Off budget only · ${attentionCount}`
+                      }
+                      onClick={() => setAttentionOnly((v) => !v)}
+                      onDelete={
+                        attentionOnly ? () => setAttentionOnly(false) : undefined
+                      }
+                      color={attentionOnly ? 'primary' : 'default'}
+                      variant={attentionOnly ? 'filled' : 'outlined'}
+                    />
+                  </Box>
+                )}
+              </Box>
             )}
       </Box>
 
       <Divider sx={PAGE_DIVIDER_SX} />
+
+      {/* Biggest expense changes vs the previous period — a fast "what moved?" */}
+      {biggestMovers.length > 0 && (
+        <>
+          <Box sx={{ mb: { xs: 2.5, sm: 3 } }}>
+            <Typography
+              sx={{
+                fontSize: '0.6875rem',
+                fontWeight: 700,
+                letterSpacing: 0.6,
+                textTransform: 'uppercase',
+                color: 'text.secondary',
+                mb: 1,
+              }}
+            >
+              Biggest changes vs {periodWord}
+            </Typography>
+            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+              {biggestMovers.map((m) => {
+                const up = m.delta > 0;
+                const Arrow = up ? ArrowDropUpIcon : ArrowDropDownIcon;
+                return (
+                  <Box
+                    key={m.categoryId}
+                    onClick={() => handleRowClick(m.categoryId, 'Expense')}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 1,
+                      py: 0.75,
+                      '&:not(:last-of-type)': {
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
+                      },
+                      ...tappableRowSx,
+                    }}
+                  >
+                    <Typography
+                      noWrap
+                      sx={{ fontSize: '0.875rem', minWidth: 0 }}
+                    >
+                      {m.name}
+                    </Typography>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        flexShrink: 0,
+                        color: up ? 'google.red' : 'google.green',
+                      }}
+                    >
+                      <Arrow sx={{ fontSize: 20 }} />
+                      <Typography sx={{ fontSize: '0.8125rem', fontWeight: 600 }}>
+                        {fmt(Math.abs(m.delta), baseCurrency)}
+                      </Typography>
+                    </Box>
+                  </Box>
+                );
+              })}
+            </Box>
+          </Box>
+          <Divider sx={PAGE_DIVIDER_SX} />
+        </>
+      )}
 
       {/* Income Budget vs Actual Section */}
       <Box sx={{ mb: { xs: 3, sm: 3 } }}>
@@ -2483,7 +2658,7 @@ function Reports() {
           )}
           {/* Mobile list view */}
           {!isDesktopView &&
-            renderSectionMobile(incomeReportData, incomeTotals, 'Income', 'Income')}
+            renderSectionMobile(incomeReportShown, incomeTotals, 'Income', 'Income')}
           {/* Desktop table view */}
           {isDesktopView && (
           <Box
@@ -2502,7 +2677,7 @@ function Reports() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {incomeReportData.map((item) =>
+                {incomeReportShown.map((item) =>
                   renderCategoryRow(item, 'Income')
                 )}
                 {/* Total Row */}
@@ -2583,7 +2758,7 @@ function Reports() {
           )}
           {/* Mobile list view */}
           {!isDesktopView &&
-            renderSectionMobile(expenseReportData, expenseTotals, 'Expense', 'Expenses')}
+            renderSectionMobile(expenseReportShown, expenseTotals, 'Expense', 'Expenses')}
           {/* Desktop table view */}
           {isDesktopView && (
           <Box
@@ -2602,7 +2777,7 @@ function Reports() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {expenseReportData.map((item) =>
+                {expenseReportShown.map((item) =>
                   renderCategoryRow(item, 'Expense')
                 )}
                 {/* Total Row */}

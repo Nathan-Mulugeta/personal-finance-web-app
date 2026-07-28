@@ -8,12 +8,14 @@ import {
   Button,
   Chip,
   CircularProgress,
+  Collapse,
   Dialog,
   DialogTitle,
   DialogContent,
   FormControl,
   FormHelperText,
   Grid,
+  InputAdornment,
   InputLabel,
   MenuItem,
   Select,
@@ -22,7 +24,9 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { format } from 'date-fns';
+import { currencyLabel } from '../../utils/currencyConversion';
 import { createTransaction } from '../../store/slices/transactionsSlice';
 import { transactionSchema } from '../../schemas/transactionSchema';
 import {
@@ -100,6 +104,9 @@ function AddTransactionDialog({ open, onClose, initialValues = null }) {
   const watchedCategoryId = watch('categoryId');
   const watchedType = watch('type');
   const watchedStatus = watch('status');
+  // Date + Status live behind "More options"; both default sensibly (today /
+  // Cleared), so the common path stays short.
+  const [showMore, setShowMore] = useState(false);
 
   // Reset form when dialog opens (only once per dialog session to prevent background refresh from resetting form data)
   useEffect(() => {
@@ -345,17 +352,6 @@ function AddTransactionDialog({ open, onClose, initialValues = null }) {
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                type="date"
-                label="Date *"
-                {...register('date')}
-                error={!!errors.date}
-                helperText={errors.date?.message}
-                InputLabelProps={{ shrink: true }}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
                 type="number"
                 label="Amount *"
                 {...register('amount', { valueAsNumber: true })}
@@ -363,28 +359,23 @@ function AddTransactionDialog({ open, onClose, initialValues = null }) {
                 error={!!errors.amount}
                 helperText={errors.amount?.message}
                 inputProps={{ step: '0.01', min: '0.01' }}
+                InputProps={
+                  watch('currency')
+                    ? {
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            {currencyLabel(watch('currency'))}
+                          </InputAdornment>
+                        ),
+                      }
+                    : undefined
+                }
               />
               <BudgetInlineCue
                 categoryId={watchedCategoryId}
                 type={watchedType}
                 amount={watch('amount')}
                 amountCurrency={watch('currency')}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                label="Currency"
-                {...register('currency')}
-                error={!!errors.currency}
-                helperText={
-                  errors.currency?.message ||
-                  'Auto-filled from account selection'
-                }
-                disabled
-                InputLabelProps={{
-                  shrink: !!watch('currency'),
-                }}
               />
             </Grid>
             <Grid item xs={12}>
@@ -398,25 +389,59 @@ function AddTransactionDialog({ open, onClose, initialValues = null }) {
                 rows={2}
               />
             </Grid>
-            <Grid item xs={12} sm={6}>
-              <FormControl fullWidth error={!!errors.status}>
-                <InputLabel>Status</InputLabel>
-                <Select
-                  {...register('status')}
-                  label="Status"
-                  value={watchedStatus || ''}
-                  onChange={(e) => setValue('status', e.target.value)}
-                >
-                  {TRANSACTION_STATUSES.map((status) => (
-                    <MenuItem key={status} value={status}>
-                      {status}
-                    </MenuItem>
-                  ))}
-                </Select>
-                {errors.status && (
-                  <FormHelperText>{errors.status.message}</FormHelperText>
-                )}
-              </FormControl>
+            <Grid item xs={12}>
+              {/* Date + Status default sensibly, so they stay out of the way
+                  behind "More options" until you actually need them. */}
+              <Button
+                onClick={() => setShowMore((v) => !v)}
+                size="small"
+                endIcon={
+                  <ExpandMoreIcon
+                    sx={{
+                      transition: 'transform 0.2s',
+                      transform: showMore ? 'rotate(180deg)' : 'none',
+                    }}
+                  />
+                }
+                sx={{ textTransform: 'none', color: 'text.secondary', px: 0.5 }}
+              >
+                More options
+              </Button>
+              <Collapse in={showMore || !!errors.date || !!errors.status}>
+                <Grid container spacing={{ xs: 1.5, sm: 2 }} sx={{ mt: 0 }}>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      type="date"
+                      label="Date *"
+                      {...register('date')}
+                      error={!!errors.date}
+                      helperText={errors.date?.message}
+                      InputLabelProps={{ shrink: true }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <FormControl fullWidth error={!!errors.status}>
+                      <InputLabel>Status</InputLabel>
+                      <Select
+                        {...register('status')}
+                        label="Status"
+                        value={watchedStatus || ''}
+                        onChange={(e) => setValue('status', e.target.value)}
+                      >
+                        {TRANSACTION_STATUSES.map((status) => (
+                          <MenuItem key={status} value={status}>
+                            {status}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                      {errors.status && (
+                        <FormHelperText>{errors.status.message}</FormHelperText>
+                      )}
+                    </FormControl>
+                  </Grid>
+                </Grid>
+              </Collapse>
             </Grid>
           </Grid>
         </DialogContent>

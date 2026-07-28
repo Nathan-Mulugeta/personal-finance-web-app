@@ -7,20 +7,25 @@ import {
   Box,
   Button,
   CircularProgress,
+  Collapse,
   Dialog,
   DialogTitle,
   DialogContent,
   FormControl,
   FormHelperText,
   Grid,
+  InputAdornment,
   InputLabel,
   MenuItem,
   Select,
   TextField,
+  Typography,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { format } from 'date-fns';
+import { currencyLabel } from '../../utils/currencyConversion';
 import { createTransfer } from '../../store/slices/transfersSlice';
 import { transferSchema } from '../../schemas/transferSchema';
 import { TRANSACTION_STATUSES } from '../../lib/api/transactions';
@@ -77,6 +82,10 @@ function AddTransferDialog({ open, onClose }) {
   const watchedFromAccountId = watch('fromAccountId');
   const watchedToAccountId = watch('toAccountId');
   const watchedStatus = watch('status');
+  const watchedFromAmount = watch('fromAmount');
+  const watchedToAmount = watch('toAmount');
+  // Date + Status live behind "More options" (both default sensibly)
+  const [showMore, setShowMore] = useState(false);
 
   // Helper function to check if both accounts have the same currency
   const isSameCurrency = () => {
@@ -91,6 +100,19 @@ function AddTransferDialog({ open, onClose }) {
     if (!accountId) return '';
     const account = accountMap.get(accountId);
     return account?.currency || '';
+  };
+
+  // For a cross-currency transfer, the implied rate from the two amounts — a
+  // quick sanity check while typing. Null until both amounts are entered.
+  const exchangeRateHint = () => {
+    const from = parseFloat(watchedFromAmount);
+    const to = parseFloat(watchedToAmount);
+    if (!(from > 0) || !(to > 0)) return null;
+    const rate = to / from;
+    return `1 ${currencyLabel(getAccountCurrency(watchedFromAccountId))} ≈ ${rate.toLocaleString(
+      'en-US',
+      { minimumFractionDigits: 2, maximumFractionDigits: 4 }
+    )} ${currencyLabel(getAccountCurrency(watchedToAccountId))}`;
   };
 
   // Reset form when dialog opens (only once per dialog session to prevent background refresh from resetting form data)
@@ -316,6 +338,19 @@ function AddTransferDialog({ open, onClose }) {
                   error={!!errors.amount}
                   helperText={errors.amount?.message}
                   inputProps={{ step: '0.01', min: '0.01' }}
+                  InputProps={
+                    getAccountCurrency(watchedFromAccountId)
+                      ? {
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              {currencyLabel(
+                                getAccountCurrency(watchedFromAccountId)
+                              )}
+                            </InputAdornment>
+                          ),
+                        }
+                      : undefined
+                  }
                 />
               </Grid>
             ) : (
@@ -356,39 +391,23 @@ function AddTransferDialog({ open, onClose }) {
                     inputProps={{ step: '0.01', min: '0.01' }}
                   />
                 </Grid>
+                {exchangeRateHint() && (
+                  <Grid item xs={12}>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        display: 'block',
+                        mt: -0.5,
+                        ml: 0.5,
+                        color: 'text.secondary',
+                      }}
+                    >
+                      {exchangeRateHint()}
+                    </Typography>
+                  </Grid>
+                )}
               </>
             )}
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                type="date"
-                label="Date *"
-                {...register('date')}
-                error={!!errors.date}
-                helperText={errors.date?.message}
-                InputLabelProps={{ shrink: true }}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <FormControl fullWidth error={!!errors.status}>
-                <InputLabel>Status</InputLabel>
-                <Select
-                  {...register('status')}
-                  label="Status"
-                  value={watchedStatus || ''}
-                  onChange={(e) => setValue('status', e.target.value)}
-                >
-                  {TRANSACTION_STATUSES.map((status) => (
-                    <MenuItem key={status} value={status}>
-                      {status}
-                    </MenuItem>
-                  ))}
-                </Select>
-                {errors.status && (
-                  <FormHelperText>{errors.status.message}</FormHelperText>
-                )}
-              </FormControl>
-            </Grid>
             <Grid item xs={12}>
               <CategoryAutocomplete
                 categories={flattenCategoryTree(categories)}
@@ -408,6 +427,60 @@ function AddTransferDialog({ open, onClose }) {
                 multiline
                 rows={2}
               />
+            </Grid>
+            <Grid item xs={12}>
+              {/* Date + Status default sensibly, so they sit behind
+                  "More options" until needed. */}
+              <Button
+                onClick={() => setShowMore((v) => !v)}
+                size="small"
+                endIcon={
+                  <ExpandMoreIcon
+                    sx={{
+                      transition: 'transform 0.2s',
+                      transform: showMore ? 'rotate(180deg)' : 'none',
+                    }}
+                  />
+                }
+                sx={{ textTransform: 'none', color: 'text.secondary', px: 0.5 }}
+              >
+                More options
+              </Button>
+              <Collapse in={showMore || !!errors.date || !!errors.status}>
+                <Grid container spacing={{ xs: 1.5, sm: 2 }} sx={{ mt: 0 }}>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      type="date"
+                      label="Date *"
+                      {...register('date')}
+                      error={!!errors.date}
+                      helperText={errors.date?.message}
+                      InputLabelProps={{ shrink: true }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <FormControl fullWidth error={!!errors.status}>
+                      <InputLabel>Status</InputLabel>
+                      <Select
+                        {...register('status')}
+                        label="Status"
+                        value={watchedStatus || ''}
+                        onChange={(e) => setValue('status', e.target.value)}
+                      >
+                        {TRANSACTION_STATUSES.map((status) => (
+                          <MenuItem key={status} value={status}>
+                            {status}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                      {errors.status && (
+                        <FormHelperText>{errors.status.message}</FormHelperText>
+                      )}
+                    </FormControl>
+                  </Grid>
+                </Grid>
+              </Collapse>
             </Grid>
           </Grid>
         </DialogContent>
