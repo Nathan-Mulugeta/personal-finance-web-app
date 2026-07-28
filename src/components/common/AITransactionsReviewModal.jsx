@@ -450,7 +450,8 @@ function AITransactionsReviewModal({
                   borderColor: 'divider',
                 }}
               >
-                {/* Category (most of the width) + amount + delete */}
+                {/* Category (most of the width) + amount. The delete lives on
+                    the next row so Category keeps the full line width here. */}
                 <Box
                   sx={{
                     display: 'flex',
@@ -486,7 +487,24 @@ function AITransactionsReviewModal({
                     }
                     size="small"
                     inputProps={{ step: '0.01', min: '0' }}
-                    sx={{ width: 116, flexShrink: 0 }}
+                    sx={{ width: 104, flexShrink: 0 }}
+                  />
+                </Box>
+
+                {/* Description on its own line (full note visible) + delete */}
+                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                  <TextField
+                    label="Description"
+                    value={txn.description}
+                    onChange={(e) =>
+                      handleTransactionChange(
+                        txn.id,
+                        'description',
+                        e.target.value,
+                      )
+                    }
+                    size="small"
+                    sx={{ flex: 1, minWidth: 0 }}
                   />
                   <IconButton
                     size="small"
@@ -501,21 +519,6 @@ function AITransactionsReviewModal({
                     <DeleteOutlineIcon fontSize="small" />
                   </IconButton>
                 </Box>
-
-                {/* Description on its own line, so the full note is visible */}
-                <TextField
-                  label="Description"
-                  value={txn.description}
-                  onChange={(e) =>
-                    handleTransactionChange(
-                      txn.id,
-                      'description',
-                      e.target.value,
-                    )
-                  }
-                  size="small"
-                  fullWidth
-                />
 
                 {/* Tax toggle (receipts only) — compact chip */}
                 {isReceipt && (
