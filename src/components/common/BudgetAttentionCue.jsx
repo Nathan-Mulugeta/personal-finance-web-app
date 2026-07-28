@@ -7,15 +7,16 @@ import BudgetStatusInline, {
   BUDGET_NEAR_COLOR,
 } from './BudgetStatusInline';
 
-const COLLAPSED_PER_COLUMN = 3;
+const COLLAPSED_PER_COLUMN = 4;
 
 /**
  * Home cue for this month's budgets. Collapsed, it shows Over and Near as two
  * compact columns so both are glanceable without eating vertical space (a single
- * group takes the full width rather than leaving an empty column). Expanded, it
- * stacks the groups full-width instead — so a long Over list beside a short Near
- * list never leaves one column mostly empty. Renders nothing when everything is
- * healthy. Tapping a category opens Reports pre-filtered to it.
+ * group takes the full width rather than leaving an empty column) — there each
+ * item stacks name over badge since the columns are narrow. Expanded, it stacks
+ * the groups full-width and lays each item on one line (name left, badge right),
+ * so a long list stays dense. Renders nothing when everything is healthy.
+ * Tapping a category opens Reports pre-filtered to it.
  */
 function BudgetAttentionCue() {
   const navigate = useNavigate();
@@ -42,11 +43,12 @@ function BudgetAttentionCue() {
       sx={{
         fontSize: '0.625rem',
         fontWeight: 700,
+        lineHeight: 1.2,
         textTransform: 'uppercase',
         letterSpacing: 0.5,
         color: tone,
-        pb: 0.5,
-        mb: 0.5,
+        pb: 0.25,
+        mb: 0.25,
         // Rule under the header so it reads as a heading, not another row
         borderBottom: '2px solid',
         borderColor: tone,
@@ -56,13 +58,21 @@ function BudgetAttentionCue() {
     </Typography>
   );
 
-  const itemRow = (item) => (
+  // `inline` puts name + badge on one line (full-width expanded rows); otherwise
+  // they stack (narrow collapsed columns, where the name needs the width).
+  const itemRow = (item, inline) => (
     <Box
       key={item.categoryId}
       onClick={() => openCategory(item.name)}
       sx={{
-        py: 0.5,
+        py: 0.375,
         cursor: 'pointer',
+        ...(inline && {
+          display: 'flex',
+          alignItems: 'baseline',
+          justifyContent: 'space-between',
+          gap: 1,
+        }),
         '&:not(:last-of-type)': {
           borderBottom: '1px solid',
           borderColor: 'divider',
@@ -71,11 +81,20 @@ function BudgetAttentionCue() {
     >
       <Typography
         noWrap
-        sx={{ fontSize: '0.8125rem', fontWeight: 500, minWidth: 0 }}
+        sx={{
+          fontSize: '0.8125rem',
+          fontWeight: 500,
+          lineHeight: 1.3,
+          minWidth: 0,
+        }}
       >
         {item.name}
       </Typography>
-      <BudgetStatusInline status={item} variant="badge" />
+      <BudgetStatusInline
+        status={item}
+        variant="badge"
+        sx={inline ? { flexShrink: 0 } : undefined}
+      />
     </Box>
   );
 
@@ -84,7 +103,7 @@ function BudgetAttentionCue() {
       sx={{
         mb: 1,
         px: 1.5,
-        py: 1,
+        py: 0.75,
         borderRadius: 2,
         border: '1px solid',
         borderColor: 'divider',
@@ -95,9 +114,9 @@ function BudgetAttentionCue() {
         // list would otherwise leave one column mostly empty.
         <Box>
           {groups.map((group, i) => (
-            <Box key={group.title} sx={{ mt: i > 0 ? 1.5 : 0 }}>
+            <Box key={group.title} sx={{ mt: i > 0 ? 1 : 0 }}>
               {groupHeader(group.title, group.items.length, group.tone)}
-              {group.items.map(itemRow)}
+              {group.items.map((item) => itemRow(item, true))}
             </Box>
           ))}
         </Box>
@@ -113,7 +132,9 @@ function BudgetAttentionCue() {
               )}
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 {groupHeader(group.title, group.items.length, group.tone)}
-                {group.items.slice(0, COLLAPSED_PER_COLUMN).map(itemRow)}
+                {group.items
+                  .slice(0, COLLAPSED_PER_COLUMN)
+                  .map((item) => itemRow(item, false))}
               </Box>
             </Fragment>
           ))}
@@ -124,7 +145,7 @@ function BudgetAttentionCue() {
         <Typography
           onClick={() => setExpanded((v) => !v)}
           sx={{
-            mt: 0.75,
+            mt: 0.5,
             fontSize: '0.75rem',
             fontWeight: 500,
             color: 'text.secondary',
