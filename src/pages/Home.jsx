@@ -21,6 +21,10 @@ import {
   IconButton,
   InputAdornment,
   Checkbox,
+  ListItemIcon,
+  ListItemText,
+  Menu,
+  MenuItem,
   Stack,
   TextField,
   Typography,
@@ -34,6 +38,7 @@ import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import CameraAltIcon from '@mui/icons-material/CameraAlt';
 import ChatIcon from '@mui/icons-material/Chat';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import AddTransactionDialog from '../components/common/AddTransactionDialog';
 import CategoryTransactionsList from '../components/common/CategoryTransactionsList';
@@ -63,6 +68,8 @@ function Home({ quickAddExpense = false }) {
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [receiptCaptureOpen, setReceiptCaptureOpen] = useState(false);
   const [naturalLanguageOpen, setNaturalLanguageOpen] = useState(false);
+  // Overflow menu for the less-used add flows (text entry, batch)
+  const [moreAnchor, setMoreAnchor] = useState(null);
   const [aiReviewOpen, setAiReviewOpen] = useState(false);
   const [aiParsedData, setAiParsedData] = useState(null);
   const [isReceiptParsing, setIsReceiptParsing] = useState(false);
@@ -350,7 +357,8 @@ function Home({ quickAddExpense = false }) {
         >
           Home
         </Typography>
-        <Box sx={{ display: 'flex', gap: 1 }}>
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+          {/* Primary quick actions — the ones used most */}
           <IconButton
             onClick={() => setReceiptCaptureOpen(true)}
             aria-label="Scan receipt"
@@ -365,34 +373,11 @@ function Home({ quickAddExpense = false }) {
               },
             }}
           >
-            <CameraAltIcon
-              sx={{
-                fontSize: 20,
-              }}
-            />
-          </IconButton>
-          <IconButton
-            onClick={() => setNaturalLanguageOpen(true)}
-            aria-label="Add transactions with text"
-            sx={{
-              backgroundColor: 'primary.main',
-              color: 'primary.contrastText',
-              width: 36,
-              height: 36,
-              '&:hover': {
-                backgroundColor: 'primary.dark',
-                cursor: 'pointer',
-              },
-            }}
-          >
-            <ChatIcon
-              sx={{
-                fontSize: 20,
-              }}
-            />
+            <CameraAltIcon sx={{ fontSize: 20 }} />
           </IconButton>
           <IconButton
             onClick={() => setTransferDialogOpen(true)}
+            aria-label="New transfer"
             sx={{
               backgroundColor: 'primary.main',
               color: 'primary.contrastText',
@@ -404,33 +389,11 @@ function Home({ quickAddExpense = false }) {
               },
             }}
           >
-            <SwapHorizIcon
-              sx={{
-                fontSize: 20,
-              }}
-            />
-          </IconButton>
-          <IconButton
-            onClick={() => setBatchTransactionOpen(true)}
-            sx={{
-              backgroundColor: 'info.main',
-              color: 'info.contrastText',
-              width: 36,
-              height: 36,
-              '&:hover': {
-                backgroundColor: 'info.dark',
-                cursor: 'pointer',
-              },
-            }}
-          >
-            <PlaylistAddIcon
-              sx={{
-                fontSize: 20,
-              }}
-            />
+            <SwapHorizIcon sx={{ fontSize: 20 }} />
           </IconButton>
           <IconButton
             onClick={() => setAddTransactionOpen(true)}
+            aria-label="Add transaction"
             sx={{
               backgroundColor: 'primary.main',
               color: 'primary.contrastText',
@@ -453,6 +416,45 @@ function Home({ quickAddExpense = false }) {
               }}
             />
           </IconButton>
+
+          {/* Less-used flows tucked into an overflow menu */}
+          <IconButton
+            onClick={(e) => setMoreAnchor(e.currentTarget)}
+            aria-label="More add options"
+            sx={{ color: 'text.secondary', width: 36, height: 36 }}
+          >
+            <MoreVertIcon sx={{ fontSize: 20 }} />
+          </IconButton>
+          <Menu
+            anchorEl={moreAnchor}
+            open={!!moreAnchor}
+            onClose={() => setMoreAnchor(null)}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+          >
+            <MenuItem
+              onClick={() => {
+                setMoreAnchor(null);
+                setNaturalLanguageOpen(true);
+              }}
+            >
+              <ListItemIcon>
+                <ChatIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Add with text</ListItemText>
+            </MenuItem>
+            <MenuItem
+              onClick={() => {
+                setMoreAnchor(null);
+                setBatchTransactionOpen(true);
+              }}
+            >
+              <ListItemIcon>
+                <PlaylistAddIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Batch add</ListItemText>
+            </MenuItem>
+          </Menu>
         </Box>
       </Box>
 

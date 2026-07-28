@@ -6,6 +6,7 @@ import {
   Alert,
   Box,
   Button,
+  Chip,
   CircularProgress,
   Dialog,
   DialogTitle,
@@ -17,6 +18,7 @@ import {
   MenuItem,
   Select,
   TextField,
+  Typography,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
@@ -276,26 +278,46 @@ function AddTransactionDialog({ open, onClose, initialValues = null }) {
               />
             </Grid>
             <Grid item xs={12} sm={6}>
-              <FormControl fullWidth error={!!errors.type}>
-                <InputLabel>Type *</InputLabel>
-                <Select
-                  {...register('type')}
-                  label="Type *"
-                  value={watchedType || ''}
-                  onChange={(e) => setValue('type', e.target.value)}
-                >
-                  {TRANSACTION_TYPES.filter(
-                    (t) => !t.includes('Transfer')
-                  ).map((type) => (
-                    <MenuItem key={type} value={type}>
-                      {type}
-                    </MenuItem>
-                  ))}
-                </Select>
-                {errors.type && (
-                  <FormHelperText>{errors.type.message}</FormHelperText>
+              {/* Type as two tap-to-select chips (faster + more thumb-friendly
+                  than a dropdown), filling the field's width */}
+              <Typography
+                variant="caption"
+                sx={{
+                  display: 'block',
+                  mb: 0.5,
+                  ml: 0.25,
+                  color: errors.type ? 'error.main' : 'text.secondary',
+                }}
+              >
+                Type *
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                {TRANSACTION_TYPES.filter((t) => !t.includes('Transfer')).map(
+                  (type) => {
+                    const selected = watchedType === type;
+                    return (
+                      <Chip
+                        key={type}
+                        label={type}
+                        onClick={() =>
+                          setValue('type', type, {
+                            shouldValidate: true,
+                            shouldDirty: true,
+                          })
+                        }
+                        color={selected ? 'primary' : 'default'}
+                        variant={selected ? 'filled' : 'outlined'}
+                        sx={{ flex: 1, fontWeight: 500 }}
+                      />
+                    );
+                  }
                 )}
-              </FormControl>
+              </Box>
+              {errors.type && (
+                <FormHelperText error sx={{ ml: 0.25 }}>
+                  {errors.type.message}
+                </FormHelperText>
+              )}
             </Grid>
             <Grid item xs={12} sm={6}>
               <CategoryAutocomplete
