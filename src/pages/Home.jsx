@@ -1,4 +1,11 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import {
+  useState,
+  useEffect,
+  useMemo,
+  useRef,
+  useCallback,
+  useDeferredValue,
+} from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { selectCategoryMap } from '../store/selectors';
@@ -6,7 +13,6 @@ import {
   Button,
   Box,
   Chip,
-  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -51,7 +57,6 @@ function Home({ quickAddExpense = false }) {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
-  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [addTransactionOpen, setAddTransactionOpen] = useState(false);
   const [addTransactionPrefill, setAddTransactionPrefill] = useState(null);
   const [batchTransactionOpen, setBatchTransactionOpen] = useState(false);
@@ -132,15 +137,6 @@ function Home({ quickAddExpense = false }) {
     },
   });
 
-  // Debounce search query with 500ms delay
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearchQuery(searchQuery.trim().toLowerCase());
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
-
   // When opened via the quick-add route, open the Add Transaction dialog once
   useEffect(() => {
     if (quickAddExpense && !hasOpenedQuickAddRef.current) {
@@ -187,17 +183,23 @@ function Home({ quickAddExpense = false }) {
     };
   }, [quickAddExpense]);
 
+  // Live client-side search — no debounce. Filtering the user's own
+  // transactions in memory is cheap and the list is capped at pageSize, so
+  // results can update as you type. `isSearching` follows what's typed
+  // (immediate) to leave browse mode at once; `deferredQuery` is React's
+  // low-priority value (not a timer) — it keeps the input snappy and shows the
+  // previous results while a large filter renders, so it never flashes blank.
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const isSearching = normalizedQuery.length > 0;
+  const deferredQuery = useDeferredValue(normalizedQuery);
+
   // Search transactions by category name and description
   const searchResults = useMemo(() => {
-    if (
-      !debouncedSearchQuery ||
-      !allTransactions ||
-      allTransactions.length === 0
-    ) {
+    if (!deferredQuery || !allTransactions || allTransactions.length === 0) {
       return [];
     }
 
-    const query = debouncedSearchQuery;
+    const query = deferredQuery;
 
     return allTransactions.filter((txn) => {
       // Skip deleted or cancelled transactions
@@ -226,16 +228,7 @@ function Home({ quickAddExpense = false }) {
 
       return false;
     });
-  }, [debouncedSearchQuery, allTransactions, categoryMap]);
-
-  // Search mode follows what's typed (immediate), not the debounced query — so
-  // the cue, shortcuts, and recent list step aside the moment you start typing,
-  // instead of the recent list shifting up into the results' place mid-debounce.
-  const normalizedQuery = searchQuery.trim().toLowerCase();
-  const isSearching = normalizedQuery.length > 0;
-  // The debounce has caught up to what's typed, so an empty result is a real
-  // "no matches" rather than a mid-typing gap.
-  const searchSettled = debouncedSearchQuery === normalizedQuery;
+  }, [deferredQuery, allTransactions, categoryMap]);
 
   // Per-currency total of the current search results (shown under the search
   // box; the list header's own summary is suppressed to avoid duplication)
@@ -267,7 +260,6 @@ function Home({ quickAddExpense = false }) {
 
   const handleClearSearch = useCallback(() => {
     setSearchQuery('');
-    setDebouncedSearchQuery('');
     // Focus the search input after clearing
     setTimeout(() => {
       if (searchInputRef.current) {
@@ -543,7 +535,7 @@ function Home({ quickAddExpense = false }) {
           }}
           autoFocus
         />
-        {debouncedSearchQuery && (
+        {isSearching && (
           <Box
             sx={{
               mt: 1,
@@ -642,7 +634,7 @@ function Home({ quickAddExpense = false }) {
         <Box>
           {/* If the query matches budgeted categories, show their budget status
               here so you can check a budget without opening Reports */}
-          <BudgetSearchHint query={debouncedSearchQuery} />
+          <BudgetSearchHint query={deferredQuery} />
           {searchResults.length > 0 ? (
             <CategoryTransactionsList
               ref={searchSelectRef}
@@ -651,17 +643,12 @@ function Home({ quickAddExpense = false }) {
               showSummary={false}
               showRestingHeader={false}
             />
-          ) : searchSettled ? (
+          ) : (
             <EmptyState
               icon={<SearchIcon />}
               title="No matching transactions"
               subtitle="Try a different search term"
             />
-          ) : (
-            /* Debounce gap — results are on the way */
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-              <CircularProgress size={24} />
-            </Box>
           )}
         </Box>
       )}
