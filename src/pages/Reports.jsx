@@ -46,7 +46,6 @@ import {
   editableUnderlineSx,
   editableAmountBoxSx,
 } from '../components/common/inlineEditStyles';
-import { computeBudgetsNeedingAttention } from '../utils/budgetStatus';
 import { usePageRefresh } from '../hooks/usePageRefresh';
 import PageSkeleton from '../components/common/PageSkeleton';
 import ErrorMessage from '../components/common/ErrorMessage';
@@ -1102,6 +1101,8 @@ function Reports() {
 
   // "Off budget only" filter — expenses over their budget, income short of plan
   const [attentionOnly, setAttentionOnly] = useState(false);
+  // Biggest-changes section stays collapsed until asked for
+  const [moversExpanded, setMoversExpanded] = useState(false);
   const attentionCount = useMemo(
     () =>
       expenseReportData.filter((i) => i.budget > 0 && i.actual > i.budget)
@@ -1229,59 +1230,6 @@ function Reports() {
   };
 
   // One-line, positive-leaning headline that gives the numbers meaning
-  const insight = useMemo(() => {
-    const income = incomeTotals.actual;
-    const expense = expenseTotals.actual;
-    if (income <= 0 && expense <= 0) return null;
-
-    const parts = [];
-    if (income > 0) {
-      const rate = Math.round(((income - expense) / income) * 100);
-      parts.push(
-        rate >= 0
-          ? `${rate}% of income saved`
-          : `spending ${Math.abs(rate)}% over income`
-      );
-    }
-    const prevExpense = expenseTotals.previousActual || 0;
-    if (expense > 0 && prevExpense > 0) {
-      const pct = Math.round(((expense - prevExpense) / prevExpense) * 100);
-      if (pct !== 0) {
-        parts.push(
-          `spending ${pct > 0 ? 'up' : 'down'} ${Math.abs(pct)}% vs ${periodWord}`
-        );
-      }
-    }
-    if (parts.length === 0 && expense > 0) {
-      parts.push(`Spent ${formatCurrency(expense, baseCurrency)}`);
-    }
-    // Over-budget count — same computation as the Home cue (every budgeted
-    // expense category, parents and subcategories) so the two never disagree.
-    // Budgets are monthly, so this is anchored to the selected month.
-    const overBudget = computeBudgetsNeedingAttention({
-      categories,
-      budgets,
-      transactions: allTransactions,
-      exchangeRates,
-      baseCurrency,
-      monthKey: selectedMonth,
-    }).filter((b) => b.over).length;
-    if (overBudget > 0) {
-      parts.push(`${overBudget} over budget`);
-    }
-    return parts.length ? parts.join(' · ') : null;
-  }, [
-    incomeTotals,
-    expenseTotals,
-    baseCurrency,
-    periodWord,
-    categories,
-    budgets,
-    allTransactions,
-    exchangeRates,
-    selectedMonth,
-  ]);
-
   const modalTransactions = useMemo(
     () => getTransactionsForModal(),
     [
@@ -2524,7 +2472,7 @@ function Reports() {
                 />
               );
             })()}
-            {(savingsRate !== null || insight || attentionCount > 0) && (
+            {(savingsRate !== null || attentionCount > 0) && (
               <Box
                 sx={{
                   mt: { xs: 1.25, sm: 1.5 },
@@ -2547,17 +2495,6 @@ function Reports() {
                     {savingsRate >= 0
                       ? `You kept ${savingsRate}% of income`
                       : `You spent ${Math.abs(savingsRate)}% over income`}
-                  </Typography>
-                )}
-                {insight && (
-                  <Typography
-                    sx={{
-                      mt: savingsRate !== null ? 0.25 : 0,
-                      fontSize: { xs: '0.75rem', md: '0.8125rem' },
-                      color: 'text.secondary',
-                    }}
-                  >
-                    {insight}
                   </Typography>
                 )}
                 {attentionCount > 0 && (
@@ -2588,19 +2525,39 @@ function Reports() {
       {biggestMovers.length > 0 && (
         <>
           <Box sx={{ mb: { xs: 2.5, sm: 3 } }}>
-            <Typography
+            <Box
+              onClick={() => setMoversExpanded((v) => !v)}
               sx={{
-                fontSize: '0.6875rem',
-                fontWeight: 700,
-                letterSpacing: 0.6,
-                textTransform: 'uppercase',
-                color: 'text.secondary',
-                mb: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                cursor: 'pointer',
+                py: 0.25,
+                ...tappableRowSx,
               }}
             >
-              Biggest changes vs {periodWord}
-            </Typography>
-            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+              <Typography
+                sx={{
+                  fontSize: '0.6875rem',
+                  fontWeight: 700,
+                  letterSpacing: 0.6,
+                  textTransform: 'uppercase',
+                  color: 'text.secondary',
+                }}
+              >
+                Biggest changes vs {periodWord}
+              </Typography>
+              <ExpandMoreIcon
+                sx={{
+                  fontSize: 20,
+                  color: 'text.secondary',
+                  transition: 'transform 0.2s',
+                  transform: moversExpanded ? 'none' : 'rotate(-90deg)',
+                }}
+              />
+            </Box>
+            <Collapse in={moversExpanded}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', mt: 0.5 }}>
               {biggestMovers.map((m) => {
                 const up = m.delta > 0;
                 const Arrow = up ? ArrowDropUpIcon : ArrowDropDownIcon;
@@ -2644,6 +2601,7 @@ function Reports() {
                 );
               })}
             </Box>
+            </Collapse>
           </Box>
           <Divider sx={PAGE_DIVIDER_SX} />
         </>
