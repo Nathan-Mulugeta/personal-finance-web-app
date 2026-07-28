@@ -54,6 +54,7 @@ import {
 import PageSkeleton from '../components/common/PageSkeleton';
 import ErrorMessage from '../components/common/ErrorMessage';
 import EmptyState from '../components/common/EmptyState';
+import ConfirmDeleteDialog from '../components/common/ConfirmDeleteDialog';
 import { usePageRefresh } from '../hooks/usePageRefresh';
 import {
   formatCurrency,
@@ -1476,53 +1477,18 @@ function BorrowingsLendings() {
       </Dialog>
 
       {/* Delete Confirmation Dialog */}
-      <Dialog
+      <ConfirmDeleteDialog
         open={!!deleteConfirm}
         onClose={() => {
           setDeleteConfirm(null);
           setDeleteError(null);
         }}
-        fullScreen={isMobile}
-      >
-        <DialogTitle>Delete Record</DialogTitle>
-        <DialogContent>
-          <Typography>
-            Are you sure you want to delete the record for{' '}
-            <strong>{deleteConfirm?.entity_name}</strong>?
-          </Typography>
-          {deleteError && (
-            <Alert severity="error" sx={{ mt: 2 }} onClose={() => setDeleteError(null)}>
-              {deleteError}
-            </Alert>
-          )}
-          <Alert severity="warning" sx={{ mt: 2 }}>
-            This action cannot be undone. Payment transactions will remain, but
-            the record will be deleted.
-          </Alert>
-        </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={() => {
-              setDeleteConfirm(null);
-              setDeleteError(null);
-            }}
-            disabled={isDeleting}
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleDelete}
-            color="error"
-            variant="contained"
-            disabled={isDeleting}
-            startIcon={
-              isDeleting ? <CircularProgress size={20} color="inherit" /> : null
-            }
-          >
-            {isDeleting ? 'Deleting...' : 'Delete'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onConfirm={handleDelete}
+        title={`Delete ${deleteConfirm?.entity_name || 'this'} record?`}
+        description="This can't be undone. Payment transactions stay, but the record is removed."
+        isDeleting={isDeleting}
+        error={deleteError}
+      />
     </Box>
   );
 }

@@ -45,6 +45,7 @@ import { categorySchema } from '../schemas/categorySchema';
 import { CATEGORY_TYPES, CATEGORY_STATUSES } from '../lib/api/categories';
 import PageSkeleton from '../components/common/PageSkeleton';
 import ErrorMessage from '../components/common/ErrorMessage';
+import ConfirmDeleteDialog from '../components/common/ConfirmDeleteDialog';
 import { usePageRefresh } from '../hooks/usePageRefresh';
 import { getStatusChipSx } from '../utils/chipStyles';
 import { buildCategoryTree } from '../utils/categoryHierarchy';
@@ -842,56 +843,18 @@ function Categories() {
       </Dialog>
 
       {/* Delete Confirmation Dialog */}
-      <Dialog
+      <ConfirmDeleteDialog
         open={!!deleteConfirm}
         onClose={() => {
           setDeleteConfirm(null);
           setDeleteError(null);
         }}
-        fullScreen={isMobile}
-      >
-        <DialogTitle>Delete Category</DialogTitle>
-        <DialogContent>
-          <Typography>
-            Are you sure you want to delete{' '}
-            <strong>{deleteConfirm?.name}</strong>?
-          </Typography>
-          {deleteError && (
-            <Alert severity="error" sx={{ mt: 2 }} onClose={() => setDeleteError(null)}>
-              {deleteError}
-            </Alert>
-          )}
-          <Alert severity="warning" sx={{ mt: 2 }}>
-            This action cannot be undone. You cannot delete categories with:
-            <ul style={{ marginTop: 8, marginBottom: 0 }}>
-              <li>Existing transactions</li>
-              <li>Subcategories</li>
-            </ul>
-          </Alert>
-        </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={() => {
-              setDeleteConfirm(null);
-              setDeleteError(null);
-            }}
-            disabled={isDeleting}
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleDelete}
-            color="error"
-            variant="contained"
-            disabled={isDeleting}
-            startIcon={
-              isDeleting ? <CircularProgress size={20} color="inherit" /> : null
-            }
-          >
-            {isDeleting ? 'Deleting...' : 'Delete'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onConfirm={handleDelete}
+        title={`Delete ${deleteConfirm?.name || 'this category'}?`}
+        description="This can't be undone. You can't delete categories that have transactions or subcategories."
+        isDeleting={isDeleting}
+        error={deleteError}
+      />
     </Box>
   );
 }

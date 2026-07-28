@@ -34,6 +34,7 @@ import {
 import { budgetSchema } from '../../schemas/budgetSchema';
 import { BUDGET_STATUSES } from '../../lib/api/budgets';
 import CategoryAutocomplete from './CategoryAutocomplete';
+import ConfirmDeleteDialog from './ConfirmDeleteDialog';
 import { selectCategoryNameGetter } from '../../store/selectors';
 
 // Month string helpers ('YYYY-MM-DD' or 'YYYY-MM' -> 'YYYY-MM')
@@ -535,59 +536,20 @@ function BudgetDialog({
       </Dialog>
 
       {/* Delete Confirmation Dialog */}
-      <Dialog
+      <ConfirmDeleteDialog
         open={!!deleteConfirm && !!editingBudget}
         onClose={() => {
           setDeleteConfirm(null);
           setDeleteError(null);
         }}
-        fullScreen={isMobile}
-      >
-        <DialogTitle>Delete Budget</DialogTitle>
-        <DialogContent>
-          <Typography>
-            Are you sure you want to delete the budget for{' '}
-            <strong>
-              {editingBudget && getCategoryName(editingBudget.category_id)}
-            </strong>
-            ?
-          </Typography>
-          {deleteError && (
-            <Alert
-              severity="error"
-              sx={{ mt: 2 }}
-              onClose={() => setDeleteError(null)}
-            >
-              {deleteError}
-            </Alert>
-          )}
-          <Alert severity="warning" sx={{ mt: 2 }}>
-            This action cannot be undone.
-          </Alert>
-        </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={() => {
-              setDeleteConfirm(null);
-              setDeleteError(null);
-            }}
-            disabled={isDeleting}
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleDelete}
-            color="error"
-            variant="contained"
-            disabled={isDeleting}
-            startIcon={
-              isDeleting ? <CircularProgress size={20} color="inherit" /> : null
-            }
-          >
-            {isDeleting ? 'Deleting...' : 'Delete'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onConfirm={handleDelete}
+        title="Delete this budget?"
+        description={`Delete the budget for ${
+          editingBudget ? getCategoryName(editingBudget.category_id) : 'this category'
+        }? This can't be undone.`}
+        isDeleting={isDeleting}
+        error={deleteError}
+      />
     </>
   );
 }

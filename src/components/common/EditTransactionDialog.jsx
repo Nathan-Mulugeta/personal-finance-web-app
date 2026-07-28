@@ -10,7 +10,6 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions,
   FormControl,
   FormHelperText,
   Grid,
@@ -18,7 +17,6 @@ import {
   MenuItem,
   Select,
   TextField,
-  Typography,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
@@ -36,6 +34,7 @@ import {
 import CategoryAutocomplete from './CategoryAutocomplete';
 import BudgetInlineCue from './BudgetInlineCue';
 import AccountAutocomplete from './AccountAutocomplete';
+import ConfirmDeleteDialog from './ConfirmDeleteDialog';
 import { flattenCategoryTree } from '../../utils/categoryHierarchy';
 import { useKeyboardAwareHeight } from '../../hooks/useKeyboardAwareHeight';
 
@@ -464,68 +463,20 @@ function EditTransactionDialog({ open, onClose, transaction }) {
         </form>
       </Dialog>
 
-      {/* Delete Confirmation Dialog - Popup Modal */}
-      <Dialog
+      {/* Delete confirmation — shared destructive-confirm modal */}
+      <ConfirmDeleteDialog
         open={deleteConfirmOpen}
         onClose={handleDeleteCancel}
-        maxWidth="xs"
-        fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: 2,
-            p: 1,
-          },
-        }}
-      >
-        <DialogTitle sx={{ textAlign: 'center', pb: 1 }}>
-          Delete Transaction?
-        </DialogTitle>
-        <DialogContent sx={{ textAlign: 'center', pb: 2 }}>
-          {deleteError && (
-            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setDeleteError(null)}>
-              {deleteError}
-            </Alert>
-          )}
-          <Typography variant="body2" color="text.secondary">
-            This action cannot be undone.
-            {transaction?.type?.includes('Transfer') && (
-              <> Both transfer transactions will be deleted.</>
-            )}
-          </Typography>
-        </DialogContent>
-        <DialogActions sx={{ justifyContent: 'center', gap: 2, px: 3, pb: 3 }}>
-          <Button
-            onClick={handleDeleteCancel}
-            disabled={isDeleting}
-            variant="outlined"
-            size="large"
-            sx={{
-              textTransform: 'none',
-              minWidth: 120,
-              py: 1.5,
-            }}
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleDeleteConfirm}
-            color="error"
-            variant="contained"
-            disabled={isDeleting}
-            size="large"
-            startIcon={
-              isDeleting ? <CircularProgress size={20} color="inherit" /> : null
-            }
-            sx={{
-              textTransform: 'none',
-              minWidth: 120,
-              py: 1.5,
-            }}
-          >
-            {isDeleting ? 'Deleting...' : 'Delete'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onConfirm={handleDeleteConfirm}
+        title="Delete Transaction?"
+        description={
+          transaction?.type?.includes('Transfer')
+            ? "This can't be undone. Both transfer transactions will be deleted."
+            : "This can't be undone."
+        }
+        isDeleting={isDeleting}
+        error={deleteError}
+      />
     </>
   );
 }
