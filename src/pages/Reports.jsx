@@ -1757,6 +1757,9 @@ function Reports() {
                     height: 16,
                     fontSize: '0.625rem',
                     flexShrink: 0,
+                    // Match the label's line box to the forced height so the
+                    // text sits vertically centred inside the chip
+                    '& .MuiChip-label': { lineHeight: 1, px: 0.5 },
                   }}
                 />
               )}

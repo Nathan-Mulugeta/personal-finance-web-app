@@ -43,6 +43,16 @@ export function useInlineEdit() {
 // (e.g. the press was the start of a scroll).
 function swallowNextClick() {
   const swallow = (event) => {
+    // Don't eat clicks that land inside a modal/menu/popover — a confirm dialog
+    // (e.g. swipe-to-delete) can open right after an editor is dismissed, and
+    // its buttons are new UI, not the element that was under the editor.
+    // Swallowing that click made the dialog need a second tap.
+    if (
+      event.target instanceof Element &&
+      event.target.closest('.MuiModal-root')
+    ) {
+      return;
+    }
     event.stopPropagation();
     event.preventDefault();
   };

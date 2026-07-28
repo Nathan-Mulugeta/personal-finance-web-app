@@ -210,18 +210,31 @@ function Home({ quickAddExpense = false }) {
         return true;
       }
 
-      // Search by category name using O(1) Map lookup
-      const category = categoryMap.get(txn.category_id);
-      if (category) {
-        const categoryName = (category.name || '').toLowerCase();
-        if (categoryName.includes(query)) {
+      // Search by category name, including ancestors — so searching a parent
+      // category also surfaces its children's transactions (matching how a
+      // parent's budget rolls up from its children in Reports).
+      let category = categoryMap.get(txn.category_id);
+      while (category) {
+        if ((category.name || '').toLowerCase().includes(query)) {
           return true;
         }
+        category = category.parent_category_id
+          ? categoryMap.get(category.parent_category_id)
+          : null;
       }
 
       return false;
     });
   }, [debouncedSearchQuery, allTransactions, categoryMap]);
+
+  // Search mode follows what's typed (immediate), not the debounced query — so
+  // the cue, shortcuts, and recent list step aside the moment you start typing,
+  // instead of the recent list shifting up into the results' place mid-debounce.
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const isSearching = normalizedQuery.length > 0;
+  // The debounce has caught up to what's typed, so an empty result is a real
+  // "no matches" rather than a mid-typing gap.
+  const searchSettled = debouncedSearchQuery === normalizedQuery;
 
   // Per-currency total of the current search results (shown under the search
   // box; the list header's own summary is suppressed to avoid duplication)
@@ -575,12 +588,12 @@ function Home({ quickAddExpense = false }) {
 
       {/* Budget attention cue — shows only when a category is near/over budget,
           and steps aside while searching so results get the room */}
-      {!searchQuery && <BudgetAttentionCue />}
+      {!isSearching && <BudgetAttentionCue />}
 
       {/* Hidden entirely when no shortcuts are configured; shortcuts can
           still be managed via the "Manage shortcuts" button below the
           Recent Transactions list */}
-      {!debouncedSearchQuery && shortcutCategories.length > 0 && (
+      {!isSearching && shortcutCategories.length > 0 && (
         <Box
           sx={{
             mb: { xs: 2, sm: 2.5 },
@@ -621,24 +634,34 @@ function Home({ quickAddExpense = false }) {
         </Box>
       )}
 
-      {/* Search Results — same look and functionality as the Transactions page */}
-      {debouncedSearchQuery && (
+      {/* Search Results — same look and functionality as the Transactions page.
+          Shown the moment you start typing so recent transactions don't linger
+          and read like results. */}
+      {isSearching && (
         <Box>
           {/* If the query matches budgeted categories, show their budget status
               here so you can check a budget without opening Reports */}
           <BudgetSearchHint query={debouncedSearchQuery} />
-          <CategoryTransactionsList
-            ref={searchSelectRef}
-            transactions={searchResults}
-            pageSize={50}
-            showSummary={false}
-            showRestingHeader={false}
-          />
+          {searchResults.length > 0 ? (
+            <CategoryTransactionsList
+              ref={searchSelectRef}
+              transactions={searchResults}
+              pageSize={50}
+              showSummary={false}
+              showRestingHeader={false}
+            />
+          ) : searchSettled ? (
+            <EmptyState
+              icon={<SearchIcon />}
+              title="No matching transactions"
+              subtitle="Try a different search term"
+            />
+          ) : null}
         </Box>
       )}
 
-      {/* Recent Transactions (shown when no search query) */}
-      {!debouncedSearchQuery && (
+      {/* Recent Transactions (shown when not searching) */}
+      {!isSearching && (
         <Box>
           <Box
             sx={{
