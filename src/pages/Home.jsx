@@ -83,6 +83,11 @@ function Home({ quickAddExpense = false }) {
   // the list itself doesn't render an empty toggle-only row above the rows
   const recentSelectRef = useRef(null);
   const searchSelectRef = useRef(null);
+  // When a list enters multi-select, its own toolbar (with the toggle acting as
+  // the on/off switch) replaces this section's header in place — so we hide the
+  // header while selecting; heights match so nothing jumps.
+  const [searchSelecting, setSearchSelecting] = useState(false);
+  const [recentSelecting, setRecentSelecting] = useState(false);
 
   // Get data from Redux
   const { allTransactions, error } = useSelector((state) => state.transactions);
@@ -537,7 +542,7 @@ function Home({ quickAddExpense = false }) {
           }}
           autoFocus
         />
-        {isSearching && (
+        {isSearching && !searchSelecting && (
           <Box
             sx={{
               mt: 1,
@@ -644,6 +649,7 @@ function Home({ quickAddExpense = false }) {
               pageSize={50}
               showSummary={false}
               showRestingHeader={false}
+              onSelectionModeChange={setSearchSelecting}
             />
           ) : (
             <EmptyState
@@ -658,12 +664,17 @@ function Home({ quickAddExpense = false }) {
       {/* Recent Transactions (shown when not searching) */}
       {!isSearching && (
         <Box>
+          {/* Hidden while the list is in selection mode — the list's own toolbar
+              (same height) takes this row's place, so the toggle reads as an
+              in-place on/off switch with no jump. */}
+          {!recentSelecting && (
           <Box
             sx={{
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
-              mb: { xs: 0.5, sm: 1.5 },
+              minHeight: 36,
+              mb: 0.5,
             }}
           >
             <Typography
@@ -700,6 +711,7 @@ function Home({ quickAddExpense = false }) {
               )}
             </Box>
           </Box>
+          )}
           {recentTransactions.length === 0 ? (
             <EmptyState
               icon={<ReceiptIcon />}
@@ -713,6 +725,7 @@ function Home({ quickAddExpense = false }) {
                 transactions={recentTransactions}
                 showSummary={false}
                 showRestingHeader={false}
+                onSelectionModeChange={setRecentSelecting}
               />
               <Button
                 fullWidth

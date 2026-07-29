@@ -25,7 +25,6 @@ import ChecklistIcon from '@mui/icons-material/Checklist';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
-import CloseIcon from '@mui/icons-material/Close';
 import { format, parseISO, isToday } from 'date-fns';
 import {
   getTransactionsTotalLabel,
@@ -95,7 +94,13 @@ const dateDisplay = (dateStr) => {
  *   toggle can start multi-select.
  */
 function CategoryTransactionsList(
-  { transactions, pageSize, showSummary = true, showRestingHeader = true },
+  {
+    transactions,
+    pageSize,
+    showSummary = true,
+    showRestingHeader = true,
+    onSelectionModeChange,
+  },
   ref
 ) {
   const dispatch = useDispatch();
@@ -110,6 +115,12 @@ function CategoryTransactionsList(
 
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
+
+  // Let a parent (e.g. Home) swap its own header into selection mode in place.
+  // Re-fires false on remount.
+  useEffect(() => {
+    onSelectionModeChange?.(selectionMode);
+  }, [selectionMode, onSelectionModeChange]);
   // Shared quick-editor for tap-to-edit category/amount/note on rows (both the
   // desktop table and mobile rows are inline maps, so one state serves all)
   const inline = useInlineEdit();
@@ -252,37 +263,29 @@ function CategoryTransactionsList(
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          minHeight: 34,
-          mb: 0.25,
+          minHeight: 36,
+          mb: 0.5,
         }}
       >
         {selectionMode ? (
-          <>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
-              <IconButton
-                size="small"
-                onClick={exitSelection}
-                aria-label="Exit selection"
-                sx={{ color: 'text.secondary' }}
-              >
-                <CloseIcon sx={{ fontSize: 18 }} />
-              </IconButton>
-              <Checkbox
-                checked={allSelected}
-                indeterminate={someSelected}
-                onChange={(e) => handleSelectAll(e.target.checked)}
-                size="small"
-                sx={{ p: 0.5 }}
-              />
-              <Typography
-                variant="body2"
-                sx={{ fontSize: '0.8125rem', fontWeight: 500 }}
-              >
-                {selectedIds.size} selected
-              </Typography>
-            </Box>
+          <Box
+            sx={{ display: 'flex', alignItems: 'center', gap: 0.25, minWidth: 0 }}
+          >
+            <Checkbox
+              checked={allSelected}
+              indeterminate={someSelected}
+              onChange={(e) => handleSelectAll(e.target.checked)}
+              size="small"
+              sx={{ p: 0.5 }}
+            />
+            <Typography
+              variant="body2"
+              sx={{ fontSize: '0.8125rem', fontWeight: 500, whiteSpace: 'nowrap' }}
+            >
+              {selectedIds.size} selected
+            </Typography>
             {selectedIds.size > 0 && (
-              <Box sx={{ display: 'flex', gap: 0.25 }}>
+              <>
                 <IconButton
                   size="small"
                   onClick={() => setBulkEditOpen(true)}
@@ -304,42 +307,50 @@ function CategoryTransactionsList(
                 >
                   <DeleteIcon sx={{ fontSize: 18 }} />
                 </IconButton>
-              </Box>
+              </>
             )}
-          </>
+          </Box>
+        ) : showSummary ? (
+          <Typography
+            variant="caption"
+            noWrap
+            sx={{ color: 'text.secondary', minWidth: 0 }}
+          >
+            {transactions.length} transaction
+            {transactions.length !== 1 ? 's' : ''}
+            {totalLabel && (
+              <>
+                {' · '}
+                <Box
+                  component="span"
+                  sx={{ fontWeight: 600, color: 'text.primary' }}
+                >
+                  {totalLabel}
+                </Box>
+              </>
+            )}
+          </Typography>
         ) : (
-          <>
-            {showSummary && (
-              <Typography
-                variant="caption"
-                noWrap
-                sx={{ color: 'text.secondary', minWidth: 0 }}
-              >
-                {transactions.length} transaction
-                {transactions.length !== 1 ? 's' : ''}
-                {totalLabel && (
-                  <>
-                    {' · '}
-                    <Box
-                      component="span"
-                      sx={{ fontWeight: 600, color: 'text.primary' }}
-                    >
-                      {totalLabel}
-                    </Box>
-                  </>
-                )}
-              </Typography>
-            )}
-            <IconButton
-              onClick={() => setSelectionMode(true)}
-              size="small"
-              aria-label="Select multiple"
-              sx={{ color: 'text.secondary', flexShrink: 0, ml: 'auto' }}
-            >
-              <ChecklistIcon sx={{ fontSize: 18 }} />
-            </IconButton>
-          </>
+          <Box />
         )}
+        {/* The multi-select toggle doubles as the on/off switch — same spot in
+            both modes, highlighted while selecting. */}
+        <IconButton
+          onClick={() =>
+            selectionMode ? exitSelection() : setSelectionMode(true)
+          }
+          size="small"
+          aria-label={selectionMode ? 'Exit selection' : 'Select multiple'}
+          sx={{
+            flexShrink: 0,
+            ml: 'auto',
+            color: selectionMode ? 'primary.main' : 'text.secondary',
+            backgroundColor: selectionMode ? 'action.selected' : 'transparent',
+            '&:hover': { backgroundColor: 'action.hover' },
+          }}
+        >
+          <ChecklistIcon sx={{ fontSize: 18 }} />
+        </IconButton>
       </Box>
       )}
 
