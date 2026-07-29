@@ -2453,8 +2453,11 @@ function Reports() {
             )}
       </Box>
 
-      {/* Biggest expense changes vs the previous period — an overview insight,
-          grouped with the summary above the divider */}
+      <Divider sx={PAGE_DIVIDER_SX} />
+
+      {/* Biggest expense changes vs the previous period. Sits just below the
+          section divider (leading the detail group) rather than above it — a
+          collapsed header hugging the full-bleed rule looked odd on mobile. */}
       {biggestMovers.length > 0 && (
           <Box sx={{ mt: { xs: 1.5, sm: 2 }, mb: { xs: 2.5, sm: 3 } }}>
             <Box
@@ -2536,8 +2539,6 @@ function Reports() {
             </Collapse>
           </Box>
       )}
-
-      <Divider sx={PAGE_DIVIDER_SX} />
 
       {/* Off-budget filter — a control for the category sections below */}
       {attentionCount > 0 && (
