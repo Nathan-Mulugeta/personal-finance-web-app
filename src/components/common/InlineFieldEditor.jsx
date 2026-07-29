@@ -101,7 +101,7 @@ function useDismissOutside(containerRef, onDismiss) {
  * `onCommit`/`onCancel` may fire more than once (Enter → trailing blur, outside
  * press → trailing blur); the parent's save/resolve guard makes them one-shot.
  */
-function InlineTextEdit({ initialText, numeric, wrap, placeholder, textSx, onCommit, onCancel }) {
+function InlineTextEdit({ initialText, numeric, wrap, caretOffset, placeholder, textSx, onCommit, onCancel }) {
   const ref = useRef(null);
 
   useLayoutEffect(() => {
@@ -109,10 +109,18 @@ function InlineTextEdit({ initialText, numeric, wrap, placeholder, textSx, onCom
     if (!el) return;
     el.textContent = initialText;
     el.focus();
-    const range = document.createRange();
-    range.selectNodeContents(el);
-    range.collapse(false); // caret at the end
     const sel = window.getSelection();
+    const range = document.createRange();
+    // Amount passes caretOffset so the caret lands just before the decimals
+    // (e.g. after "1,234" in "1,234.00"), which is what you edit first.
+    if (typeof caretOffset === 'number' && el.firstChild) {
+      const pos = Math.max(0, Math.min(caretOffset, el.firstChild.length));
+      range.setStart(el.firstChild, pos);
+      range.collapse(true);
+    } else {
+      range.selectNodeContents(el);
+      range.collapse(false); // caret at the end
+    }
     sel.removeAllRanges();
     sel.addRange(range);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -285,6 +293,7 @@ export function InlineFieldInput({ transaction, field, onDone, textSx, prefix })
         <InlineTextEdit
           initialText={number}
           numeric
+          caretOffset={number.length - 3}
           textSx={textSx}
           onCommit={(text) => {
             const num = parseFloat(String(text).replace(/,/g, ''));
