@@ -7,9 +7,6 @@ import {
   Box,
   Button,
   CircularProgress,
-  Dialog,
-  DialogTitle,
-  DialogContent,
   FormControl,
   FormHelperText,
   Grid,
@@ -17,8 +14,6 @@ import {
   MenuItem,
   Select,
   TextField,
-  useMediaQuery,
-  useTheme,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { format } from 'date-fns';
@@ -35,8 +30,8 @@ import CategoryAutocomplete from './CategoryAutocomplete';
 import BudgetInlineCue from './BudgetInlineCue';
 import AccountAutocomplete from './AccountAutocomplete';
 import ConfirmDeleteDialog from './ConfirmDeleteDialog';
+import AppDialog from './AppDialog';
 import { flattenCategoryTree } from '../../utils/categoryHierarchy';
-import { useKeyboardAwareHeight } from '../../hooks/useKeyboardAwareHeight';
 
 /**
  * Reusable Edit Transaction Dialog component.
@@ -49,9 +44,6 @@ import { useKeyboardAwareHeight } from '../../hooks/useKeyboardAwareHeight';
  */
 function EditTransactionDialog({ open, onClose, transaction }) {
   const dispatch = useDispatch();
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const { keyboardVisible, keyboardHeight } = useKeyboardAwareHeight();
 
   const { accounts } = useSelector((state) => state.accounts);
   const { categories } = useSelector((state) => state.categories);
@@ -221,48 +213,56 @@ function EditTransactionDialog({ open, onClose, transaction }) {
 
   return (
     <>
-      <Dialog
+      <AppDialog
         open={open}
         onClose={handleClose}
-        maxWidth="sm"
-        fullWidth
-        fullScreen={isMobile}
-        PaperProps={{
-          sx: isMobile
-            ? {
-                display: 'flex',
-                flexDirection: 'column',
-                height: '100%',
-                maxHeight: '100%',
-              }
-            : {},
-        }}
-      >
-        <form
-          onSubmit={handleSubmit(onSubmit)}
-          style={
-            isMobile
-              ? {
-                  display: 'flex',
-                  flexDirection: 'column',
-                  height: '100%',
-                  overflow: 'hidden',
-                  paddingBottom: keyboardVisible ? `${keyboardHeight}px` : 0,
-                }
-              : {}
-          }
-        >
-          <DialogTitle sx={{ flexShrink: 0, pb: { xs: 1, sm: 2 } }}>
-            Edit Transaction
-          </DialogTitle>
-          <DialogContent
+        title="Edit Transaction"
+        onSubmit={handleSubmit(onSubmit)}
+        contentSx={{ pt: { xs: 1, sm: 2 }, pb: 2 }}
+        footer={
+          <Box
             sx={{
-              flexGrow: 1,
-              overflow: 'auto',
-              pt: { xs: 1, sm: 2 },
-              pb: 2,
+              flexShrink: 0,
+              p: { xs: 1.5, sm: 2 },
+              display: 'flex',
+              gap: 1,
+              borderTop: '1px solid',
+              borderColor: 'divider',
+              backgroundColor: 'background.paper',
             }}
           >
+            <Button
+              onClick={handleDeleteClick}
+              color="error"
+              disabled={isSubmitting}
+              startIcon={<DeleteIcon sx={{ fontSize: { xs: 18, sm: 20 } }} />}
+              sx={{ textTransform: 'none', flex: 1 }}
+            >
+              Delete
+            </Button>
+            <Button
+              onClick={handleClose}
+              disabled={isSubmitting}
+              sx={{ textTransform: 'none', flex: 1 }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={isSubmitting}
+              startIcon={
+                isSubmitting ? (
+                  <CircularProgress size={16} color="inherit" />
+                ) : null
+              }
+              sx={{ textTransform: 'none', flex: 1 }}
+            >
+              {isSubmitting ? 'Updating...' : 'Update'}
+            </Button>
+          </Box>
+        }
+      >
             {actionError && (
               <Alert severity="error" sx={{ mb: 2 }} onClose={() => setActionError(null)}>
                 {actionError}
@@ -408,60 +408,7 @@ function EditTransactionDialog({ open, onClose, transaction }) {
                 </FormControl>
               </Grid>
             </Grid>
-          </DialogContent>
-          {/* Button Bar - Delete | Cancel | Update on same line */}
-          <Box
-            sx={{
-              flexShrink: 0,
-              p: { xs: 1.5, sm: 2 },
-              display: 'flex',
-              gap: 1,
-              borderTop: '1px solid',
-              borderColor: 'divider',
-              backgroundColor: 'background.paper',
-            }}
-          >
-            <Button
-              onClick={handleDeleteClick}
-              color="error"
-              disabled={isSubmitting}
-              startIcon={<DeleteIcon sx={{ fontSize: { xs: 18, sm: 20 } }} />}
-              sx={{
-                textTransform: 'none',
-                flex: 1,
-              }}
-            >
-              Delete
-            </Button>
-            <Button
-              onClick={handleClose}
-              disabled={isSubmitting}
-              sx={{
-                textTransform: 'none',
-                flex: 1,
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              variant="contained"
-              disabled={isSubmitting}
-              startIcon={
-                isSubmitting ? (
-                  <CircularProgress size={16} color="inherit" />
-                ) : null
-              }
-              sx={{
-                textTransform: 'none',
-                flex: 1,
-              }}
-            >
-              {isSubmitting ? 'Updating...' : 'Update'}
-            </Button>
-          </Box>
-        </form>
-      </Dialog>
+      </AppDialog>
 
       {/* Delete confirmation — shared destructive-confirm modal */}
       <ConfirmDeleteDialog
