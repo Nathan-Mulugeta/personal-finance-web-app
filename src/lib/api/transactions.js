@@ -783,27 +783,29 @@ export async function bulkDeleteTransactions(transactionIds) {
   // Track all transaction IDs that will be deleted (including linked ones)
   const allTransactionIdsToDelete = new Set(transactionIds);
 
-  // Find all linked transactions (transfers)
-  for (const transaction of transactions) {
-    if (transaction.transfer_id) {
-      // Get all transactions with this transfer_id
-      const { data: linkedTransactions } = await supabase
-        .from('transactions')
-        .select('transaction_id')
-        .eq('transfer_id', transaction.transfer_id)
-        .eq('user_id', user.id)
-        .is('deleted_at', null);
-
-      if (linkedTransactions) {
-        linkedTransactions.forEach((t) => {
-          allTransactionIdsToDelete.add(t.transaction_id);
-        });
-      }
+  // Directly-linked partners (no query needed)
+  transactions.forEach((t) => {
+    if (t.linked_transaction_id) {
+      allTransactionIdsToDelete.add(t.linked_transaction_id);
     }
+  });
 
-    if (transaction.linked_transaction_id) {
-      allTransactionIdsToDelete.add(transaction.linked_transaction_id);
-    }
+  // Pull in every sibling of the selected transfers in one query (rather than
+  // one lookup per transfer row)
+  const transferIds = [
+    ...new Set(transactions.map((t) => t.transfer_id).filter(Boolean)),
+  ];
+  if (transferIds.length > 0) {
+    const { data: linkedTransactions } = await supabase
+      .from('transactions')
+      .select('transaction_id')
+      .in('transfer_id', transferIds)
+      .eq('user_id', user.id)
+      .is('deleted_at', null);
+
+    (linkedTransactions || []).forEach((t) => {
+      allTransactionIdsToDelete.add(t.transaction_id);
+    });
   }
 
   const idsToDelete = Array.from(allTransactionIdsToDelete);
@@ -825,11 +827,11 @@ export async function bulkDeleteTransactions(transactionIds) {
   };
 }
 
-// Bulk-update several transactions with the same field changes (e.g. moving
-// many transactions to a new category). Each update runs through the single
-// updateTransaction path (validation + balance triggers). Uses allSettled so
-// one bad row (e.g. a category/currency mismatch) doesn't abort the rest.
-export async function bulkUpdateTransactions(transactionIds, updates) {
+// Per-row fallback: run each id through the single updateTransaction path
+// (validation + per-row date/time handling). Uses allSettled so one bad row
+// doesn't abort the rest. Used when the change needs per-row logic (a new date,
+// whose time-of-day is preserved from each original row).
+async function bulkUpdatePerRow(transactionIds, updates) {
   const results = await Promise.allSettled(
     (transactionIds || []).map((id) => updateTransaction(id, updates))
   );
@@ -848,4 +850,95 @@ export async function bulkUpdateTransactions(transactionIds, updates) {
   });
 
   return { updated, failed };
+}
+
+// Bulk-update several transactions with the same field changes (e.g. moving
+// many transactions to a new category or marking them Cleared).
+//
+// Because bulk edit applies identical values to every selected row, the shared
+// values are validated once and written in a single `.update().in(...)` query
+// instead of one heavy round-trip per row. The only field that genuinely needs
+// per-row work is `date` (each row keeps its own time-of-day), so that case
+// falls back to the per-row path.
+export async function bulkUpdateTransactions(transactionIds, updates) {
+  const ids = (transactionIds || []).filter(Boolean);
+  if (ids.length === 0) return { updated: [], failed: [] };
+
+  // Setting a date needs per-row time-of-day preservation — defer to the
+  // per-row path for that (rare) case.
+  if (updates?.date !== undefined) {
+    return bulkUpdatePerRow(ids, updates);
+  }
+
+  const user = await getCurrentUser();
+  if (!user) throw new Error('User not authenticated');
+
+  // --- Validate the shared values once (they're identical for every row) ---
+  if (updates.type && !TRANSACTION_TYPES.includes(updates.type)) {
+    throw new Error(
+      `Invalid transaction type. Must be one of: ${TRANSACTION_TYPES.join(', ')}`
+    );
+  }
+  if (updates.status && !TRANSACTION_STATUSES.includes(updates.status)) {
+    throw new Error(
+      `Invalid status. Must be one of: ${TRANSACTION_STATUSES.join(', ')}`
+    );
+  }
+  if (updates.accountId || updates.currency) {
+    const { data: account } = await supabase
+      .from('accounts')
+      .select('*')
+      .eq('account_id', updates.accountId)
+      .eq('user_id', user.id)
+      .eq('status', 'Active')
+      .single();
+    if (!account) throw new Error('Account not found or is not active');
+    if (updates.currency && updates.currency.toUpperCase() !== account.currency) {
+      throw new Error(`Currency must match account currency: ${account.currency}`);
+    }
+  }
+  if (updates.categoryId) {
+    const { data: category } = await supabase
+      .from('categories')
+      .select('*')
+      .eq('category_id', updates.categoryId)
+      .eq('user_id', user.id)
+      .eq('status', 'Active')
+      .single();
+    if (!category) throw new Error('Category not found or is not active');
+    const parentIds = await fetchParentCategoryIds(user.id, [updates.categoryId]);
+    if (parentIds.has(updates.categoryId)) {
+      throw new Error(
+        'This category has subcategories. Please choose a specific subcategory instead.'
+      );
+    }
+  }
+
+  // --- Map to columns (same mapping as updateTransaction, minus date) ---
+  const updateData = {};
+  if (updates.accountId !== undefined) updateData.account_id = updates.accountId;
+  if (updates.categoryId !== undefined) updateData.category_id = updates.categoryId;
+  if (updates.amount !== undefined) updateData.amount = updates.amount;
+  if (updates.currency !== undefined)
+    updateData.currency = updates.currency.toUpperCase();
+  if (updates.description !== undefined)
+    updateData.description = updates.description;
+  if (updates.type !== undefined) updateData.type = updates.type;
+  if (updates.status !== undefined) updateData.status = updates.status;
+
+  if (Object.keys(updateData).length === 0) {
+    return { updated: [], failed: [] };
+  }
+
+  const { data, error } = await supabase
+    .from('transactions')
+    .update(updateData)
+    .in('transaction_id', ids)
+    .eq('user_id', user.id)
+    .is('deleted_at', null)
+    .select('*');
+
+  if (error) throw error;
+
+  return { updated: data || [], failed: [] };
 }
