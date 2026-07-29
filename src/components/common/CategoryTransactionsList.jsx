@@ -95,7 +95,13 @@ const dateDisplay = (dateStr) => {
  *   toggle can start multi-select.
  */
 function CategoryTransactionsList(
-  { transactions, pageSize, showSummary = true, showRestingHeader = true },
+  {
+    transactions,
+    pageSize,
+    showSummary = true,
+    showRestingHeader = true,
+    onSelectionModeChange,
+  },
   ref
 ) {
   const dispatch = useDispatch();
@@ -110,6 +116,12 @@ function CategoryTransactionsList(
 
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
+
+  // Let a parent collapse its own header row while this list is in selection
+  // mode (so the two headers don't stack). Re-fires false on remount.
+  useEffect(() => {
+    onSelectionModeChange?.(selectionMode);
+  }, [selectionMode, onSelectionModeChange]);
   // Shared quick-editor for tap-to-edit category/amount/note on rows (both the
   // desktop table and mobile rows are inline maps, so one state serves all)
   const inline = useInlineEdit();

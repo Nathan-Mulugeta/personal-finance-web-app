@@ -83,6 +83,11 @@ function Home({ quickAddExpense = false }) {
   // the list itself doesn't render an empty toggle-only row above the rows
   const recentSelectRef = useRef(null);
   const searchSelectRef = useRef(null);
+  // While a list is in multi-select mode, its own toolbar (exit/select-all/
+  // count/actions) takes over — so we hide the section's title/count row above
+  // it to avoid two stacked headers.
+  const [searchSelecting, setSearchSelecting] = useState(false);
+  const [recentSelecting, setRecentSelecting] = useState(false);
 
   // Get data from Redux
   const { allTransactions, error } = useSelector((state) => state.transactions);
@@ -537,7 +542,7 @@ function Home({ quickAddExpense = false }) {
           }}
           autoFocus
         />
-        {isSearching && (
+        {isSearching && !searchSelecting && (
           <Box
             sx={{
               mt: 1,
@@ -644,6 +649,7 @@ function Home({ quickAddExpense = false }) {
               pageSize={50}
               showSummary={false}
               showRestingHeader={false}
+              onSelectionModeChange={setSearchSelecting}
             />
           ) : (
             <EmptyState
@@ -658,6 +664,7 @@ function Home({ quickAddExpense = false }) {
       {/* Recent Transactions (shown when not searching) */}
       {!isSearching && (
         <Box>
+          {!recentSelecting && (
           <Box
             sx={{
               display: 'flex',
@@ -700,6 +707,7 @@ function Home({ quickAddExpense = false }) {
               )}
             </Box>
           </Box>
+          )}
           {recentTransactions.length === 0 ? (
             <EmptyState
               icon={<ReceiptIcon />}
@@ -713,6 +721,7 @@ function Home({ quickAddExpense = false }) {
                 transactions={recentTransactions}
                 showSummary={false}
                 showRestingHeader={false}
+                onSelectionModeChange={setRecentSelecting}
               />
               <Button
                 fullWidth
