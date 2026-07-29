@@ -1014,7 +1014,9 @@ function Transactions() {
         </Box>
       </Box>
 
-      {/* Date Navigation - Compact */}
+      {/* Date Navigation — becomes the selection toolbar in selection mode, so
+          the exit / select-all / count sit on one line with the actions
+          instead of pushing a second row below. */}
       <Box
         sx={{
           mb: 1.5,
@@ -1022,12 +1024,68 @@ function Transactions() {
           borderBottom: '1px solid',
           borderColor: 'divider',
           display: 'flex',
-          flexDirection: { xs: 'column', sm: 'row' },
-          alignItems: { xs: 'flex-start', sm: 'center' },
+          flexDirection: selectionMode ? 'row' : { xs: 'column', sm: 'row' },
+          alignItems: selectionMode ? 'center' : { xs: 'flex-start', sm: 'center' },
           justifyContent: 'space-between',
           gap: { xs: 1, sm: 0 },
+          minHeight: 44,
         }}
       >
+        {selectionMode ? (
+          <>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
+              <IconButton
+                size="small"
+                onClick={exitSelectionMode}
+                aria-label="Exit selection"
+                sx={{ color: 'text.secondary' }}
+              >
+                <CloseIcon sx={{ fontSize: 18 }} />
+              </IconButton>
+              <Checkbox
+                checked={isAllSelected}
+                indeterminate={isIndeterminate}
+                onChange={(e) => handleSelectAll(e.target.checked)}
+                size="small"
+                sx={{ p: 0.5 }}
+              />
+              <Typography
+                variant="body2"
+                sx={{ fontSize: '0.8125rem', fontWeight: 500 }}
+              >
+                {selectedItems.size} selected
+              </Typography>
+            </Box>
+            {selectedItems.size > 0 && (
+              <Box sx={{ display: 'flex', gap: 0.25 }}>
+                {selectedTransactionIds.length > 0 && (
+                  <IconButton
+                    size="small"
+                    onClick={() => setBulkEditOpen(true)}
+                    disabled={isBulkDeleting}
+                    aria-label="Edit selected"
+                    sx={{ color: 'text.secondary' }}
+                  >
+                    <EditIcon sx={{ fontSize: 18 }} />
+                  </IconButton>
+                )}
+                <IconButton
+                  size="small"
+                  onClick={() => setBulkDeleteConfirm(true)}
+                  disabled={isBulkDeleting}
+                  aria-label="Delete selected"
+                  sx={{
+                    color: 'text.secondary',
+                    '&:hover': { color: 'google.red' },
+                  }}
+                >
+                  <DeleteIcon sx={{ fontSize: 18 }} />
+                </IconButton>
+              </Box>
+            )}
+          </>
+        ) : (
+          <>
         <Box
           sx={{
             display: 'flex',
@@ -1182,76 +1240,12 @@ function Transactions() {
           })()}
         </Typography>
         </Box>
+          </>
+        )}
       </Box>
 
       {error && (
         <ErrorMessage error={error} onClose={() => dispatch(clearError())} />
-      )}
-
-      {/* Selection Header - only visible in selection mode */}
-      {selectionMode && combinedItems.length > 0 && (
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            mb: 1,
-            height: 44,
-            borderBottom: '1px solid',
-            borderColor: 'divider',
-          }}
-        >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
-            <IconButton
-              size="small"
-              onClick={exitSelectionMode}
-              aria-label="Exit selection"
-              sx={{ color: 'text.secondary' }}
-            >
-              <CloseIcon sx={{ fontSize: 18 }} />
-            </IconButton>
-            <Checkbox
-              checked={isAllSelected}
-              indeterminate={isIndeterminate}
-              onChange={(e) => handleSelectAll(e.target.checked)}
-              size="small"
-              sx={{ p: 0.5 }}
-            />
-            <Typography
-              variant="body2"
-              sx={{ fontSize: '0.8125rem', fontWeight: 500 }}
-            >
-              {selectedItems.size} selected
-            </Typography>
-          </Box>
-          {selectedItems.size > 0 && (
-            <Box sx={{ display: 'flex', gap: 0.25 }}>
-              {selectedTransactionIds.length > 0 && (
-                <IconButton
-                  size="small"
-                  onClick={() => setBulkEditOpen(true)}
-                  disabled={isBulkDeleting}
-                  aria-label="Edit selected"
-                  sx={{ color: 'text.secondary' }}
-                >
-                  <EditIcon sx={{ fontSize: 18 }} />
-                </IconButton>
-              )}
-              <IconButton
-                size="small"
-                onClick={() => setBulkDeleteConfirm(true)}
-                disabled={isBulkDeleting}
-                aria-label="Delete selected"
-                sx={{
-                  color: 'text.secondary',
-                  '&:hover': { color: 'google.red' },
-                }}
-              >
-                <DeleteIcon sx={{ fontSize: 18 }} />
-              </IconButton>
-            </Box>
-          )}
-        </Box>
       )}
 
       {/* Filters Section */}
