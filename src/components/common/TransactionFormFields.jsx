@@ -43,6 +43,10 @@ import {
  * @param {string} [excludeTransactionId] - the row being edited (budget cue math)
  * @param {boolean} [autoFocusAccount]
  * @param {boolean} [autoFocusCategory]
+ * @param {boolean} [collapseDateStatus] - hide Date+Status behind "More options"
+ *   (Add/Edit). Set false to keep them always visible (Batch rapid entry).
+ * @param {number|string} [categoryKey] - key for the Category field, so callers
+ *   that re-enter rapidly (Batch) can force a re-mount to re-focus it.
  */
 export default function TransactionFormFields({
   register,
@@ -56,6 +60,8 @@ export default function TransactionFormFields({
   excludeTransactionId,
   autoFocusAccount = false,
   autoFocusCategory = false,
+  collapseDateStatus = true,
+  categoryKey,
 }) {
   const [showMore, setShowMore] = useState(false);
 
@@ -77,6 +83,44 @@ export default function TransactionFormFields({
     }
     return flattenCategoryTree(filtered);
   };
+
+  // Date + Status share the same two fields whether collapsed (Add/Edit) or
+  // inline (Batch), so they're defined once here.
+  const dateStatusFields = (
+    <>
+      <Grid item xs={12} sm={6}>
+        <TextField
+          fullWidth
+          type="date"
+          label="Date *"
+          {...register('date')}
+          error={!!errors.date}
+          helperText={errors.date?.message}
+          InputLabelProps={{ shrink: true }}
+        />
+      </Grid>
+      <Grid item xs={12} sm={6}>
+        <FormControl fullWidth error={!!errors.status}>
+          <InputLabel>Status</InputLabel>
+          <Select
+            {...register('status')}
+            label="Status"
+            value={watchedStatus || ''}
+            onChange={(e) => setValue('status', e.target.value)}
+          >
+            {TRANSACTION_STATUSES.map((status) => (
+              <MenuItem key={status} value={status}>
+                {status}
+              </MenuItem>
+            ))}
+          </Select>
+          {errors.status && (
+            <FormHelperText>{errors.status.message}</FormHelperText>
+          )}
+        </FormControl>
+      </Grid>
+    </>
+  );
 
   return (
     <Grid container spacing={{ xs: 1.5, sm: 2 }} sx={{ mt: { xs: 0.5, sm: 1 } }}>
@@ -142,6 +186,7 @@ export default function TransactionFormFields({
       </Grid>
       <Grid item xs={12} sm={6}>
         <CategoryAutocomplete
+          key={categoryKey}
           categories={getFilteredCategories()}
           leafOnly
           value={watchedCategoryId || ''}
@@ -204,60 +249,36 @@ export default function TransactionFormFields({
           rows={2}
         />
       </Grid>
-      <Grid item xs={12}>
-        {/* Date + Status default sensibly, so they stay out of the way
-            behind "More options" until you actually need them. */}
-        <Button
-          onClick={() => setShowMore((v) => !v)}
-          size="small"
-          endIcon={
-            <ExpandMoreIcon
-              sx={{
-                transition: 'transform 0.2s',
-                transform: showMore ? 'rotate(180deg)' : 'none',
-              }}
-            />
-          }
-          sx={{ textTransform: 'none', color: 'text.secondary', px: 0.5 }}
-        >
-          More options
-        </Button>
-        <Collapse in={showMore || !!errors.date || !!errors.status}>
-          <Grid container spacing={{ xs: 1.5, sm: 2 }} sx={{ mt: 0 }}>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                type="date"
-                label="Date *"
-                {...register('date')}
-                error={!!errors.date}
-                helperText={errors.date?.message}
-                InputLabelProps={{ shrink: true }}
+      {collapseDateStatus ? (
+        <Grid item xs={12}>
+          {/* Date + Status default sensibly, so they stay out of the way
+              behind "More options" until you actually need them. */}
+          <Button
+            onClick={() => setShowMore((v) => !v)}
+            size="small"
+            endIcon={
+              <ExpandMoreIcon
+                sx={{
+                  transition: 'transform 0.2s',
+                  transform: showMore ? 'rotate(180deg)' : 'none',
+                }}
               />
+            }
+            sx={{ textTransform: 'none', color: 'text.secondary', px: 0.5 }}
+          >
+            More options
+          </Button>
+          <Collapse in={showMore || !!errors.date || !!errors.status}>
+            <Grid container spacing={{ xs: 1.5, sm: 2 }} sx={{ mt: 0 }}>
+              {dateStatusFields}
             </Grid>
-            <Grid item xs={12} sm={6}>
-              <FormControl fullWidth error={!!errors.status}>
-                <InputLabel>Status</InputLabel>
-                <Select
-                  {...register('status')}
-                  label="Status"
-                  value={watchedStatus || ''}
-                  onChange={(e) => setValue('status', e.target.value)}
-                >
-                  {TRANSACTION_STATUSES.map((status) => (
-                    <MenuItem key={status} value={status}>
-                      {status}
-                    </MenuItem>
-                  ))}
-                </Select>
-                {errors.status && (
-                  <FormHelperText>{errors.status.message}</FormHelperText>
-                )}
-              </FormControl>
-            </Grid>
-          </Grid>
-        </Collapse>
-      </Grid>
+          </Collapse>
+        </Grid>
+      ) : (
+        // Batch rapid entry keeps Date + Status inline (no collapse), since
+        // each queued row commonly needs its own date.
+        dateStatusFields
+      )}
     </Grid>
   );
 }

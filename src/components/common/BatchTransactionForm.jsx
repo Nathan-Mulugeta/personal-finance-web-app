@@ -9,25 +9,11 @@ import {
   CircularProgress,
   DialogTitle,
   DialogContent,
-  FormControl,
-  FormHelperText,
-  Grid,
-  InputLabel,
-  MenuItem,
-  Select,
-  TextField,
   Typography,
-  useMediaQuery,
-  useTheme,
 } from '@mui/material';
 import { format } from 'date-fns';
 import { transactionSchema } from '../../schemas/transactionSchema';
-import {
-  TRANSACTION_TYPES,
-  TRANSACTION_STATUSES,
-} from '../../lib/api/transactions';
-import CategoryAutocomplete from './CategoryAutocomplete';
-import { flattenCategoryTree } from '../../utils/categoryHierarchy';
+import TransactionFormFields from './TransactionFormFields';
 
 /**
  * Batch Transaction Form Component
@@ -44,8 +30,6 @@ function BatchTransactionForm({
   keyboardVisible = false,
   keyboardHeight = 0,
 }) {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { accounts } = useSelector((state) => state.accounts);
   const { categories } = useSelector((state) => state.categories);
   const { settings } = useSelector((state) => state.settings);
@@ -54,6 +38,7 @@ function BatchTransactionForm({
   const [actionError, setActionError] = useState(null);
   const [formKey, setFormKey] = useState(0); // Increments to force re-mount for auto-focus
   const amountInputRef = useRef(null); // Ref for Amount field focus chaining
+  const categoryInputRef = useRef(null); // Ref for Category field focus chaining
   const initializedForRef = useRef(null); // Track which state has been initialized to prevent refresh reset
 
   // Get default account from settings
@@ -90,9 +75,6 @@ function BatchTransactionForm({
   });
 
   const watchedAccountId = watch('accountId');
-  const watchedCategoryId = watch('categoryId');
-  const watchedType = watch('type');
-  const watchedStatus = watch('status');
 
   // Reset form or populate with editing transaction (only when the editing state changes, not on background refresh)
   useEffect(() => {
@@ -148,20 +130,6 @@ function BatchTransactionForm({
       }
     }
   }, [watchedAccountId, accounts, setValue]);
-
-  // Filter categories by type and flatten with hierarchy
-  const getFilteredCategories = () => {
-    if (!watchedType) return flattenCategoryTree(categories);
-    let filtered;
-    if (watchedType === 'Income') {
-      filtered = categories.filter((cat) => cat.type === 'Income');
-    } else if (watchedType === 'Expense') {
-      filtered = categories.filter((cat) => cat.type === 'Expense');
-    } else {
-      filtered = categories;
-    }
-    return flattenCategoryTree(filtered);
-  };
 
   // Handle Next button - save and create new
   const handleNext = handleSubmit((data) => {
@@ -248,142 +216,19 @@ function BatchTransactionForm({
           </Alert>
         )}
 
-        <Grid container spacing={{ xs: 1.5, sm: 2 }} sx={{ mt: { xs: 0.5, sm: 1 } }}>
-          <Grid item xs={12} sm={6}>
-            <FormControl fullWidth error={!!errors.accountId}>
-              <InputLabel>Account *</InputLabel>
-              <Select
-                {...register('accountId')}
-                label="Account *"
-                value={watchedAccountId || ''}
-                onChange={(e) => setValue('accountId', e.target.value)}
-              >
-                {accounts
-                  .filter((acc) => acc.status === 'Active')
-                  .map((account) => (
-                    <MenuItem key={account.account_id} value={account.account_id}>
-                      {account.name} ({account.currency})
-                    </MenuItem>
-                  ))}
-              </Select>
-              {errors.accountId && (
-                <FormHelperText>{errors.accountId.message}</FormHelperText>
-              )}
-            </FormControl>
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <FormControl fullWidth error={!!errors.type}>
-              <InputLabel>Type *</InputLabel>
-              <Select
-                {...register('type')}
-                label="Type *"
-                value={watchedType || ''}
-                onChange={(e) => setValue('type', e.target.value)}
-              >
-                {TRANSACTION_TYPES.filter((t) => !t.includes('Transfer')).map(
-                  (type) => (
-                    <MenuItem key={type} value={type}>
-                      {type}
-                    </MenuItem>
-                  )
-                )}
-              </Select>
-              {errors.type && (
-                <FormHelperText>{errors.type.message}</FormHelperText>
-              )}
-            </FormControl>
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <CategoryAutocomplete
-              key={formKey}
-              categories={getFilteredCategories()}
-              leafOnly
-              value={watchedCategoryId || ''}
-              onChange={(id) => setValue('categoryId', id)}
-              onSelect={() => {
-                // Focus Amount field after category selection
-                amountInputRef.current?.focus();
-              }}
-              label="Category *"
-              error={!!errors.categoryId}
-              helperText={
-                errors.categoryId?.message ||
-                (!watchedType ? 'Please select a transaction type first' : undefined)
-              }
-              disabled={!watchedType}
-              autoFocus={!!watchedType}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              type="date"
-              label="Date *"
-              {...register('date')}
-              error={!!errors.date}
-              helperText={errors.date?.message}
-              InputLabelProps={{ shrink: true }}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              type="number"
-              label="Amount *"
-              {...register('amount', { valueAsNumber: true })}
-              inputRef={amountInputRef}
-              error={!!errors.amount}
-              helperText={errors.amount?.message}
-              inputProps={{ step: '0.01', min: '0.01' }}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              label="Currency"
-              {...register('currency')}
-              error={!!errors.currency}
-              helperText={
-                errors.currency?.message || 'Auto-filled from account selection'
-              }
-              disabled
-              InputLabelProps={{
-                shrink: !!watch('currency'),
-              }}
-            />
-          </Grid>
-          <Grid item xs={12}>
-            <TextField
-              fullWidth
-              label="Description"
-              {...register('description')}
-              error={!!errors.description}
-              helperText={errors.description?.message}
-              multiline
-              rows={2}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <FormControl fullWidth error={!!errors.status}>
-              <InputLabel>Status</InputLabel>
-              <Select
-                {...register('status')}
-                label="Status"
-                value={watchedStatus || ''}
-                onChange={(e) => setValue('status', e.target.value)}
-              >
-                {TRANSACTION_STATUSES.map((status) => (
-                  <MenuItem key={status} value={status}>
-                    {status}
-                  </MenuItem>
-                ))}
-              </Select>
-              {errors.status && (
-                <FormHelperText>{errors.status.message}</FormHelperText>
-              )}
-            </FormControl>
-          </Grid>
-        </Grid>
+        <TransactionFormFields
+          register={register}
+          setValue={setValue}
+          watch={watch}
+          errors={errors}
+          accounts={accounts}
+          categories={categories}
+          amountInputRef={amountInputRef}
+          categoryInputRef={categoryInputRef}
+          autoFocusCategory
+          collapseDateStatus={false}
+          categoryKey={formKey}
+        />
       </DialogContent>
 
       {/* Action Buttons */}
@@ -401,9 +246,7 @@ function BatchTransactionForm({
       >
         <Button
           onClick={onCancel}
-          disabled={isProcessing}
-          size={isMobile ? 'medium' : 'medium'}
-          sx={{
+          disabled={isProcessing}          sx={{
             textTransform: 'none',
             flex: 1,
           }}
@@ -413,9 +256,7 @@ function BatchTransactionForm({
         <Button
           onClick={handleNext}
           variant="outlined"
-          disabled={isProcessing}
-          size={isMobile ? 'medium' : 'medium'}
-          startIcon={isProcessing ? <CircularProgress size={16} color="inherit" /> : null}
+          disabled={isProcessing}          startIcon={isProcessing ? <CircularProgress size={16} color="inherit" /> : null}
           sx={{
             textTransform: 'none',
             flex: 1,
@@ -426,9 +267,7 @@ function BatchTransactionForm({
         <Button
           onClick={handleDone}
           variant="contained"
-          disabled={isProcessing || (queuedCount === 0 && !watch('amount'))}
-          size={isMobile ? 'medium' : 'medium'}
-          sx={{
+          disabled={isProcessing || (queuedCount === 0 && !watch('amount'))}          sx={{
             textTransform: 'none',
             flex: 1,
           }}
