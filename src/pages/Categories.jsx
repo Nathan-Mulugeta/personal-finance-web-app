@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -34,7 +34,6 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import CategoryIcon from '@mui/icons-material/Category';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import {
-  fetchCategories,
   createCategory,
   updateCategory,
   deleteCategory,
@@ -56,8 +55,9 @@ function Categories() {
   const dispatch = useDispatch();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const { categories, loading, backgroundLoading, isInitialized, error } =
-    useSelector((state) => state.categories);
+  const { categories, loading, isInitialized, error } = useSelector(
+    (state) => state.categories
+  );
   const [openDialog, setOpenDialog] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -272,10 +272,9 @@ function Categories() {
 
   // Render category tree recursively - Google Sheets-like clean rows
   const renderCategoryTree = (categoryNodes, level = 0) => {
-    return categoryNodes.map((category, index) => {
+    return categoryNodes.map((category) => {
       const hasChildren = category.children && category.children.length > 0;
       const isExpanded = expandedCategories.has(category.category_id);
-      const isLast = index === categoryNodes.length - 1;
 
       return (
         <Box key={category.category_id}>

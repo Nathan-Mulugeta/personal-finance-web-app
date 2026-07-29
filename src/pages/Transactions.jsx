@@ -8,7 +8,6 @@ import {
   selectShowBudgetOnRows,
 } from '../store/selectors';
 import {
-  Badge,
   Box,
   Button,
   Checkbox,
@@ -79,6 +78,7 @@ import {
 } from '../components/common/transactionRowStyles';
 import AddTransferDialog from '../components/common/AddTransferDialog';
 import BulkEditTransactionsDialog from '../components/common/BulkEditTransactionsDialog';
+import HeaderActionButton from '../components/common/HeaderActionButton';
 import SwipeToDelete from '../components/common/SwipeToDelete';
 import ConfirmDeleteDialog from '../components/common/ConfirmDeleteDialog';
 import RowBudgetBadge from '../components/common/RowBudgetBadge';
@@ -993,57 +993,24 @@ function Transactions() {
             flexShrink: 0,
           }}
         >
-          <IconButton
+          <HeaderActionButton
+            variant="secondary"
+            label="Filters"
+            badgeContent={activeFilterCount}
+            icon={<FilterListIcon sx={{ fontSize: 20 }} />}
             onClick={() => setFiltersOpen(!filtersOpen)}
-            aria-label="Filters"
-            sx={{
-              width: 36,
-              height: 36,
-              color: 'text.secondary',
-              '&:hover': { backgroundColor: 'action.hover' },
-            }}
-          >
-            <Badge
-              badgeContent={activeFilterCount}
-              color="primary"
-              overlap="circular"
-              sx={{
-                '& .MuiBadge-badge': {
-                  fontSize: '0.5625rem',
-                  height: 15,
-                  minWidth: 15,
-                  px: 0.25,
-                },
-              }}
-            >
-              <FilterListIcon sx={{ fontSize: 20 }} />
-            </Badge>
-          </IconButton>
-          <IconButton
+          />
+          <HeaderActionButton
+            variant="secondary"
+            label="New transfer"
+            icon={<SwapHorizIcon sx={{ fontSize: 20 }} />}
             onClick={handleOpenTransferDialog}
-            aria-label="New transfer"
-            sx={{
-              width: 36,
-              height: 36,
-              color: 'text.secondary',
-              '&:hover': { backgroundColor: 'action.hover' },
-            }}
-          >
-            <SwapHorizIcon sx={{ fontSize: 20 }} />
-          </IconButton>
-          <IconButton
+          />
+          <HeaderActionButton
+            label="Add transaction"
+            icon={<AddIcon sx={{ fontSize: 20 }} />}
             onClick={() => setAddTransactionOpen(true)}
-            aria-label="Add transaction"
-            sx={{
-              width: 36,
-              height: 36,
-              backgroundColor: 'primary.main',
-              color: 'primary.contrastText',
-              '&:hover': { backgroundColor: 'primary.dark' },
-            }}
-          >
-            <AddIcon sx={{ fontSize: 20 }} />
-          </IconButton>
+          />
         </Box>
       </Box>
 

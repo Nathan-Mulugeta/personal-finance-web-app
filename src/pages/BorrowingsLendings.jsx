@@ -67,13 +67,12 @@ function BorrowingsLendings() {
   const dispatch = useDispatch();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const { records, summary, loading, backgroundLoading, isInitialized, error } =
-    useSelector((state) => state.borrowingsLendings);
+  const { records, loading, isInitialized, error } = useSelector(
+    (state) => state.borrowingsLendings
+  );
   const { allTransactions } = useSelector((state) => state.transactions);
-  const { accounts } = useSelector((state) => state.accounts);
   const { settings } = useSelector((state) => state.settings);
   const { exchangeRates } = useSelector((state) => state.exchangeRates);
-  const appInitialized = useSelector((state) => state.appInit.isInitialized);
   const [openDialog, setOpenDialog] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [createError, setCreateError] = useState(null);
@@ -117,7 +116,6 @@ function BorrowingsLendings() {
     handleSubmit: handleSubmitPayment,
     formState: { errors: errorsPayment },
     reset: resetPayment,
-    setValue: setValuePayment,
   } = useForm({
     defaultValues: {
       amount: '',
@@ -144,9 +142,6 @@ function BorrowingsLendings() {
   const watchedTransactionId = watchCreate('originalTransactionId');
   const watchedEditStatus = watchEdit('status');
 
-  const transactionsInitialized = useSelector(
-    (state) => state.transactions.isInitialized
-  );
 
   // Track previous transaction count to detect new transactions
   const prevTransactionCount = useRef(0);
@@ -437,7 +432,7 @@ function BorrowingsLendings() {
     setIsPaying(true);
     setPaymentError(null);
     try {
-      const result = await dispatch(
+      await dispatch(
         recordPayment({
           recordId: paymentDialog.record_id,
           paymentData: {
@@ -464,7 +459,7 @@ function BorrowingsLendings() {
   const handleMarkAsFullyPaid = async (record) => {
     setIsMarkingPaid(record.record_id);
     try {
-      const result = await dispatch(markAsFullyPaid(record.record_id)).unwrap();
+      await dispatch(markAsFullyPaid(record.record_id)).unwrap();
 
       // Also refresh summary
       dispatch(fetchSummary({}));
@@ -510,20 +505,6 @@ function BorrowingsLendings() {
       currency: '',
       entityName: '',
     });
-  };
-
-  // Get transaction description helper
-  const getTransactionDescription = (transactionId) => {
-    const transaction = allTransactions.find(
-      (txn) => txn.transaction_id === transactionId
-    );
-    return transaction?.description || 'Unknown transaction';
-  };
-
-  // Get account name helper
-  const getAccountName = (accountId) => {
-    const account = accounts.find((acc) => acc.account_id === accountId);
-    return account?.name || 'Unknown';
   };
 
   // Google-style chip styling for status badges

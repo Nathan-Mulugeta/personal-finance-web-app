@@ -27,6 +27,7 @@ import { updateSettings } from '../store/slices/settingsSlice';
 import PageSkeleton from '../components/common/PageSkeleton';
 import ErrorMessage from '../components/common/ErrorMessage';
 import CategoryAutocomplete from '../components/common/CategoryAutocomplete';
+import PageHeader from '../components/common/PageHeader';
 import { usePageRefresh } from '../hooks/usePageRefresh';
 import { persistor } from '../store';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -154,22 +155,10 @@ function Settings() {
 
   return (
     <Box>
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          mb: { xs: 2, sm: 3 },
-          gap: 1,
-        }}
-      >
-        <Typography
-          variant="h4"
-          sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' }, fontWeight: 500 }}
-        >
-          Settings
-        </Typography>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
+      <PageHeader
+        title="Settings"
+        sx={{ mb: { xs: 2, sm: 3 } }}
+        actions={
           <Tooltip title={isRefreshing ? 'Refreshing…' : 'Refresh data'}>
             <span>
               <IconButton
@@ -186,8 +175,8 @@ function Settings() {
               </IconButton>
             </span>
           </Tooltip>
-        </Box>
-      </Box>
+        }
+      />
 
       {error && <ErrorMessage error={error} />}
 

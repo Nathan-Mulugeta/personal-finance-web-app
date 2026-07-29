@@ -21,7 +21,6 @@ import {
   TextField,
   MenuItem,
   InputAdornment,
-  Badge,
   Collapse,
   useMediaQuery,
   useTheme,
@@ -42,6 +41,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import BudgetDialog from '../components/common/BudgetDialog';
 import CategoryTransactionsList from '../components/common/CategoryTransactionsList';
 import SummaryTiles from '../components/common/SummaryTiles';
+import HeaderActionButton from '../components/common/HeaderActionButton';
 import {
   editableUnderlineSx,
   editableAmountBoxSx,
@@ -2116,42 +2116,18 @@ function Reports() {
           Budget vs Actual
         </Typography>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-          <IconButton
+          <HeaderActionButton
+            variant="secondary"
+            label="Filter"
+            badgeContent={activeFilterCount}
+            icon={<FilterListIcon sx={{ fontSize: 20 }} />}
             onClick={() => setFiltersOpen((open) => !open)}
-            aria-label="Filter"
-            sx={{ width: 36, height: 36, color: 'text.secondary' }}
-          >
-            <Badge
-              badgeContent={activeFilterCount}
-              color="primary"
-              overlap="circular"
-              sx={{
-                '& .MuiBadge-badge': {
-                  fontSize: '0.5625rem',
-                  height: 15,
-                  minWidth: 15,
-                  px: 0.25,
-                },
-              }}
-            >
-              <FilterListIcon sx={{ fontSize: 20 }} />
-            </Badge>
-          </IconButton>
-          <IconButton
+          />
+          <HeaderActionButton
+            label="Add budget"
+            icon={<AddIcon sx={{ fontSize: 20 }} />}
             onClick={() => handleOpenBudgetDialog()}
-            aria-label="Add budget"
-            sx={{
-              backgroundColor: 'primary.main',
-              color: 'primary.contrastText',
-              width: 36,
-              height: 36,
-              '&:hover': {
-                backgroundColor: 'primary.dark',
-              },
-            }}
-          >
-            <AddIcon sx={{ fontSize: 20 }} />
-          </IconButton>
+          />
         </Box>
       </Box>
 
