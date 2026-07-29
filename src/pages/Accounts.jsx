@@ -29,6 +29,11 @@ import AddIcon from '@mui/icons-material/Add';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
+import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import SavingsIcon from '@mui/icons-material/Savings';
+import CreditCardIcon from '@mui/icons-material/CreditCard';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import PaymentsIcon from '@mui/icons-material/Payments';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import {
@@ -49,6 +54,17 @@ import { formatCurrency, currencyLabel } from '../utils/currencyConversion';
 import { usePageRefresh } from '../hooks/usePageRefresh';
 import { getOutlinedStatusChipSx } from '../utils/chipStyles';
 import { useAutoDismissError } from '../hooks/useAutoDismissError';
+
+// A leading glyph per account type — the main "real banking app" cue while
+// keeping rows to one compact line. Falls back to the generic bank icon.
+const ACCOUNT_TYPE_ICONS = {
+  Checking: AccountBalanceWalletIcon,
+  Savings: SavingsIcon,
+  Credit: CreditCardIcon,
+  Investment: TrendingUpIcon,
+  Cash: PaymentsIcon,
+  Bank: AccountBalanceIcon,
+};
 
 function Accounts() {
   const dispatch = useDispatch();
@@ -403,13 +419,16 @@ function Accounts() {
           ) => {
             const currentBalance =
               account.current_balance ?? account.opening_balance ?? 0;
+            const TypeIcon =
+              ACCOUNT_TYPE_ICONS[account.type] || AccountBalanceIcon;
+            const isInactive = account.status !== 'Active';
             return (
               <Box
                 key={account.account_id}
                 onClick={() => handleOpenDialog(account)}
                 sx={{
                   py: 1,
-                  pl: 1,
+                  pl: 0.5,
                   display: 'flex',
                   alignItems: 'center',
                   gap: 1,
@@ -418,6 +437,22 @@ function Accounts() {
                   ...pressableSx,
                 }}
               >
+                <Box
+                  sx={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: '50%',
+                    flexShrink: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: 'action.hover',
+                    color: 'text.secondary',
+                    opacity: isInactive ? 0.5 : 1,
+                  }}
+                >
+                  <TypeIcon sx={{ fontSize: 18 }} />
+                </Box>
                 <Box
                   sx={{
                     minWidth: 0,
