@@ -2453,94 +2453,8 @@ function Reports() {
             )}
       </Box>
 
-      {/* No section rule here on mobile: the full-bleed divider looked odd
-          stacked with the summary's own borders and the "Biggest changes"
-          header just below it. The uppercase header is enough of a break on
-          mobile; desktop keeps the rule. */}
-      <Divider sx={[PAGE_DIVIDER_SX, { display: { xs: 'none', md: 'block' } }]} />
-
-      {/* Biggest expense changes vs the previous period. */}
-      {biggestMovers.length > 0 && (
-          <Box sx={{ mt: { xs: 1.5, sm: 2 }, mb: { xs: 2.5, sm: 3 } }}>
-            <Box
-              onClick={() => setMoversExpanded((v) => !v)}
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                cursor: 'pointer',
-                py: 0.25,
-                ...tappableRowSx,
-              }}
-            >
-              <Typography
-                sx={{
-                  fontSize: '0.6875rem',
-                  fontWeight: 700,
-                  letterSpacing: 0.6,
-                  textTransform: 'uppercase',
-                  color: 'text.secondary',
-                }}
-              >
-                Biggest changes vs {periodWord}
-              </Typography>
-              <ExpandMoreIcon
-                sx={{
-                  fontSize: 20,
-                  color: 'text.secondary',
-                  transition: 'transform 0.2s',
-                  transform: moversExpanded ? 'none' : 'rotate(-90deg)',
-                }}
-              />
-            </Box>
-            <Collapse in={moversExpanded}>
-            <Box sx={{ display: 'flex', flexDirection: 'column', mt: 0.5 }}>
-              {biggestMovers.map((m) => {
-                const up = m.delta > 0;
-                const Arrow = up ? ArrowDropUpIcon : ArrowDropDownIcon;
-                return (
-                  <Box
-                    key={m.categoryId}
-                    onClick={() => handleRowClick(m.categoryId, 'Expense')}
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: 1,
-                      py: 0.75,
-                      '&:not(:last-of-type)': {
-                        borderBottom: '1px solid',
-                        borderColor: 'divider',
-                      },
-                      ...tappableRowSx,
-                    }}
-                  >
-                    <Typography
-                      noWrap
-                      sx={{ fontSize: '0.875rem', minWidth: 0 }}
-                    >
-                      {m.name}
-                    </Typography>
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        flexShrink: 0,
-                        color: up ? 'google.red' : 'google.green',
-                      }}
-                    >
-                      <Arrow sx={{ fontSize: 20 }} />
-                      <Typography sx={{ fontSize: '0.8125rem', fontWeight: 600 }}>
-                        {fmt(Math.abs(m.delta), baseCurrency)}
-                      </Typography>
-                    </Box>
-                  </Box>
-                );
-              })}
-            </Box>
-            </Collapse>
-          </Box>
-      )}
+      {/* Section rule between the summary and the category detail below. */}
+      <Divider sx={PAGE_DIVIDER_SX} />
 
       {/* Off-budget filter — a control for the category sections below */}
       {attentionCount > 0 && (
@@ -2753,6 +2667,90 @@ function Reports() {
           </Box>
           )}
       </Box>
+
+      {/* Biggest changes vs the previous period — a trends footer at the very
+          bottom, so it no longer interrupts the summary → category-detail flow. */}
+      {biggestMovers.length > 0 && (
+        <>
+          <Divider sx={PAGE_DIVIDER_SX} />
+          <Box sx={{ mb: { xs: 2.5, sm: 3 } }}>
+            <Box
+              onClick={() => setMoversExpanded((v) => !v)}
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                cursor: 'pointer',
+                py: 0.25,
+                ...tappableRowSx,
+              }}
+            >
+              <Typography
+                sx={{
+                  fontSize: '0.6875rem',
+                  fontWeight: 700,
+                  letterSpacing: 0.6,
+                  textTransform: 'uppercase',
+                  color: 'text.secondary',
+                }}
+              >
+                Biggest changes vs {periodWord}
+              </Typography>
+              <ExpandMoreIcon
+                sx={{
+                  fontSize: 20,
+                  color: 'text.secondary',
+                  transition: 'transform 0.2s',
+                  transform: moversExpanded ? 'none' : 'rotate(-90deg)',
+                }}
+              />
+            </Box>
+            <Collapse in={moversExpanded}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', mt: 0.5 }}>
+                {biggestMovers.map((m) => {
+                  const up = m.delta > 0;
+                  const Arrow = up ? ArrowDropUpIcon : ArrowDropDownIcon;
+                  return (
+                    <Box
+                      key={m.categoryId}
+                      onClick={() => handleRowClick(m.categoryId, 'Expense')}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 1,
+                        py: 0.75,
+                        '&:not(:last-of-type)': {
+                          borderBottom: '1px solid',
+                          borderColor: 'divider',
+                        },
+                        ...tappableRowSx,
+                      }}
+                    >
+                      <Typography noWrap sx={{ fontSize: '0.875rem', minWidth: 0 }}>
+                        {m.name}
+                      </Typography>
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          flexShrink: 0,
+                          color: up ? 'google.red' : 'google.green',
+                        }}
+                      >
+                        <Arrow sx={{ fontSize: 20 }} />
+                        <Typography sx={{ fontSize: '0.8125rem', fontWeight: 600 }}>
+                          {fmt(Math.abs(m.delta), baseCurrency)}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  );
+                })}
+              </Box>
+            </Collapse>
+          </Box>
+        </>
+      )}
 
       {/* Transaction Modal */}
       <Dialog
