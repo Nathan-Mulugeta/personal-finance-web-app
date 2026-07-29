@@ -2,7 +2,6 @@ import { useEffect, useState, useMemo, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useForm } from 'react-hook-form';
 import {
-  Badge,
   Box,
   Button,
   Chip,
@@ -55,6 +54,8 @@ import PageSkeleton from '../components/common/PageSkeleton';
 import ErrorMessage from '../components/common/ErrorMessage';
 import EmptyState from '../components/common/EmptyState';
 import ConfirmDeleteDialog from '../components/common/ConfirmDeleteDialog';
+import PageHeader from '../components/common/PageHeader';
+import HeaderActionButton from '../components/common/HeaderActionButton';
 import { usePageRefresh } from '../hooks/usePageRefresh';
 import {
   formatCurrency,
@@ -616,75 +617,33 @@ function BorrowingsLendings() {
 
   return (
     <Box>
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 1,
-          mb: { xs: 2, sm: 3 },
-        }}
-      >
-        <Typography
-          variant="h4"
-          sx={{
-            fontSize: { xs: '1.25rem', sm: '1.5rem' },
-            fontWeight: 500,
-            minWidth: 0,
-          }}
-          noWrap
-        >
-          Borrowings/Lendings
-        </Typography>
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: { xs: 0.25, sm: 0.5 },
-            flexShrink: 0,
-          }}
-        >
-          <IconButton
-            onClick={() => setFiltersOpen(!filtersOpen)}
-            aria-label="Filters"
+      <PageHeader
+        title="Borrowings/Lendings"
+        sx={{ mb: { xs: 2, sm: 3 } }}
+        actions={
+          <Box
             sx={{
-              width: 36,
-              height: 36,
-              color: 'text.secondary',
-              '&:hover': { backgroundColor: 'action.hover' },
+              display: 'flex',
+              alignItems: 'center',
+              gap: { xs: 0.25, sm: 0.5 },
+              flexShrink: 0,
             }}
           >
-            <Badge
+            <HeaderActionButton
+              variant="secondary"
+              label="Filters"
               badgeContent={activeFilterCount}
-              color="primary"
-              overlap="circular"
-              sx={{
-                '& .MuiBadge-badge': {
-                  fontSize: '0.5625rem',
-                  height: 15,
-                  minWidth: 15,
-                  px: 0.25,
-                },
-              }}
-            >
-              <FilterListIcon sx={{ fontSize: 20 }} />
-            </Badge>
-          </IconButton>
-          <IconButton
-            onClick={handleOpenDialog}
-            aria-label="Add record"
-            sx={{
-              width: 36,
-              height: 36,
-              backgroundColor: 'primary.main',
-              color: 'primary.contrastText',
-              '&:hover': { backgroundColor: 'primary.dark' },
-            }}
-          >
-            <AddIcon sx={{ fontSize: 20 }} />
-          </IconButton>
-        </Box>
-      </Box>
+              icon={<FilterListIcon sx={{ fontSize: 20 }} />}
+              onClick={() => setFiltersOpen(!filtersOpen)}
+            />
+            <HeaderActionButton
+              label="Add record"
+              icon={<AddIcon sx={{ fontSize: 20 }} />}
+              onClick={handleOpenDialog}
+            />
+          </Box>
+        }
+      />
 
       {error && <ErrorMessage error={error} />}
 

@@ -3,7 +3,6 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
-  Badge,
   Box,
   Button,
   Chip,
@@ -46,6 +45,8 @@ import { CATEGORY_TYPES, CATEGORY_STATUSES } from '../lib/api/categories';
 import PageSkeleton from '../components/common/PageSkeleton';
 import ErrorMessage from '../components/common/ErrorMessage';
 import ConfirmDeleteDialog from '../components/common/ConfirmDeleteDialog';
+import PageHeader from '../components/common/PageHeader';
+import HeaderActionButton from '../components/common/HeaderActionButton';
 import { usePageRefresh } from '../hooks/usePageRefresh';
 import { getStatusChipSx } from '../utils/chipStyles';
 import { buildCategoryTree } from '../utils/categoryHierarchy';
@@ -473,76 +474,33 @@ function Categories() {
 
   return (
     <Box>
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          mb: { xs: 2, sm: 2 },
-          gap: 1,
-        }}
-      >
-        <Typography
-          variant="h5"
-          noWrap
-          sx={{
-            fontSize: { xs: '1.25rem', sm: '1.5rem' },
-            fontWeight: 500,
-            color: 'text.primary',
-            minWidth: 0,
-          }}
-        >
-          Categories
-        </Typography>
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: { xs: 0.25, sm: 0.5 },
-            flexShrink: 0,
-          }}
-        >
-          <IconButton
-            onClick={() => setFiltersOpen(!filtersOpen)}
-            aria-label="Filters"
+      <PageHeader
+        title="Categories"
+        sx={{ mb: { xs: 2, sm: 2 } }}
+        actions={
+          <Box
             sx={{
-              width: 36,
-              height: 36,
-              color: 'text.secondary',
-              '&:hover': { backgroundColor: 'action.hover' },
+              display: 'flex',
+              alignItems: 'center',
+              gap: { xs: 0.25, sm: 0.5 },
+              flexShrink: 0,
             }}
           >
-            <Badge
+            <HeaderActionButton
+              variant="secondary"
+              label="Filters"
               badgeContent={activeFilterCount}
-              color="primary"
-              overlap="circular"
-              sx={{
-                '& .MuiBadge-badge': {
-                  fontSize: '0.5625rem',
-                  height: 15,
-                  minWidth: 15,
-                  px: 0.25,
-                },
-              }}
-            >
-              <FilterListIcon sx={{ fontSize: 20 }} />
-            </Badge>
-          </IconButton>
-          <IconButton
-            onClick={() => handleOpenDialog()}
-            aria-label="Add category"
-            sx={{
-              width: 36,
-              height: 36,
-              backgroundColor: 'primary.main',
-              color: 'primary.contrastText',
-              '&:hover': { backgroundColor: 'primary.dark' },
-            }}
-          >
-            <AddIcon sx={{ fontSize: 20 }} />
-          </IconButton>
-        </Box>
-      </Box>
+              icon={<FilterListIcon sx={{ fontSize: 20 }} />}
+              onClick={() => setFiltersOpen(!filtersOpen)}
+            />
+            <HeaderActionButton
+              label="Add category"
+              icon={<AddIcon sx={{ fontSize: 20 }} />}
+              onClick={() => handleOpenDialog()}
+            />
+          </Box>
+        }
+      />
 
       {error && <ErrorMessage error={error} />}
 

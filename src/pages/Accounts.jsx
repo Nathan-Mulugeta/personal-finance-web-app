@@ -44,6 +44,7 @@ import PageSkeleton from '../components/common/PageSkeleton';
 import EmptyState from '../components/common/EmptyState';
 import ErrorMessage from '../components/common/ErrorMessage';
 import ConfirmDeleteDialog from '../components/common/ConfirmDeleteDialog';
+import HeaderActionButton from '../components/common/HeaderActionButton';
 import { formatCurrency, currencyLabel } from '../utils/currencyConversion';
 import { usePageRefresh } from '../hooks/usePageRefresh';
 import { getOutlinedStatusChipSx } from '../utils/chipStyles';
@@ -358,19 +359,11 @@ function Accounts() {
             </Typography>
           )}
         </Box>
-        <IconButton
+        <HeaderActionButton
           onClick={() => handleOpenDialog()}
-          aria-label="Add account"
-          sx={{
-            backgroundColor: 'primary.main',
-            color: 'primary.contrastText',
-            width: 36,
-            height: 36,
-            '&:hover': { backgroundColor: 'primary.dark' },
-          }}
-        >
-          <AddIcon sx={{ fontSize: 20 }} />
-        </IconButton>
+          label="Add account"
+          icon={<AddIcon sx={{ fontSize: 20 }} />}
+        />
       </Box>
 
       {error && <ErrorMessage error={error} />}

@@ -5,7 +5,6 @@ import {
   selectCategoryNameGetter,
 } from '../store/selectors';
 import {
-  Badge,
   Box,
   Button,
   Chip,
@@ -34,6 +33,8 @@ import PageSkeleton from '../components/common/PageSkeleton';
 import ErrorMessage from '../components/common/ErrorMessage';
 import BudgetDialog from '../components/common/BudgetDialog';
 import SummaryTiles from '../components/common/SummaryTiles';
+import PageHeader from '../components/common/PageHeader';
+import HeaderActionButton from '../components/common/HeaderActionButton';
 import { budgetAppliesToMonth } from '../utils/budgetMatching';
 import { getStatusChipSx } from '../utils/chipStyles';
 import { usePageRefresh } from '../hooks/usePageRefresh';
@@ -449,101 +450,60 @@ function Budgets() {
 
   return (
     <Box>
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 1,
-          mb: { xs: 2, sm: 3 },
-        }}
-      >
-        <Typography
-          variant="h4"
-          sx={{
-            fontSize: { xs: '1.25rem', sm: '1.5rem' },
-            fontWeight: 500,
-            flexShrink: 0,
-          }}
-        >
-          Budgets
-        </Typography>
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: { xs: 0.25, sm: 0.5 },
-            minWidth: 0,
-          }}
-        >
-          <IconButton
-            onClick={handlePreviousMonth}
-            size="small"
-            aria-label="Previous month"
-            sx={{ p: 0.25, color: 'text.secondary' }}
-          >
-            <ChevronLeftIcon sx={{ fontSize: 20 }} />
-          </IconButton>
-          <TextField
-            size="small"
-            type="month"
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
+      <PageHeader
+        title="Budgets"
+        sx={{ mb: { xs: 2, sm: 3 } }}
+        actions={
+          <Box
             sx={{
-              width: { xs: 130, sm: 150 },
-              '& .MuiInputBase-input': { py: 0.5, fontSize: '0.8125rem' },
-            }}
-          />
-          <IconButton
-            onClick={handleNextMonth}
-            size="small"
-            aria-label="Next month"
-            sx={{ p: 0.25, color: 'text.secondary' }}
-          >
-            <ChevronRightIcon sx={{ fontSize: 20 }} />
-          </IconButton>
-          <IconButton
-            onClick={() => setFiltersOpen(!filtersOpen)}
-            aria-label="Filters"
-            sx={{
-              ml: { xs: 0.25, sm: 0.5 },
-              width: 36,
-              height: 36,
-              color: 'text.secondary',
-              '&:hover': { backgroundColor: 'action.hover' },
+              display: 'flex',
+              alignItems: 'center',
+              gap: { xs: 0.25, sm: 0.5 },
+              minWidth: 0,
             }}
           >
-            <Badge
-              badgeContent={activeFilterCount}
-              color="primary"
-              overlap="circular"
-              sx={{
-                '& .MuiBadge-badge': {
-                  fontSize: '0.5625rem',
-                  height: 15,
-                  minWidth: 15,
-                  px: 0.25,
-                },
-              }}
+            <IconButton
+              onClick={handlePreviousMonth}
+              size="small"
+              aria-label="Previous month"
+              sx={{ p: 0.25, color: 'text.secondary' }}
             >
-              <FilterListIcon sx={{ fontSize: 20 }} />
-            </Badge>
-          </IconButton>
-          <IconButton
-            onClick={() => handleOpenDialog()}
-            aria-label="Add budget"
-            sx={{
-              width: 36,
-              height: 36,
-              backgroundColor: 'primary.main',
-              color: 'primary.contrastText',
-              '&:hover': { backgroundColor: 'primary.dark' },
-            }}
-          >
-            <AddIcon sx={{ fontSize: 20 }} />
-          </IconButton>
-        </Box>
-      </Box>
+              <ChevronLeftIcon sx={{ fontSize: 20 }} />
+            </IconButton>
+            <TextField
+              size="small"
+              type="month"
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              sx={{
+                width: { xs: 130, sm: 150 },
+                '& .MuiInputBase-input': { py: 0.5, fontSize: '0.8125rem' },
+              }}
+            />
+            <IconButton
+              onClick={handleNextMonth}
+              size="small"
+              aria-label="Next month"
+              sx={{ p: 0.25, color: 'text.secondary' }}
+            >
+              <ChevronRightIcon sx={{ fontSize: 20 }} />
+            </IconButton>
+            <HeaderActionButton
+              variant="secondary"
+              label="Filters"
+              badgeContent={activeFilterCount}
+              icon={<FilterListIcon sx={{ fontSize: 20 }} />}
+              onClick={() => setFiltersOpen(!filtersOpen)}
+              sx={{ ml: { xs: 0.25, sm: 0.5 } }}
+            />
+            <HeaderActionButton
+              label="Add budget"
+              icon={<AddIcon sx={{ fontSize: 20 }} />}
+              onClick={() => handleOpenDialog()}
+            />
+          </Box>
+        }
+      />
 
       {error && <ErrorMessage error={error} />}
 
