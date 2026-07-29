@@ -358,6 +358,15 @@ function Home({ quickAddExpense = false }) {
           Home
         </Typography>
         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+          {/* Less-used flows in an overflow menu — kept to the LEFT of the
+              frequent actions so those stay at the edge */}
+          <IconButton
+            onClick={(e) => setMoreAnchor(e.currentTarget)}
+            aria-label="More add options"
+            sx={{ color: 'text.secondary', width: 36, height: 36 }}
+          >
+            <MoreVertIcon sx={{ fontSize: 20 }} />
+          </IconButton>
           {/* Primary quick actions — the ones used most */}
           <IconButton
             onClick={() => setReceiptCaptureOpen(true)}
@@ -415,15 +424,6 @@ function Home({ quickAddExpense = false }) {
                 transition: 'transform 0.2s ease-in-out',
               }}
             />
-          </IconButton>
-
-          {/* Less-used flows tucked into an overflow menu */}
-          <IconButton
-            onClick={(e) => setMoreAnchor(e.currentTarget)}
-            aria-label="More add options"
-            sx={{ color: 'text.secondary', width: 36, height: 36 }}
-          >
-            <MoreVertIcon sx={{ fontSize: 20 }} />
           </IconButton>
           <Menu
             anchorEl={moreAnchor}

@@ -128,7 +128,7 @@ const MobileTransactionRow = memo(function MobileTransactionRow({
       if (isToday(dateTime)) {
         return format(dateTime, 'h:mm a');
       } else {
-        return format(dateTime, 'MMM dd');
+        return format(dateTime, 'MMM dd · h:mm a');
       }
     } catch {
       return transaction.date;
@@ -1745,7 +1745,7 @@ function Transactions() {
                         if (isToday(dateTime)) {
                           return format(dateTime, 'MMM dd, yyyy h:mm a');
                         } else {
-                          return format(dateTime, 'MMM dd, yyyy');
+                          return format(dateTime, 'MMM dd, yyyy · h:mm a');
                         }
                       } catch {
                         return transaction.date;

@@ -69,7 +69,7 @@ const rowTapSx = {
 const dateDisplay = (dateStr) => {
   try {
     const dt = parseISO(dateStr);
-    return isToday(dt) ? format(dt, 'h:mm a') : format(dt, 'MMM dd');
+    return isToday(dt) ? format(dt, 'h:mm a') : format(dt, 'MMM dd · h:mm a');
   } catch {
     return dateStr;
   }

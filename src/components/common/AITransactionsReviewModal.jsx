@@ -98,12 +98,12 @@ function AITransactionsReviewModal({
   // Initialize state when modal opens
   useEffect(() => {
     if (open && parsedData) {
-      // Prefix the store name onto each item ("Walmart · Milk") for receipts,
-      // when enabled — so a scanned line reads back with where it came from.
+      // Append the store name after each item ("Milk · Walmart") for receipts,
+      // when enabled — so the item reads first and where it came from follows.
       const merchantName = (parsedData.merchant || '').trim();
       const withMerchant = (desc) =>
         isReceipt && prefixMerchant && merchantName && desc
-          ? `${merchantName} · ${desc}`
+          ? `${desc} · ${merchantName}`
           : desc;
       // Initialize transactions with tax toggle (default ON for receipts)
       // Store base amount (pre-tax) and calculate display amount based on applyTax
