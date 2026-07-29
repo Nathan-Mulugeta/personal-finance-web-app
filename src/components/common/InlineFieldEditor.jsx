@@ -101,7 +101,7 @@ function useDismissOutside(containerRef, onDismiss) {
  * `onCommit`/`onCancel` may fire more than once (Enter → trailing blur, outside
  * press → trailing blur); the parent's save/resolve guard makes them one-shot.
  */
-function InlineTextEdit({ initialText, numeric, placeholder, textSx, onCommit, onCancel }) {
+function InlineTextEdit({ initialText, numeric, wrap, placeholder, textSx, onCommit, onCancel }) {
   const ref = useRef(null);
 
   useLayoutEffect(() => {
@@ -143,8 +143,13 @@ function InlineTextEdit({ initialText, numeric, placeholder, textSx, onCommit, o
       sx={[
         {
           outline: 'none',
-          whiteSpace: 'pre',
+          // Amount stays on one line (whiteSpace: pre); a long description wraps
+          // instead of overflowing the row off-screen on mobile — including an
+          // unbroken run, hence overflowWrap: anywhere.
+          whiteSpace: wrap ? 'pre-wrap' : 'pre',
+          overflowWrap: wrap ? 'anywhere' : 'normal',
           display: 'inline-block',
+          maxWidth: '100%',
           lineHeight: 'inherit',
           minWidth: '0.5ch',
           '&:empty::before': {
@@ -302,7 +307,7 @@ export function InlineFieldInput({ transaction, field, onDone, textSx, prefix })
       component="span"
       onClick={(e) => e.stopPropagation()}
       sx={[
-        { whiteSpace: 'nowrap', display: 'inline-block', maxWidth: '100%' },
+        { display: 'inline-block', maxWidth: '100%', minWidth: 0 },
         textSx,
       ]}
     >
@@ -310,6 +315,7 @@ export function InlineFieldInput({ transaction, field, onDone, textSx, prefix })
       <InlineTextEdit
         initialText={transaction.description || ''}
         placeholder="Add note"
+        wrap
         textSx={textSx}
         onCommit={(text) => {
           const next = String(text).trim();
