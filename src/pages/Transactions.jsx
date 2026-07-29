@@ -1170,6 +1170,8 @@ function Transactions() {
           color="text.secondary"
           sx={{
             fontSize: '0.8125rem',
+            // Give the selection cluster the room on this row while selecting
+            display: selectionMode ? 'none' : 'block',
           }}
         >
           {(() => {
