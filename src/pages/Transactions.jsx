@@ -39,7 +39,6 @@ import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
-import CloseIcon from '@mui/icons-material/Close';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
@@ -1014,9 +1013,10 @@ function Transactions() {
         </Box>
       </Box>
 
-      {/* Date Navigation — becomes the selection toolbar in selection mode, so
-          the exit / select-all / count sit on one line with the actions
-          instead of pushing a second row below. */}
+      {/* Date Navigation - Compact. In selection mode the select-all / count /
+          actions appear on the left of the totals row (right side of the
+          header); the date nav and totals keep their place, so toggling only
+          reveals the cluster — nothing else moves. */}
       <Box
         sx={{
           mb: 1.5,
@@ -1024,68 +1024,12 @@ function Transactions() {
           borderBottom: '1px solid',
           borderColor: 'divider',
           display: 'flex',
-          flexDirection: selectionMode ? 'row' : { xs: 'column', sm: 'row' },
-          alignItems: selectionMode ? 'center' : { xs: 'flex-start', sm: 'center' },
+          flexDirection: { xs: 'column', sm: 'row' },
+          alignItems: { xs: 'flex-start', sm: 'center' },
           justifyContent: 'space-between',
           gap: { xs: 1, sm: 0 },
-          minHeight: 44,
         }}
       >
-        {selectionMode ? (
-          <>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
-              <IconButton
-                size="small"
-                onClick={exitSelectionMode}
-                aria-label="Exit selection"
-                sx={{ color: 'text.secondary' }}
-              >
-                <CloseIcon sx={{ fontSize: 18 }} />
-              </IconButton>
-              <Checkbox
-                checked={isAllSelected}
-                indeterminate={isIndeterminate}
-                onChange={(e) => handleSelectAll(e.target.checked)}
-                size="small"
-                sx={{ p: 0.5 }}
-              />
-              <Typography
-                variant="body2"
-                sx={{ fontSize: '0.8125rem', fontWeight: 500 }}
-              >
-                {selectedItems.size} selected
-              </Typography>
-            </Box>
-            {selectedItems.size > 0 && (
-              <Box sx={{ display: 'flex', gap: 0.25 }}>
-                {selectedTransactionIds.length > 0 && (
-                  <IconButton
-                    size="small"
-                    onClick={() => setBulkEditOpen(true)}
-                    disabled={isBulkDeleting}
-                    aria-label="Edit selected"
-                    sx={{ color: 'text.secondary' }}
-                  >
-                    <EditIcon sx={{ fontSize: 18 }} />
-                  </IconButton>
-                )}
-                <IconButton
-                  size="small"
-                  onClick={() => setBulkDeleteConfirm(true)}
-                  disabled={isBulkDeleting}
-                  aria-label="Delete selected"
-                  sx={{
-                    color: 'text.secondary',
-                    '&:hover': { color: 'google.red' },
-                  }}
-                >
-                  <DeleteIcon sx={{ fontSize: 18 }} />
-                </IconButton>
-              </Box>
-            )}
-          </>
-        ) : (
-          <>
         <Box
           sx={{
             display: 'flex',
@@ -1142,12 +1086,68 @@ function Transactions() {
         </Box>
         <Box
           sx={{
-            alignSelf: { xs: 'flex-end', sm: 'auto' },
+            alignSelf: { xs: 'stretch', sm: 'auto' },
+            width: { xs: '100%', sm: 'auto' },
             display: 'flex',
             alignItems: 'center',
             gap: 0.75,
+            justifyContent: selectionMode ? 'space-between' : 'flex-end',
           }}
         >
+          {/* Selection cluster — appears on the left in selection mode; the
+              totals + toggle keep their spot on the right, so toggling just
+              shows/hides this without shifting anything else. */}
+          {selectionMode && (
+            <Box
+              sx={{ display: 'flex', alignItems: 'center', gap: 0.25, minWidth: 0 }}
+            >
+              <Checkbox
+                checked={isAllSelected}
+                indeterminate={isIndeterminate}
+                onChange={(e) => handleSelectAll(e.target.checked)}
+                size="small"
+                sx={{ p: 0.5 }}
+              />
+              <Typography
+                variant="body2"
+                sx={{
+                  fontSize: '0.8125rem',
+                  fontWeight: 500,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {selectedItems.size} selected
+              </Typography>
+              {selectedItems.size > 0 && (
+                <>
+                  {selectedTransactionIds.length > 0 && (
+                    <IconButton
+                      size="small"
+                      onClick={() => setBulkEditOpen(true)}
+                      disabled={isBulkDeleting}
+                      aria-label="Edit selected"
+                      sx={{ color: 'text.secondary' }}
+                    >
+                      <EditIcon sx={{ fontSize: 18 }} />
+                    </IconButton>
+                  )}
+                  <IconButton
+                    size="small"
+                    onClick={() => setBulkDeleteConfirm(true)}
+                    disabled={isBulkDeleting}
+                    aria-label="Delete selected"
+                    sx={{
+                      color: 'text.secondary',
+                      '&:hover': { color: 'google.red' },
+                    }}
+                  >
+                    <DeleteIcon sx={{ fontSize: 18 }} />
+                  </IconButton>
+                </>
+              )}
+            </Box>
+          )}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
           <IconButton
             onClick={() =>
               selectionMode ? exitSelectionMode() : setSelectionMode(true)
@@ -1239,9 +1239,8 @@ function Transactions() {
             return `${totalStr} • ${countStr}`;
           })()}
         </Typography>
+          </Box>
         </Box>
-          </>
-        )}
       </Box>
 
       {error && (
