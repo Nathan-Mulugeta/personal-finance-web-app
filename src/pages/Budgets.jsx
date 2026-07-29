@@ -716,7 +716,10 @@ function Budgets() {
                 onClick={() => handleRowClick(budget)}
                 sx={{
                   py: 1.25,
-                  pl: indentLevel * 2,
+                  // Reserve the parent's chevron column (~2.75) so a row's whole
+                  // content lines up under the parent name; subcategory rows add
+                  // one indent level past it — a consistent flow like Reports.
+                  pl: 2.75 + indentLevel * 2,
                   borderBottom: '1px solid',
                   borderColor: 'divider',
                   ...pressableSx,
