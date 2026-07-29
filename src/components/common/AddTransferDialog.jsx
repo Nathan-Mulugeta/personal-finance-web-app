@@ -8,9 +8,6 @@ import {
   Button,
   CircularProgress,
   Collapse,
-  Dialog,
-  DialogTitle,
-  DialogContent,
   FormControl,
   FormHelperText,
   Grid,
@@ -20,8 +17,6 @@ import {
   Select,
   TextField,
   Typography,
-  useMediaQuery,
-  useTheme,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { format } from 'date-fns';
@@ -31,8 +26,8 @@ import { transferSchema } from '../../schemas/transferSchema';
 import { TRANSACTION_STATUSES } from '../../lib/api/transactions';
 import CategoryAutocomplete from './CategoryAutocomplete';
 import AccountAutocomplete from './AccountAutocomplete';
+import AppDialog from './AppDialog';
 import { flattenCategoryTree } from '../../utils/categoryHierarchy';
-import { useKeyboardAwareHeight } from '../../hooks/useKeyboardAwareHeight';
 import { selectAccountMap } from '../../store/selectors';
 
 /**
@@ -41,10 +36,7 @@ import { selectAccountMap } from '../../store/selectors';
  */
 function AddTransferDialog({ open, onClose }) {
   const dispatch = useDispatch();
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const { keyboardVisible, keyboardHeight } = useKeyboardAwareHeight();
-  
+
   const { accounts } = useSelector((state) => state.accounts);
   const { categories } = useSelector((state) => state.categories);
   const accountMap = useSelector(selectAccountMap);
@@ -227,45 +219,58 @@ function AddTransferDialog({ open, onClose }) {
   };
 
   return (
-    <Dialog
+    <AppDialog
       open={open}
       onClose={handleClose}
-      maxWidth="sm"
-      fullWidth
-      fullScreen={isMobile}
-      PaperProps={{
-        sx: isMobile
-          ? {
-              display: 'flex',
-              flexDirection: 'column',
-              height: '100%',
-              maxHeight: '100%',
-            }
-          : {},
-      }}
-    >
-      <form
-        onSubmit={handleSubmit(onSubmit, (errors) => {
-          console.log('Form validation errors:', errors);
-        })}
-        style={
-          isMobile
-            ? {
-                display: 'flex',
-                flexDirection: 'column',
-                height: '100%',
-                overflow: 'hidden',
-                paddingBottom: keyboardVisible ? `${keyboardHeight}px` : 0,
-              }
-            : {}
-        }
-      >
-        <DialogTitle sx={{ flexShrink: 0, pb: { xs: 1, sm: 2 } }}>
-          Create New Transfer
-        </DialogTitle>
-        <DialogContent
-          sx={{ flexGrow: 1, overflow: 'auto', pt: { xs: 1, sm: 2 } }}
+      title="Create New Transfer"
+      onSubmit={handleSubmit(onSubmit)}
+      contentSx={{ pt: { xs: 1, sm: 2 } }}
+      footer={
+        <Box
+          sx={{
+            flexShrink: 0,
+            p: { xs: 1.5, sm: 2 },
+            gap: 1,
+            display: 'flex',
+            justifyContent: 'flex-end',
+            borderTop: '1px solid',
+            borderColor: 'divider',
+            backgroundColor: 'background.paper',
+          }}
         >
+          <Button
+            onClick={handleClose}
+            disabled={isSubmitting}
+            size="medium"
+            sx={{
+              textTransform: 'none',
+              flex: { xs: 1, sm: 'none' },
+              minWidth: { xs: 'auto', sm: 100 },
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            variant="contained"
+            disabled={isSubmitting}
+            size="medium"
+            startIcon={
+              isSubmitting ? (
+                <CircularProgress size={16} color="inherit" />
+              ) : null
+            }
+            sx={{
+              textTransform: 'none',
+              flex: { xs: 1, sm: 'none' },
+              minWidth: { xs: 'auto', sm: 100 },
+            }}
+          >
+            {isSubmitting ? 'Creating...' : 'Create Transfer'}
+          </Button>
+        </Box>
+      }
+    >
           {actionError && (
             <Alert severity="error" sx={{ mb: 2 }} onClose={() => setActionError(null)}>
               {actionError}
@@ -483,52 +488,7 @@ function AddTransferDialog({ open, onClose }) {
               </Collapse>
             </Grid>
           </Grid>
-        </DialogContent>
-        <Box
-          sx={{
-            flexShrink: 0,
-            p: { xs: 1.5, sm: 2 },
-            gap: 1,
-            display: 'flex',
-            justifyContent: 'flex-end',
-            borderTop: '1px solid',
-            borderColor: 'divider',
-            backgroundColor: 'background.paper',
-          }}
-        >
-          <Button
-            onClick={handleClose}
-            disabled={isSubmitting}
-            size="medium"
-            sx={{
-              textTransform: 'none',
-              flex: { xs: 1, sm: 'none' },
-              minWidth: { xs: 'auto', sm: 100 },
-            }}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            variant="contained"
-            disabled={isSubmitting}
-            size="medium"
-            startIcon={
-              isSubmitting ? (
-                <CircularProgress size={16} color="inherit" />
-              ) : null
-            }
-            sx={{
-              textTransform: 'none',
-              flex: { xs: 1, sm: 'none' },
-              minWidth: { xs: 'auto', sm: 100 },
-            }}
-          >
-            {isSubmitting ? 'Creating...' : 'Create Transfer'}
-          </Button>
-        </Box>
-      </form>
-    </Dialog>
+    </AppDialog>
   );
 }
 
