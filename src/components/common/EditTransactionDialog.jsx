@@ -2,19 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import {
-  Alert,
-  Box,
-  Button,
-  CircularProgress,
-  FormControl,
-  FormHelperText,
-  Grid,
-  InputLabel,
-  MenuItem,
-  Select,
-  TextField,
-} from '@mui/material';
+import { Alert, Box, Button, CircularProgress } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { format } from 'date-fns';
 import {
@@ -22,16 +10,9 @@ import {
   deleteTransaction,
 } from '../../store/slices/transactionsSlice';
 import { transactionSchema } from '../../schemas/transactionSchema';
-import {
-  TRANSACTION_TYPES,
-  TRANSACTION_STATUSES,
-} from '../../lib/api/transactions';
-import CategoryAutocomplete from './CategoryAutocomplete';
-import BudgetInlineCue from './BudgetInlineCue';
-import AccountAutocomplete from './AccountAutocomplete';
 import ConfirmDeleteDialog from './ConfirmDeleteDialog';
 import AppDialog from './AppDialog';
-import { flattenCategoryTree } from '../../utils/categoryHierarchy';
+import TransactionFormFields from './TransactionFormFields';
 
 /**
  * Reusable Edit Transaction Dialog component.
@@ -79,9 +60,6 @@ function EditTransactionDialog({ open, onClose, transaction }) {
   });
 
   const watchedAccountId = watch('accountId');
-  const watchedCategoryId = watch('categoryId');
-  const watchedType = watch('type');
-  const watchedStatus = watch('status');
 
   // Reset form when dialog opens with transaction data (only once per transaction to prevent background refresh from resetting form data)
   useEffect(() => {
@@ -131,20 +109,6 @@ function EditTransactionDialog({ open, onClose, transaction }) {
       }
     }
   }, [watchedAccountId, accounts, setValue]);
-
-  // Filter categories by type and flatten with hierarchy
-  const getFilteredCategories = () => {
-    if (!watchedType) return flattenCategoryTree(categories);
-    let filtered;
-    if (watchedType === 'Income') {
-      filtered = categories.filter((cat) => cat.type === 'Income');
-    } else if (watchedType === 'Expense') {
-      filtered = categories.filter((cat) => cat.type === 'Expense');
-    } else {
-      filtered = categories;
-    }
-    return flattenCategoryTree(filtered);
-  };
 
   const handleClose = () => {
     setActionError(null);
@@ -268,146 +232,17 @@ function EditTransactionDialog({ open, onClose, transaction }) {
                 {actionError}
               </Alert>
             )}
-            <Grid
-              container
-              spacing={{ xs: 1.5, sm: 2 }}
-              sx={{ mt: { xs: 0.5, sm: 1 } }}
-            >
-              <Grid item xs={12} sm={6}>
-                <AccountAutocomplete
-                  accounts={accounts}
-                  value={watchedAccountId || ''}
-                  onChange={(id) => setValue('accountId', id)}
-                  label="Account"
-                  error={!!errors.accountId}
-                  helperText={errors.accountId?.message}
-                  required
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <FormControl fullWidth error={!!errors.type}>
-                  <InputLabel>Type *</InputLabel>
-                  <Select
-                    {...register('type')}
-                    label="Type *"
-                    value={watchedType || ''}
-                    onChange={(e) => setValue('type', e.target.value)}
-                  >
-                    {TRANSACTION_TYPES.filter(
-                      (t) => !t.includes('Transfer')
-                    ).map((type) => (
-                      <MenuItem key={type} value={type}>
-                        {type}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                  {errors.type && (
-                    <FormHelperText>{errors.type.message}</FormHelperText>
-                  )}
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <CategoryAutocomplete
-                  categories={getFilteredCategories()}
-                  leafOnly
-                  value={watchedCategoryId || ''}
-                  onChange={(id) => setValue('categoryId', id)}
-                  onSelect={() => {
-                    // Focus Amount field after category selection
-                    setTimeout(() => {
-                      amountInputRef.current?.focus();
-                    }, 50);
-                  }}
-                  label="Category *"
-                  error={!!errors.categoryId}
-                  helperText={
-                    errors.categoryId?.message ||
-                    (!watchedType
-                      ? 'Please select a transaction type first'
-                      : undefined)
-                  }
-                  disabled={!watchedType}
-                  inputRef={categoryInputRef}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  type="date"
-                  label="Date *"
-                  {...register('date')}
-                  error={!!errors.date}
-                  helperText={errors.date?.message}
-                  InputLabelProps={{ shrink: true }}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  type="number"
-                  label="Amount *"
-                  {...register('amount', { valueAsNumber: true })}
-                  inputRef={amountInputRef}
-                  error={!!errors.amount}
-                  helperText={errors.amount?.message}
-                  inputProps={{ step: '0.01', min: '0.01' }}
-                />
-                <BudgetInlineCue
-                  categoryId={watchedCategoryId}
-                  type={watchedType}
-                  amount={watch('amount')}
-                  amountCurrency={watch('currency')}
-                  excludeTransactionId={transaction?.transaction_id}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Currency"
-                  {...register('currency')}
-                  error={!!errors.currency}
-                  helperText={
-                    errors.currency?.message ||
-                    'Auto-filled from account selection'
-                  }
-                  disabled
-                  InputLabelProps={{
-                    shrink: !!watch('currency'),
-                  }}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Description"
-                  {...register('description')}
-                  error={!!errors.description}
-                  helperText={errors.description?.message}
-                  multiline
-                  rows={2}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <FormControl fullWidth error={!!errors.status}>
-                  <InputLabel>Status</InputLabel>
-                  <Select
-                    {...register('status')}
-                    label="Status"
-                    value={watchedStatus || ''}
-                    onChange={(e) => setValue('status', e.target.value)}
-                  >
-                    {TRANSACTION_STATUSES.map((status) => (
-                      <MenuItem key={status} value={status}>
-                        {status}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                  {errors.status && (
-                    <FormHelperText>{errors.status.message}</FormHelperText>
-                  )}
-                </FormControl>
-              </Grid>
-            </Grid>
+            <TransactionFormFields
+              register={register}
+              setValue={setValue}
+              watch={watch}
+              errors={errors}
+              accounts={accounts}
+              categories={categories}
+              amountInputRef={amountInputRef}
+              categoryInputRef={categoryInputRef}
+              excludeTransactionId={transaction?.transaction_id}
+            />
       </AppDialog>
 
       {/* Delete confirmation — shared destructive-confirm modal */}
