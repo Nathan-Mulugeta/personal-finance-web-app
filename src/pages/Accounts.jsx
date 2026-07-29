@@ -1,4 +1,4 @@
-import { useState, useMemo, Fragment } from 'react';
+import { useState, useMemo, useCallback, Fragment } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -25,6 +25,7 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import AddIcon from '@mui/icons-material/Add';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -55,15 +56,17 @@ import { usePageRefresh } from '../hooks/usePageRefresh';
 import { getOutlinedStatusChipSx } from '../utils/chipStyles';
 import { useAutoDismissError } from '../hooks/useAutoDismissError';
 
-// A leading glyph per account type — the main "real banking app" cue while
-// keeping rows to one compact line. Falls back to the generic bank icon.
-const ACCOUNT_TYPE_ICONS = {
-  Checking: AccountBalanceWalletIcon,
-  Savings: SavingsIcon,
-  Credit: CreditCardIcon,
-  Investment: TrendingUpIcon,
-  Cash: PaymentsIcon,
-  Bank: AccountBalanceIcon,
+// A leading glyph + accent colour per account type — the main "real banking
+// app" cue. `palette` is a theme palette key so both light and dark modes stay
+// correct; the avatar tints its background from the same colour. Falls back to
+// the generic bank icon in a neutral primary tint.
+const ACCOUNT_TYPE_META = {
+  Checking: { Icon: AccountBalanceWalletIcon, palette: 'primary' },
+  Savings: { Icon: SavingsIcon, palette: 'success' },
+  Credit: { Icon: CreditCardIcon, palette: 'secondary' },
+  Investment: { Icon: TrendingUpIcon, palette: 'warning' },
+  Cash: { Icon: PaymentsIcon, palette: 'info' },
+  Bank: { Icon: AccountBalanceIcon, palette: 'primary' },
 };
 
 function Accounts() {
@@ -92,8 +95,43 @@ function Accounts() {
     return [...accounts].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
   }, [accounts]);
 
+  const baseCurrency = useMemo(
+    () =>
+      settings.find((s) => s.setting_key === 'BaseCurrency')?.setting_value ||
+      'USD',
+    [settings]
+  );
+
+  // Latest known rate from `currency` → base currency, or null if none is
+  // cached. Used only for the clearly-labelled base-equivalent lines; the row
+  // and group amounts themselves always stay in their own original currency.
+  const rateToBase = useCallback(
+    (currency) => {
+      if (!currency) return null;
+      const from = currency.toUpperCase();
+      const to = baseCurrency.toUpperCase();
+      if (from === to) return 1;
+      const latest = (rows) =>
+        rows.sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+      const direct = latest(
+        (exchangeRates || []).filter(
+          (er) => er.from_currency === from && er.to_currency === to
+        )
+      );
+      if (direct) return direct.rate;
+      const reverse = latest(
+        (exchangeRates || []).filter(
+          (er) => er.from_currency === to && er.to_currency === from
+        )
+      );
+      return reverse?.rate ? 1 / reverse.rate : null;
+    },
+    [exchangeRates, baseCurrency]
+  );
+
   // Active accounts grouped by currency (manual sort order preserved);
-  // section totals are per-currency originals, never conversions
+  // section totals are per-currency originals. `baseTotal` is the same total
+  // converted to base for a secondary "≈" line only (null if no rate known).
   const currencyGroups = useMemo(() => {
     const groups = new Map();
     sortedAccounts
@@ -110,8 +148,14 @@ function Accounts() {
         group.accounts.push(account);
         group.total += account.current_balance ?? account.opening_balance ?? 0;
       });
-    return Array.from(groups.values());
-  }, [sortedAccounts]);
+    return Array.from(groups.values()).map((group) => {
+      const rate = rateToBase(group.currency);
+      return {
+        ...group,
+        baseTotal: rate != null ? group.total * rate : null,
+      };
+    });
+  }, [sortedAccounts, rateToBase]);
 
   const inactiveAccounts = useMemo(
     () => sortedAccounts.filter((account) => account.status !== 'Active'),
@@ -351,36 +395,77 @@ function Accounts() {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          mb: { xs: 1.5, sm: 2, md: 3 },
+          mb: { xs: 1, sm: 1.5 },
           gap: { xs: 1, sm: 0 },
         }}
       >
-        <Box>
-          <Typography
-            variant="h4"
-            sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' }, fontWeight: 500 }}
-          >
-            Accounts
-          </Typography>
-          {summaryData && (
-            <Typography
-              variant="caption"
-              sx={{ fontSize: '0.75rem', color: 'text.secondary' }}
-            >
-              Total:{' '}
-              {formatCurrency(
-                summaryData.totalBalance || 0,
-                summaryData.baseCurrency || 'USD'
-              )}
-            </Typography>
-          )}
-        </Box>
+        <Typography
+          variant="h4"
+          sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' }, fontWeight: 500 }}
+        >
+          Accounts
+        </Typography>
         <HeaderActionButton
           onClick={() => handleOpenDialog()}
           label="Add account"
           icon={<AddIcon sx={{ fontSize: 20 }} />}
         />
       </Box>
+
+      {/* Net-worth hero — the base-currency total across accounts, promoted from
+          a tiny caption. The per-currency originals below stay the source of
+          truth; this is the one deliberate aggregate conversion. */}
+      {summaryData && (
+        <Box sx={{ mb: { xs: 2, sm: 2.5 } }}>
+          <Typography
+            sx={{
+              fontSize: '0.6875rem',
+              fontWeight: 600,
+              letterSpacing: 0.6,
+              textTransform: 'uppercase',
+              color: 'text.secondary',
+            }}
+          >
+            Net worth
+          </Typography>
+          <Typography
+            sx={{
+              fontSize: { xs: '1.75rem', sm: '2rem' },
+              fontWeight: 600,
+              lineHeight: 1.15,
+              color:
+                (summaryData.totalBalance || 0) < 0
+                  ? 'google.red'
+                  : 'text.primary',
+            }}
+          >
+            {formatCurrency(
+              summaryData.totalBalance || 0,
+              summaryData.baseCurrency || baseCurrency
+            )}
+          </Typography>
+          {(() => {
+            const activeCount = currencyGroups.reduce(
+              (n, g) => n + g.accounts.length,
+              0
+            );
+            const currencyCount = currencyGroups.length;
+            return (
+              <Typography
+                variant="caption"
+                sx={{ fontSize: '0.75rem', color: 'text.secondary' }}
+              >
+                {activeCount} account{activeCount !== 1 ? 's' : ''}
+                {currencyCount > 1
+                  ? ` · ${currencyCount} currencies · in ${
+                      summaryData.baseCurrency || baseCurrency
+                    }`
+                  : ''}
+              </Typography>
+            );
+          })()}
+        </Box>
+      )}
 
       {error && <ErrorMessage error={error} />}
 
@@ -419,88 +504,112 @@ function Accounts() {
           ) => {
             const currentBalance =
               account.current_balance ?? account.opening_balance ?? 0;
-            const TypeIcon =
-              ACCOUNT_TYPE_ICONS[account.type] || AccountBalanceIcon;
+            const meta =
+              ACCOUNT_TYPE_META[account.type] || ACCOUNT_TYPE_META.Bank;
+            const TypeIcon = meta.Icon;
             const isInactive = account.status !== 'Active';
+            const balanceColor =
+              currentBalance < 0
+                ? 'google.red'
+                : currentBalance === 0
+                ? 'text.secondary'
+                : 'text.primary';
             return (
               <Box
                 key={account.account_id}
                 onClick={() => handleOpenDialog(account)}
-                sx={{
-                  py: 1,
-                  pl: 0.5,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1,
-                  borderBottom: '1px solid',
-                  borderColor: 'divider',
-                  ...pressableSx,
-                }}
+                sx={[
+                  {
+                    py: 1,
+                    pl: 0.5,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1.25,
+                    borderBottom: '1px solid',
+                    borderColor: 'divider',
+                  },
+                  pressableSx,
+                  {
+                    // Reveal the reorder arrows on hover (pointer devices only);
+                    // on touch they stay visible, since there's no hover.
+                    '@media (hover: hover)': {
+                      '&:hover .reorder-controls': { opacity: 1 },
+                    },
+                  },
+                ]}
               >
                 <Box
                   sx={{
-                    width: 32,
-                    height: 32,
+                    width: 34,
+                    height: 34,
                     borderRadius: '50%',
                     flexShrink: 0,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    backgroundColor: 'action.hover',
-                    color: 'text.secondary',
-                    opacity: isInactive ? 0.5 : 1,
+                    color: isInactive ? 'text.disabled' : `${meta.palette}.main`,
+                    backgroundColor: (theme) =>
+                      alpha(
+                        isInactive
+                          ? theme.palette.text.secondary
+                          : theme.palette[meta.palette].main,
+                        isInactive ? 0.06 : 0.14
+                      ),
                   }}
                 >
-                  <TypeIcon sx={{ fontSize: 18 }} />
+                  <TypeIcon sx={{ fontSize: 19 }} />
                 </Box>
-                <Box
-                  sx={{
-                    minWidth: 0,
-                    flex: 1,
-                    display: 'flex',
-                    alignItems: 'baseline',
-                    gap: 0.75,
-                  }}
-                >
-                  <Typography
-                    variant="body2"
-                    noWrap
+                <Box sx={{ minWidth: 0, flex: 1 }}>
+                  <Box
                     sx={{
-                      fontSize: '0.875rem',
-                      fontWeight: 500,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 0.75,
                       minWidth: 0,
                     }}
                   >
-                    {account.name}
-                  </Typography>
+                    <Typography
+                      variant="body2"
+                      noWrap
+                      sx={{ fontSize: '0.875rem', fontWeight: 600, minWidth: 0 }}
+                    >
+                      {account.name}
+                    </Typography>
+                    {showStatus && (
+                      <Chip
+                        label={account.status}
+                        size="small"
+                        variant="outlined"
+                        sx={{
+                          height: 16,
+                          fontSize: '0.625rem',
+                          flexShrink: 0,
+                          ...getOutlinedStatusChipSx(account.status),
+                        }}
+                      />
+                    )}
+                  </Box>
                   <Typography
                     variant="caption"
                     noWrap
                     sx={{
+                      display: 'block',
                       fontSize: '0.6875rem',
                       color: 'text.secondary',
-                      flexShrink: 0,
                     }}
                   >
                     {account.type}
                   </Typography>
-                  {showStatus && (
-                    <Chip
-                      label={account.status}
-                      size="small"
-                      variant="outlined"
-                      sx={{
-                        height: 16,
-                        fontSize: '0.625rem',
-                        flexShrink: 0,
-                        ...getOutlinedStatusChipSx(account.status),
-                      }}
-                    />
-                  )}
                 </Box>
                 {groupAccounts && groupAccounts.length > 1 && (
                   <Box
-                    sx={{ display: 'flex', flexShrink: 0 }}
+                    className="reorder-controls"
+                    sx={{
+                      display: 'flex',
+                      flexShrink: 0,
+                      transition: 'opacity 0.15s',
+                      '@media (hover: hover)': { opacity: 0 },
+                    }}
                     onClick={(event) => event.stopPropagation()}
                   >
                     <IconButton
@@ -530,10 +639,10 @@ function Accounts() {
                 <Typography
                   variant="body2"
                   sx={{
-                    fontSize: '0.875rem',
+                    fontSize: '0.9375rem',
                     fontWeight: 600,
                     flexShrink: 0,
-                    color: currentBalance < 0 ? 'google.red' : 'text.primary',
+                    color: balanceColor,
                   }}
                 >
                   {formatCurrency(currentBalance, account.currency)}
@@ -548,7 +657,8 @@ function Accounts() {
                 <Fragment key={group.currency}>
                   <Box
                     sx={{
-                      py: 1.25,
+                      pt: 1.75,
+                      pb: 1.25,
                       display: 'flex',
                       alignItems: 'baseline',
                       gap: 0.75,
@@ -557,7 +667,11 @@ function Accounts() {
                     }}
                   >
                     <Typography
-                      sx={{ fontSize: '1.0625rem', fontWeight: 600 }}
+                      sx={{
+                        fontSize: '1.0625rem',
+                        fontWeight: 700,
+                        letterSpacing: 0.2,
+                      }}
                     >
                       {currencyLabel(group.currency)}
                     </Typography>
@@ -573,11 +687,31 @@ function Accounts() {
                       · {group.accounts.length} account
                       {group.accounts.length !== 1 ? 's' : ''}
                     </Typography>
-                    <Typography
-                      sx={{ fontSize: '1.0625rem', fontWeight: 600, flexShrink: 0 }}
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'flex-end',
+                        flexShrink: 0,
+                      }}
                     >
-                      {formatCurrency(group.total, group.currency)}
-                    </Typography>
+                      <Typography sx={{ fontSize: '1.0625rem', fontWeight: 700 }}>
+                        {formatCurrency(group.total, group.currency)}
+                      </Typography>
+                      {group.baseTotal != null &&
+                        group.currency.toUpperCase() !==
+                          baseCurrency.toUpperCase() && (
+                          <Typography
+                            sx={{
+                              fontSize: '0.6875rem',
+                              color: 'text.secondary',
+                              lineHeight: 1.2,
+                            }}
+                          >
+                            ≈ {formatCurrency(group.baseTotal, baseCurrency)}
+                          </Typography>
+                        )}
+                    </Box>
                   </Box>
                   {group.accounts.map((account, index) =>
                     renderAccountRow(account, group.accounts, index)
