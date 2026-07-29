@@ -2453,11 +2453,13 @@ function Reports() {
             )}
       </Box>
 
-      <Divider sx={PAGE_DIVIDER_SX} />
+      {/* No section rule here on mobile: the full-bleed divider looked odd
+          stacked with the summary's own borders and the "Biggest changes"
+          header just below it. The uppercase header is enough of a break on
+          mobile; desktop keeps the rule. */}
+      <Divider sx={[PAGE_DIVIDER_SX, { display: { xs: 'none', md: 'block' } }]} />
 
-      {/* Biggest expense changes vs the previous period. Sits just below the
-          section divider (leading the detail group) rather than above it — a
-          collapsed header hugging the full-bleed rule looked odd on mobile. */}
+      {/* Biggest expense changes vs the previous period. */}
       {biggestMovers.length > 0 && (
           <Box sx={{ mt: { xs: 1.5, sm: 2 }, mb: { xs: 2.5, sm: 3 } }}>
             <Box
