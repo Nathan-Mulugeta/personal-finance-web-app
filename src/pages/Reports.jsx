@@ -39,6 +39,7 @@ import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import CloseIcon from '@mui/icons-material/Close';
 import BudgetDialog from '../components/common/BudgetDialog';
+import MixedCurrencyChip from '../components/common/MixedCurrencyChip';
 import CategoryTransactionsList from '../components/common/CategoryTransactionsList';
 import SummaryTiles from '../components/common/SummaryTiles';
 import HeaderActionButton from '../components/common/HeaderActionButton';
@@ -1008,13 +1009,7 @@ function Reports() {
           }}
         >
           {isMixed && (
-            <Chip
-              label="Mixed currencies"
-              size="small"
-              sx={{ height: 18, fontSize: '0.65rem' }}
-              color="default"
-              variant="outlined"
-            />
+            <MixedCurrencyChip />
           )}
           <Typography variant="body2" sx={{ fontWeight: bold ? 'bold' : undefined, color }}>
             {money.primary}
@@ -1342,13 +1337,7 @@ function Reports() {
             }}
           >
             {showMixedChip && isMixed && (
-              <Chip
-                label="Mixed currencies"
-                size="small"
-                sx={{ height: 18, fontSize: '0.65rem' }}
-                color="default"
-                variant="outlined"
-              />
+              <MixedCurrencyChip />
             )}
             <Typography variant="body2">{money.primary}</Typography>
           </Box>
@@ -1484,13 +1473,7 @@ function Reports() {
                 }}
               >
                 {isMixed && (
-                  <Chip
-                    label="Mixed currencies"
-                    size="small"
-                    sx={{ height: 18, fontSize: '0.65rem' }}
-                    color="default"
-                    variant="outlined"
-                  />
+                  <MixedCurrencyChip />
                 )}
                 <Typography
                   variant="body2"
@@ -2644,13 +2627,7 @@ function Reports() {
                       }}
                     >
                       {incomeTotals.isMixed && (
-                        <Chip
-                          label="Mixed currencies"
-                          size="small"
-                          sx={{ height: 18, fontSize: '0.65rem' }}
-                          color="default"
-                          variant="outlined"
-                        />
+                        <MixedCurrencyChip />
                       )}
                       <Typography
                         variant="body2"
@@ -2744,13 +2721,7 @@ function Reports() {
                       }}
                     >
                       {expenseTotals.isMixed && (
-                        <Chip
-                          label="Mixed currencies"
-                          size="small"
-                          sx={{ height: 18, fontSize: '0.65rem' }}
-                          color="default"
-                          variant="outlined"
-                        />
+                        <MixedCurrencyChip />
                       )}
                       <Typography
                         variant="body2"
