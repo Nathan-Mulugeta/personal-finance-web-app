@@ -37,6 +37,7 @@ import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import PaymentsIcon from '@mui/icons-material/Payments';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import SwipeToReorder from '../components/common/SwipeToReorder';
 import {
   createAccount,
   updateAccount,
@@ -514,7 +515,10 @@ function Accounts() {
                 : currentBalance === 0
                 ? 'text.secondary'
                 : 'text.primary';
-            return (
+
+            const canReorder = groupAccounts && groupAccounts.length > 1;
+
+            const rowContent = (
               <Box
                 key={account.account_id}
                 onClick={() => handleOpenDialog(account)}
@@ -601,11 +605,12 @@ function Accounts() {
                     {account.type}
                   </Typography>
                 </Box>
-                {groupAccounts && groupAccounts.length > 1 && (
+                {/* Desktop-only hover reorder arrows */}
+                {canReorder && (
                   <Box
                     className="reorder-controls"
                     sx={{
-                      display: 'flex',
+                      display: { xs: 'none', sm: 'flex' },
                       flexShrink: 0,
                       transition: 'opacity 0.15s',
                       '@media (hover: hover)': { opacity: 0 },
@@ -649,6 +654,24 @@ function Accounts() {
                 </Typography>
               </Box>
             );
+
+            // On mobile, wrap reorderable rows with swipe-to-reveal arrows
+            if (canReorder && isMobile) {
+              return (
+                <SwipeToReorder
+                  key={account.account_id}
+                  onMoveUp={() => handleSwapOrder(account, groupAccounts[index - 1])}
+                  onMoveDown={() => handleSwapOrder(account, groupAccounts[index + 1])}
+                  disableUp={index === 0 || isReordering}
+                  disableDown={index === groupAccounts.length - 1 || isReordering}
+                  disabled={isReordering}
+                >
+                  {rowContent}
+                </SwipeToReorder>
+              );
+            }
+
+            return rowContent;
           };
 
           return (
