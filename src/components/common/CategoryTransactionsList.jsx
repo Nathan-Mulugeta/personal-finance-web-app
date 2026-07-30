@@ -1,6 +1,7 @@
 import {
   useState,
   useEffect,
+  useLayoutEffect,
   useMemo,
   forwardRef,
   useImperativeHandle,
@@ -118,7 +119,7 @@ function CategoryTransactionsList(
 
   // Let a parent (e.g. Home) swap its own header into selection mode in place.
   // Re-fires false on remount.
-  useEffect(() => {
+  useLayoutEffect(() => {
     onSelectionModeChange?.(selectionMode);
   }, [selectionMode, onSelectionModeChange]);
   // Shared quick-editor for tap-to-edit category/amount/note on rows (both the

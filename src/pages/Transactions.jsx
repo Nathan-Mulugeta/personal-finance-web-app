@@ -1148,23 +1148,6 @@ function Transactions() {
             </Box>
           )}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
-          <IconButton
-            onClick={() =>
-              selectionMode ? exitSelectionMode() : setSelectionMode(true)
-            }
-            size="small"
-            aria-label={selectionMode ? 'Exit selection mode' : 'Select multiple'}
-            sx={{
-              width: 28,
-              height: 28,
-              p: 0.5,
-              color: selectionMode ? 'primary.main' : 'text.secondary',
-              backgroundColor: selectionMode ? 'action.selected' : 'transparent',
-              '&:hover': { backgroundColor: 'action.hover' },
-            }}
-          >
-            <ChecklistIcon sx={{ fontSize: 18 }} />
-          </IconButton>
         <Typography
           variant="body2"
           color="text.secondary"
@@ -1241,6 +1224,23 @@ function Transactions() {
             return `${totalStr} • ${countStr}`;
           })()}
         </Typography>
+          <IconButton
+            onClick={() =>
+              selectionMode ? exitSelectionMode() : setSelectionMode(true)
+            }
+            size="small"
+            aria-label={selectionMode ? 'Exit selection mode' : 'Select multiple'}
+            sx={{
+              width: 28,
+              height: 28,
+              p: 0.5,
+              color: selectionMode ? 'primary.main' : 'text.secondary',
+              backgroundColor: selectionMode ? 'action.selected' : 'transparent',
+              '&:hover': { backgroundColor: 'action.hover' },
+            }}
+          >
+            <ChecklistIcon sx={{ fontSize: 18 }} />
+          </IconButton>
           </Box>
         </Box>
       </Box>

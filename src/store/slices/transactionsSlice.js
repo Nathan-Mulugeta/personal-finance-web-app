@@ -321,6 +321,16 @@ const transactionsSlice = createSlice({
             );
             // Remove any transactions that have deleted_at set (from incremental sync)
             state.allTransactions = state.allTransactions.filter(t => !t.deleted_at);
+            
+            // Sort allTransactions by date and created_at (newest first)
+            state.allTransactions.sort((a, b) => {
+              const dateDiff = new Date(b.date) - new Date(a.date);
+              if (dateDiff !== 0) return dateDiff;
+              if (a.created_at && b.created_at) {
+                return new Date(b.created_at) - new Date(a.created_at);
+              }
+              return 0;
+            });
           } else {
             state.allTransactions = (transactions || []).filter(t => !t.deleted_at);
           }
@@ -336,6 +346,16 @@ const transactionsSlice = createSlice({
             );
             // Remove any transactions that have deleted_at set (from incremental sync)
             state.allTransactions = state.allTransactions.filter(t => !t.deleted_at);
+
+            // Sort allTransactions by date and created_at (newest first)
+            state.allTransactions.sort((a, b) => {
+              const dateDiff = new Date(b.date) - new Date(a.date);
+              if (dateDiff !== 0) return dateDiff;
+              if (a.created_at && b.created_at) {
+                return new Date(b.created_at) - new Date(a.created_at);
+              }
+              return 0;
+            });
           } else {
             state.allTransactions = (transactions || []).filter(t => !t.deleted_at);
           }
