@@ -4,7 +4,6 @@ import {
   useMemo,
   useRef,
   useCallback,
-  useDeferredValue,
 } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
@@ -197,21 +196,21 @@ function Home({ quickAddExpense = false }) {
 
   // Live client-side search — no debounce. Filtering the user's own
   // transactions in memory is cheap and the list is capped at pageSize, so
-  // results can update as you type. `isSearching` follows what's typed
-  // (immediate) to leave browse mode at once; `deferredQuery` is React's
-  // low-priority value (not a timer) — it keeps the input snappy and shows the
-  // previous results while a large filter renders, so it never flashes blank.
+  // results can update as you type. Uses normalizedQuery directly (not
+  // useDeferredValue) so that background-synced transactions are immediately
+  // searchable — a deferred value can suppress recomputation when
+  // allTransactions updates during a React transition, causing newly synced
+  // rows to be invisible to the filter until the next render cycle.
   const normalizedQuery = searchQuery.trim().toLowerCase();
   const isSearching = normalizedQuery.length > 0;
-  const deferredQuery = useDeferredValue(normalizedQuery);
 
   // Search transactions by category name and description
   const searchResults = useMemo(() => {
-    if (!deferredQuery || !allTransactions || allTransactions.length === 0) {
+    if (!normalizedQuery || !allTransactions || allTransactions.length === 0) {
       return [];
     }
 
-    const query = deferredQuery;
+    const query = normalizedQuery;
 
     return allTransactions.filter((txn) => {
       // Skip deleted or cancelled transactions
@@ -240,7 +239,7 @@ function Home({ quickAddExpense = false }) {
 
       return false;
     });
-  }, [deferredQuery, allTransactions, categoryMap]);
+  }, [normalizedQuery, allTransactions, categoryMap]);
 
   // Per-currency total of the current search results (shown under the search
   // box; the list header's own summary is suppressed to avoid duplication)
@@ -641,7 +640,7 @@ function Home({ quickAddExpense = false }) {
         <Box>
           {/* If the query matches budgeted categories, show their budget status
               here so you can check a budget without opening Reports */}
-          <BudgetSearchHint query={deferredQuery} />
+          <BudgetSearchHint query={normalizedQuery} />
           {searchResults.length > 0 ? (
             <CategoryTransactionsList
               ref={searchSelectRef}
