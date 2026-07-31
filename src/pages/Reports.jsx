@@ -17,7 +17,7 @@ import {
   Button,
   Chip,
   Divider,
-  LinearProgress,
+
   TextField,
   MenuItem,
   InputAdornment,
@@ -980,7 +980,7 @@ function Reports() {
   const renderMoneyStacked = (
     baseAmount,
     originalAmounts,
-    { isMixed = false, bold = false, color } = {}
+    { isMixed = false, bold = false, color, currencies: currencyList } = {}
   ) => {
     const money = getMoneyDisplay(baseAmount, originalAmounts);
     return (
@@ -996,7 +996,7 @@ function Reports() {
           }}
         >
           {isMixed && (
-            <MixedCurrencyChip />
+            <MixedCurrencyChip currencies={currencyList} />
           )}
           <Typography variant="body2" sx={{ fontWeight: bold ? 'bold' : undefined, color }}>
             {money.primary}
@@ -1271,6 +1271,7 @@ function Reports() {
       previousActual,
       difference,
       variance,
+      currencies,
       isMixed,
       budgetOriginalAmounts,
       actualOriginalAmounts,
@@ -1324,7 +1325,7 @@ function Reports() {
             }}
           >
             {showMixedChip && isMixed && (
-              <MixedCurrencyChip />
+              <MixedCurrencyChip currencies={currencies} />
             )}
             <Typography variant="body2">{money.primary}</Typography>
           </Box>
@@ -1429,50 +1430,17 @@ function Reports() {
             </Box>
           </TableCell>
           <TableCell align="right">
-            {renderCurrencyCell(actual, actualOriginalAmounts, true)}
-            {spendDelta && (
-              <Box
-                sx={{
-                  fontSize: '0.6875rem',
-                  mt: 0.25,
-                  display: 'flex',
-                  justifyContent: 'flex-end',
-                }}
-              >
-                {renderDelta(spendDelta, { label: true })}
-              </Box>
-            )}
-          </TableCell>
-          <TableCell align="right">
-            <Box
-              sx={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'flex-end',
-              }}
-            >
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'flex-end',
-                  gap: 0.5,
-                }}
-              >
-                {isMixed && (
-                  <MixedCurrencyChip />
-                )}
-                <Typography
-                  variant="body2"
-                  sx={{ color: differenceColor, fontWeight: 'medium' }}
-                >
-                  {diffText}
-                </Typography>
-              </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.625 }}>
+              {spendDelta && (
+                <Box sx={{ fontSize: '0.6875rem' }}>
+                  {renderDelta(spendDelta)}
+                </Box>
+              )}
+              {renderCurrencyCell(actual, actualOriginalAmounts, true)}
             </Box>
           </TableCell>
           <TableCell align="right">
-            {renderProgressCell({ budget, actual, difference, variance }, type)}
+            {renderProgressCell({ budget, actual, difference, variance, differenceOriginalAmounts, isMixed, currencies }, type)}
           </TableCell>
         </TableRow>
         {hasChildren && isExpanded && (
@@ -1496,7 +1464,7 @@ function Reports() {
               onClick={() => handleRowClick(category.category_id, type)}
               sx={{ cursor: 'pointer' }}
             >
-              <TableCell colSpan={5} sx={{ py: 0.75 }}>
+              <TableCell colSpan={4} sx={{ py: 0.75 }}>
                 <Box
                   sx={{
                     display: 'flex',
@@ -1543,49 +1511,66 @@ function Reports() {
     return { text: `${pctOfBudget}% used`, color: 'text.secondary' };
   };
 
-  // Variance phrase + progress bar for desktop table cells
+  // Consolidated progress + difference for desktop table cells
   const renderProgressCell = (
-    { budget, actual, difference, variance },
+    { budget, actual, difference, variance, differenceOriginalAmounts, isMixed: isMixedFlag, currencies: currencyList },
     type,
     bold = false
   ) => {
-    const phrase = getVariancePhrase(variance, type);
-    const pctUsed = budget > 0 ? (actual / budget) * 100 : null;
-    const barColor = getDifferenceColor(difference, type).startsWith('success')
-      ? 'success'
-      : 'error';
+    if (budget <= 0) {
+      return (
+        <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+          No budget
+        </Typography>
+      );
+    }
+
+    const pctOfBudget = Math.round((actual / budget) * 100);
+    const diffColor = getDifferenceColor(difference, type);
+    const diffDisplay = getDiffText(difference, differenceOriginalAmounts, type);
+
+    // Green when on track, red when off track
+    const isGood = type === 'Income' ? actual >= budget : actual <= budget;
+    const pillColor = isGood ? 'google.green' : 'google.red';
+    const pillBg = isGood ? 'google.greenBg' : 'google.redBg';
+
     return (
       <Box
         sx={{
           display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'flex-end',
-          gap: 0.5,
+          alignItems: 'center',
+          justifyContent: 'flex-end',
+          gap: 0.625,
         }}
       >
-        <Typography
-          variant="caption"
+        {isMixedFlag && <MixedCurrencyChip currencies={currencyList} />}
+        <Box
+          component="span"
           sx={{
-            fontSize: '0.75rem',
-            fontWeight: bold ? 'bold' : 500,
-            color: phrase.color,
+            display: 'inline-flex',
+            alignItems: 'center',
+            fontWeight: 600,
+            fontSize: '0.6875rem',
+            color: pillColor,
+            bgcolor: pillBg,
+            borderRadius: 0.75,
+            px: '0.4em',
+            py: '0.15em',
+            lineHeight: 1,
+            whiteSpace: 'nowrap',
           }}
         >
-          {phrase.text}
+          {pctOfBudget}%
+        </Box>
+        <Typography
+          variant="body2"
+          sx={{
+            fontWeight: bold ? 'bold' : 'medium',
+            color: diffColor,
+          }}
+        >
+          {diffDisplay}
         </Typography>
-        {pctUsed !== null && (
-          <LinearProgress
-            variant="determinate"
-            value={Math.min(100, pctUsed)}
-            color={barColor}
-            sx={{
-              height: 4,
-              borderRadius: 2,
-              width: 110,
-              backgroundColor: 'action.hover',
-            }}
-          />
-        )}
       </Box>
     );
   };
@@ -1599,6 +1584,7 @@ function Reports() {
       actual,
       previousActual,
       difference,
+      currencies,
       isMixed,
       budgetOriginalAmounts,
       actualOriginalAmounts,
@@ -1720,10 +1706,8 @@ function Reports() {
                 {category.name}
               </Typography>
               {isMixed && (
-                <Chip
-                  label="Mixed"
-                  size="small"
-                  variant="outlined"
+                <MixedCurrencyChip
+                  currencies={currencies}
                   sx={{
                     ml: 0.75,
                     height: 16,
@@ -2493,8 +2477,7 @@ function Reports() {
                   <TableCell sx={{ minWidth: 140, whiteSpace: 'nowrap' }}>CATEGORY</TableCell>
                   <TableCell align="right" sx={{ minWidth: 100, whiteSpace: 'nowrap' }}>BUDGETED</TableCell>
                   <TableCell align="right" sx={{ minWidth: 110, whiteSpace: 'nowrap' }}>ACTUAL INCOME</TableCell>
-                  <TableCell align="right" sx={{ minWidth: 100, whiteSpace: 'nowrap' }}>DIFFERENCE</TableCell>
-                  <TableCell align="right" sx={{ minWidth: 130, whiteSpace: 'nowrap' }}>PROGRESS</TableCell>
+                  <TableCell align="right" sx={{ minWidth: 140, whiteSpace: 'nowrap' }}>PROGRESS</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -2512,45 +2495,15 @@ function Reports() {
                     {renderMoneyStacked(
                       incomeTotals.budget,
                       incomeTotals.budgetOriginalAmounts,
-                      { isMixed: incomeTotals.isMixed, bold: true }
+                      { isMixed: incomeTotals.isMixed, bold: true, currencies: incomeTotals.currencies }
                     )}
                   </TableCell>
                   <TableCell align="right">
                     {renderMoneyStacked(
                       incomeTotals.actual,
                       incomeTotals.actualOriginalAmounts,
-                      { isMixed: incomeTotals.isMixed, bold: true }
+                      { isMixed: incomeTotals.isMixed, bold: true, currencies: incomeTotals.currencies }
                     )}
-                  </TableCell>
-                  <TableCell align="right">
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'flex-end',
-                        gap: 0.5,
-                      }}
-                    >
-                      {incomeTotals.isMixed && (
-                        <MixedCurrencyChip />
-                      )}
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          fontWeight: 'bold',
-                          color: getDifferenceColor(
-                            incomeTotals.difference,
-                            'Income'
-                          ),
-                        }}
-                      >
-                        {getDiffText(
-                          incomeTotals.difference,
-                          incomeTotals.differenceOriginalAmounts,
-                          'Income'
-                        )}
-                      </Typography>
-                    </Box>
                   </TableCell>
                   <TableCell align="right">
                     {renderProgressCell(incomeTotals, 'Income', true)}
@@ -2587,8 +2540,7 @@ function Reports() {
                   <TableCell sx={{ minWidth: 140, whiteSpace: 'nowrap' }}>CATEGORY</TableCell>
                   <TableCell align="right" sx={{ minWidth: 100, whiteSpace: 'nowrap' }}>BUDGETED</TableCell>
                   <TableCell align="right" sx={{ minWidth: 120, whiteSpace: 'nowrap' }}>ACTUAL SPENDING</TableCell>
-                  <TableCell align="right" sx={{ minWidth: 100, whiteSpace: 'nowrap' }}>DIFFERENCE</TableCell>
-                  <TableCell align="right" sx={{ minWidth: 130, whiteSpace: 'nowrap' }}>PROGRESS</TableCell>
+                  <TableCell align="right" sx={{ minWidth: 140, whiteSpace: 'nowrap' }}>PROGRESS</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -2606,45 +2558,15 @@ function Reports() {
                     {renderMoneyStacked(
                       expenseTotals.budget,
                       expenseTotals.budgetOriginalAmounts,
-                      { isMixed: expenseTotals.isMixed, bold: true }
+                      { isMixed: expenseTotals.isMixed, bold: true, currencies: expenseTotals.currencies }
                     )}
                   </TableCell>
                   <TableCell align="right">
                     {renderMoneyStacked(
                       expenseTotals.actual,
                       expenseTotals.actualOriginalAmounts,
-                      { isMixed: expenseTotals.isMixed, bold: true }
+                      { isMixed: expenseTotals.isMixed, bold: true, currencies: expenseTotals.currencies }
                     )}
-                  </TableCell>
-                  <TableCell align="right">
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'flex-end',
-                        gap: 0.5,
-                      }}
-                    >
-                      {expenseTotals.isMixed && (
-                        <MixedCurrencyChip />
-                      )}
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          fontWeight: 'bold',
-                          color: getDifferenceColor(
-                            expenseTotals.difference,
-                            'Expense'
-                          ),
-                        }}
-                      >
-                        {getDiffText(
-                          expenseTotals.difference,
-                          expenseTotals.differenceOriginalAmounts,
-                          'Expense'
-                        )}
-                      </Typography>
-                    </Box>
                   </TableCell>
                   <TableCell align="right">
                     {renderProgressCell(expenseTotals, 'Expense', true)}
