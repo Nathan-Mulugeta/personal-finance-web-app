@@ -2573,13 +2573,13 @@ function Reports() {
               overflowX: 'auto',
             }}
           >
-            <Table size="small" sx={{ minWidth: 600 }}>
+            <Table size="small" sx={{ minWidth: 600, tableLayout: 'fixed' }}>
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ minWidth: 140, whiteSpace: 'nowrap' }}>CATEGORY</TableCell>
-                  <TableCell align="right" sx={{ minWidth: 100, whiteSpace: 'nowrap' }}>BUDGETED</TableCell>
-                  <TableCell align="right" sx={{ minWidth: 110, whiteSpace: 'nowrap' }}>ACTUAL INCOME</TableCell>
-                  <TableCell align="right" sx={{ minWidth: 140, whiteSpace: 'nowrap' }}>PROGRESS</TableCell>
+                  <TableCell sx={{ width: '40%', whiteSpace: 'nowrap' }}>CATEGORY</TableCell>
+                  <TableCell align="right" sx={{ width: '20%', whiteSpace: 'nowrap' }}>BUDGETED</TableCell>
+                  <TableCell align="right" sx={{ width: '20%', whiteSpace: 'nowrap' }}>ACTUAL INCOME</TableCell>
+                  <TableCell align="right" sx={{ width: '20%', whiteSpace: 'nowrap' }}>PROGRESS</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -2587,7 +2587,7 @@ function Reports() {
                   renderCategoryRow(item, 'Income', 0, incomeTotals.actual, incomeTotals.budget)
                 )}
                 {/* Total Row */}
-                <TableRow sx={{ bgcolor: 'action.hover' }}>
+                <TableRow sx={{ '& td': { borderTop: 2, borderColor: 'divider' } }}>
                   <TableCell>
                     <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
                       Total
@@ -2636,13 +2636,13 @@ function Reports() {
               overflowX: 'auto',
             }}
           >
-            <Table size="small" sx={{ minWidth: 600 }}>
+            <Table size="small" sx={{ minWidth: 600, tableLayout: 'fixed' }}>
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ minWidth: 140, whiteSpace: 'nowrap' }}>CATEGORY</TableCell>
-                  <TableCell align="right" sx={{ minWidth: 100, whiteSpace: 'nowrap' }}>BUDGETED</TableCell>
-                  <TableCell align="right" sx={{ minWidth: 120, whiteSpace: 'nowrap' }}>ACTUAL SPENDING</TableCell>
-                  <TableCell align="right" sx={{ minWidth: 140, whiteSpace: 'nowrap' }}>PROGRESS</TableCell>
+                  <TableCell sx={{ width: '40%', whiteSpace: 'nowrap' }}>CATEGORY</TableCell>
+                  <TableCell align="right" sx={{ width: '20%', whiteSpace: 'nowrap' }}>BUDGETED</TableCell>
+                  <TableCell align="right" sx={{ width: '20%', whiteSpace: 'nowrap' }}>ACTUAL SPENDING</TableCell>
+                  <TableCell align="right" sx={{ width: '20%', whiteSpace: 'nowrap' }}>PROGRESS</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -2650,7 +2650,7 @@ function Reports() {
                   renderCategoryRow(item, 'Expense', 0, expenseTotals.actual, expenseTotals.budget)
                 )}
                 {/* Total Row */}
-                <TableRow sx={{ bgcolor: 'action.hover' }}>
+                <TableRow sx={{ '& td': { borderTop: 2, borderColor: 'divider' } }}>
                   <TableCell>
                     <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
                       Total
@@ -2756,13 +2756,13 @@ function Reports() {
                 Other Activity
               </Typography>
               <Box sx={{ overflowX: 'auto' }}>
-                <Table size="small" sx={{ minWidth: 600 }}>
+                <Table size="small" sx={{ minWidth: 600, tableLayout: 'fixed' }}>
                   <TableHead>
                     <TableRow>
-                      <TableCell sx={{ minWidth: 140, whiteSpace: 'nowrap' }}>CATEGORY</TableCell>
-                      <TableCell align="right" sx={{ minWidth: 100, whiteSpace: 'nowrap' }}>BUDGETED</TableCell>
-                      <TableCell align="right" sx={{ minWidth: 110, whiteSpace: 'nowrap' }}>ACTUAL</TableCell>
-                      <TableCell align="right" sx={{ minWidth: 140, whiteSpace: 'nowrap' }}>PROGRESS</TableCell>
+                      <TableCell sx={{ width: '40%', whiteSpace: 'nowrap' }}>CATEGORY</TableCell>
+                      <TableCell align="right" sx={{ width: '20%', whiteSpace: 'nowrap' }}>BUDGETED</TableCell>
+                      <TableCell align="right" sx={{ width: '20%', whiteSpace: 'nowrap' }}>ACTUAL</TableCell>
+                      <TableCell align="right" sx={{ width: '20%', whiteSpace: 'nowrap' }}>PROGRESS</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -2776,7 +2776,7 @@ function Reports() {
                       )
                     )}
                     {/* Total Row */}
-                    <TableRow sx={{ bgcolor: 'action.hover' }}>
+                    <TableRow sx={{ '& td': { borderTop: 2, borderColor: 'divider' } }}>
                       <TableCell>
                         <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
                           Total
