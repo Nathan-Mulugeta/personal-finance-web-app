@@ -71,6 +71,12 @@ import {
   findBudgetForCategoryMonth,
   budgetAppliesToMonth,
 } from '../utils/budgetMatching';
+import {
+  selectBorrowingCategoryId,
+  selectLendingCategoryId,
+  selectBorrowingPaymentCategoryId,
+  selectLendingPaymentCategoryId,
+} from '../store/selectors';
 
 // Tappable mobile row: suppress the browser tap highlight (blue flash on
 // Android/Chrome) and sticky hover on touch; give explicit pressed feedback
@@ -119,6 +125,12 @@ function Reports() {
   const { settings } = useSelector((state) => state.settings);
   const { exchangeRates } = useSelector((state) => state.exchangeRates);
   const { accounts } = useSelector((state) => state.accounts);
+
+  // Category IDs for borrowings, lending, and adjustments (configured in Settings)
+  const borrowingCategoryId = useSelector(selectBorrowingCategoryId);
+  const lendingCategoryId = useSelector(selectLendingCategoryId);
+  const borrowingPaymentCategoryId = useSelector(selectBorrowingPaymentCategoryId);
+  const lendingPaymentCategoryId = useSelector(selectLendingPaymentCategoryId);
 
   // Refresh data on navigation
   usePageRefresh({
@@ -1040,10 +1052,32 @@ function Reports() {
     }
   };
 
+  // Set of category IDs (including descendants) that belong to borrowings,
+  // lending, and adjustment categories configured in settings. These are
+  // excluded from the main Income/Expense sections and shown separately.
+  const excludedCategoryIds = useMemo(() => {
+    const ids = new Set();
+    [borrowingCategoryId, lendingCategoryId, borrowingPaymentCategoryId, lendingPaymentCategoryId]
+      .filter(Boolean)
+      .forEach((id) => {
+        ids.add(id);
+        getCategoryDescendants(id, categories).forEach((d) =>
+          ids.add(d.category_id)
+        );
+      });
+    return ids;
+  }, [
+    borrowingCategoryId,
+    lendingCategoryId,
+    borrowingPaymentCategoryId,
+    lendingPaymentCategoryId,
+    categories,
+  ]);
+
   // Memoized report data
   // Build the (expensive) report data independent of the search text, so a
   // keystroke never triggers a full recompute — only the cheap filter re-runs.
-  const incomeReportDataFull = useMemo(
+  const incomeReportDataFullRaw = useMemo(
     () => buildReportData('Income'),
     [
       categories,
@@ -1057,12 +1091,8 @@ function Reports() {
       filterStatus,
     ]
   );
-  const incomeReportData = useMemo(
-    () => filterReportBySearch(incomeReportDataFull, debouncedReportSearch),
-    [incomeReportDataFull, debouncedReportSearch]
-  );
 
-  const expenseReportDataFull = useMemo(
+  const expenseReportDataFullRaw = useMemo(
     () => buildReportData('Expense'),
     [
       categories,
@@ -1076,9 +1106,54 @@ function Reports() {
       filterStatus,
     ]
   );
+
+  // Partition into regular categories vs excluded (borrowings/lending/adjustments)
+  const {
+    incomeReportDataFull,
+    expenseReportDataFull,
+    otherActivityData,
+  } = useMemo(() => {
+    if (excludedCategoryIds.size === 0) {
+      return {
+        incomeReportDataFull: incomeReportDataFullRaw,
+        expenseReportDataFull: expenseReportDataFullRaw,
+        otherActivityData: [],
+      };
+    }
+    const isExcluded = (item) =>
+      excludedCategoryIds.has(item.category.category_id);
+    const incRegular = incomeReportDataFullRaw.filter((i) => !isExcluded(i));
+    const expRegular = expenseReportDataFullRaw.filter((i) => !isExcluded(i));
+    const excluded = [
+      ...incomeReportDataFullRaw.filter(isExcluded).map((i) => ({ ...i, _type: 'Income' })),
+      ...expenseReportDataFullRaw.filter(isExcluded).map((i) => ({ ...i, _type: 'Expense' })),
+    ].filter((i) => i.actual > 0 || i.budget > 0);
+    return {
+      incomeReportDataFull: incRegular,
+      expenseReportDataFull: expRegular,
+      otherActivityData: excluded,
+    };
+  }, [incomeReportDataFullRaw, expenseReportDataFullRaw, excludedCategoryIds]);
+
+  const incomeReportData = useMemo(
+    () => filterReportBySearch(incomeReportDataFull, debouncedReportSearch),
+    [incomeReportDataFull, debouncedReportSearch]
+  );
+
   const expenseReportData = useMemo(
     () => filterReportBySearch(expenseReportDataFull, debouncedReportSearch),
     [expenseReportDataFull, debouncedReportSearch]
+  );
+
+  // Filter "Other Activity" by search as well
+  const otherActivityShown = useMemo(
+    () => filterReportBySearch(otherActivityData, debouncedReportSearch),
+    [otherActivityData, debouncedReportSearch]
+  );
+
+  const otherActivityTotals = useMemo(
+    () => calculateSectionTotals(otherActivityShown),
+    [otherActivityShown]
   );
 
   // "Off budget only" filter — expenses over their budget, income short of plan
@@ -2604,6 +2679,134 @@ function Reports() {
           </Box>
           )}
       </Box>
+
+      {/* Other Activity — borrowings, lending, adjustments excluded from main sections */}
+      {otherActivityShown.length > 0 && (
+        <Box sx={{ mb: { xs: 3, sm: 3 } }}>
+          {/* Mobile view */}
+          {!isDesktopView && (() => {
+            const totalActualMoney = getMoneyDisplay(
+              otherActivityTotals.actual,
+              otherActivityTotals.actualOriginalAmounts
+            );
+            return (
+              <Box>
+                <Box
+                  sx={{
+                    px: 1.25,
+                    py: 1,
+                    mb: 0.75,
+                    borderRadius: 1.5,
+                    backgroundColor: 'action.hover',
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      fontSize: '0.6875rem',
+                      fontWeight: 700,
+                      letterSpacing: 0.6,
+                      textTransform: 'uppercase',
+                      color: 'text.secondary',
+                      mb: 0.25,
+                    }}
+                  >
+                    Other Activity
+                  </Typography>
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography sx={{ fontSize: '1.25rem', fontWeight: 700 }}>
+                      {totalActualMoney.primary}
+                    </Typography>
+                    {totalActualMoney.secondary && (
+                      <Typography
+                        sx={{
+                          fontSize: '0.625rem',
+                          color: 'text.secondary',
+                          lineHeight: 1.2,
+                        }}
+                      >
+                        {totalActualMoney.secondary}
+                      </Typography>
+                    )}
+                  </Box>
+                </Box>
+                <Box sx={{ mt: 0.5 }}>
+                  {otherActivityShown.map((item) =>
+                    renderMobileCategoryRow(
+                      item,
+                      item._type || 'Expense',
+                      0,
+                      otherActivityTotals.actual
+                    )
+                  )}
+                </Box>
+              </Box>
+            );
+          })()}
+          {/* Desktop view */}
+          {isDesktopView && (
+            <>
+              <Typography
+                variant="h6"
+                sx={{
+                  mb: { xs: 1.5, sm: 2 },
+                  fontWeight: 'bold',
+                  fontSize: { xs: '1rem', sm: '1.125rem' },
+                }}
+              >
+                Other Activity
+              </Typography>
+              <Box sx={{ overflowX: 'auto' }}>
+                <Table size="small" sx={{ minWidth: 600 }}>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ minWidth: 140, whiteSpace: 'nowrap' }}>CATEGORY</TableCell>
+                      <TableCell align="right" sx={{ minWidth: 100, whiteSpace: 'nowrap' }}>BUDGETED</TableCell>
+                      <TableCell align="right" sx={{ minWidth: 110, whiteSpace: 'nowrap' }}>ACTUAL</TableCell>
+                      <TableCell align="right" sx={{ minWidth: 140, whiteSpace: 'nowrap' }}>PROGRESS</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {otherActivityShown.map((item) =>
+                      renderCategoryRow(
+                        item,
+                        item._type || 'Expense',
+                        0,
+                        otherActivityTotals.actual,
+                        otherActivityTotals.budget
+                      )
+                    )}
+                    {/* Total Row */}
+                    <TableRow sx={{ bgcolor: 'action.hover' }}>
+                      <TableCell>
+                        <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                          Total
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right">
+                        {renderMoneyStacked(
+                          otherActivityTotals.budget,
+                          otherActivityTotals.budgetOriginalAmounts,
+                          { isMixed: otherActivityTotals.isMixed, bold: true, currencies: otherActivityTotals.currencies }
+                        )}
+                      </TableCell>
+                      <TableCell align="right">
+                        {renderMoneyStacked(
+                          otherActivityTotals.actual,
+                          otherActivityTotals.actualOriginalAmounts,
+                          { isMixed: otherActivityTotals.isMixed, bold: true, currencies: otherActivityTotals.currencies }
+                        )}
+                      </TableCell>
+                      <TableCell align="right">
+                        {renderProgressCell(otherActivityTotals, 'Expense', true)}
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </Box>
+            </>
+          )}
+        </Box>
+      )}
 
       {/* Biggest changes vs the previous period — a trends footer at the very
           bottom, so it no longer interrupts the summary → category-detail flow. */}

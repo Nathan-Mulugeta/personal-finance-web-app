@@ -288,9 +288,10 @@ function AddTransferDialog({ open, onClose }) {
                 onChange={(id) => setValue('fromAccountId', id)}
                 onSelect={() => {
                   // Focus To Account field after From Account selection
-                  setTimeout(() => {
-                    toAccountInputRef.current?.focus();
-                  }, 100);
+                  // Note: AccountAutocomplete already delays onSelect by 50ms,
+                  // so no additional setTimeout is needed here. Adding one causes
+                  // a focus flicker where the Amount field briefly gains focus.
+                  toAccountInputRef.current?.focus();
                 }}
                 label="From Account"
                 error={!!errors.fromAccountId}
