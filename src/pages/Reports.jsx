@@ -2744,7 +2744,7 @@ function Reports() {
       <Dialog
         open={transactionModalOpen}
         onClose={() => setTransactionModalOpen(false)}
-        maxWidth="md"
+        maxWidth="lg"
         fullWidth
         fullScreen={isMobile}
         PaperProps={{ sx: { borderRadius: { xs: 0, sm: 3 } } }}
