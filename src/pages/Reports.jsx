@@ -1263,7 +1263,7 @@ function Reports() {
   const currentMonth = format(new Date(), 'yyyy-MM');
 
   // Render category row
-  const renderCategoryRow = (item, type, level = 0) => {
+  const renderCategoryRow = (item, type, level = 0, sectionActual = 0, sectionBudget = 0) => {
     const {
       category,
       budget,
@@ -1402,6 +1402,18 @@ function Reports() {
                         sx={{ fontSize: 12, color: 'text.secondary' }}
                       />
                     )}
+                    {sectionBudget > 0 && budget > 0 && (
+                      <Typography
+                        component="span"
+                        sx={{
+                          fontSize: '0.6875rem',
+                          color: level > 0 ? 'text.disabled' : 'text.secondary',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {Math.round((budget / sectionBudget) * 100)}%
+                      </Typography>
+                    )}
                   </Box>
                   {(budgetParentOnly || budgetIncludesChildren) && (
                     <Typography
@@ -1431,12 +1443,25 @@ function Reports() {
           </TableCell>
           <TableCell align="right">
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.625 }}>
+              {isMixed && <MixedCurrencyChip currencies={currencies} />}
               {spendDelta && (
                 <Box sx={{ fontSize: '0.6875rem' }}>
                   {renderDelta(spendDelta)}
                 </Box>
               )}
-              {renderCurrencyCell(actual, actualOriginalAmounts, true)}
+              {renderCurrencyCell(actual, actualOriginalAmounts, false)}
+              {sectionActual > 0 && actual > 0 && (
+                <Typography
+                  component="span"
+                  sx={{
+                    fontSize: '0.6875rem',
+                    color: level > 0 ? 'text.disabled' : 'text.secondary',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {Math.round((actual / sectionActual) * 100)}%
+                </Typography>
+              )}
             </Box>
           </TableCell>
           <TableCell align="right">
@@ -1456,7 +1481,9 @@ function Reports() {
                 renderCategoryRow(
                   { category: child, ...data },
                   type,
-                  level + 1
+                  level + 1,
+                  actual,
+                  budget
                 )
               )}
             <TableRow
@@ -2482,7 +2509,7 @@ function Reports() {
               </TableHead>
               <TableBody>
                 {incomeReportShown.map((item) =>
-                  renderCategoryRow(item, 'Income')
+                  renderCategoryRow(item, 'Income', 0, incomeTotals.actual, incomeTotals.budget)
                 )}
                 {/* Total Row */}
                 <TableRow sx={{ bgcolor: 'action.hover' }}>
@@ -2545,7 +2572,7 @@ function Reports() {
               </TableHead>
               <TableBody>
                 {expenseReportShown.map((item) =>
-                  renderCategoryRow(item, 'Expense')
+                  renderCategoryRow(item, 'Expense', 0, expenseTotals.actual, expenseTotals.budget)
                 )}
                 {/* Total Row */}
                 <TableRow sx={{ bgcolor: 'action.hover' }}>
