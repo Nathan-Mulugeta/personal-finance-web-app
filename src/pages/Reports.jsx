@@ -2573,13 +2573,13 @@ function Reports() {
               overflowX: 'auto',
             }}
           >
-            <Table size="small" sx={{ minWidth: 600, tableLayout: 'fixed' }}>
+            <Table size="small" sx={{ minWidth: 600, tableLayout: 'fixed', '& td, & th': { whiteSpace: 'nowrap' } }}>
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ width: '40%', whiteSpace: 'nowrap' }}>CATEGORY</TableCell>
-                  <TableCell align="right" sx={{ width: '20%', whiteSpace: 'nowrap' }}>BUDGETED</TableCell>
-                  <TableCell align="right" sx={{ width: '20%', whiteSpace: 'nowrap' }}>ACTUAL INCOME</TableCell>
-                  <TableCell align="right" sx={{ width: '20%', whiteSpace: 'nowrap' }}>PROGRESS</TableCell>
+                  <TableCell>Category</TableCell>
+                  <TableCell align="right" sx={{ width: 250 }}>Budgeted</TableCell>
+                  <TableCell align="right" sx={{ width: 250 }}>Actual Income</TableCell>
+                  <TableCell align="right" sx={{ width: 250 }}>Progress</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -2636,13 +2636,13 @@ function Reports() {
               overflowX: 'auto',
             }}
           >
-            <Table size="small" sx={{ minWidth: 600, tableLayout: 'fixed' }}>
+            <Table size="small" sx={{ minWidth: 600, tableLayout: 'fixed', '& td, & th': { whiteSpace: 'nowrap' } }}>
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ width: '40%', whiteSpace: 'nowrap' }}>CATEGORY</TableCell>
-                  <TableCell align="right" sx={{ width: '20%', whiteSpace: 'nowrap' }}>BUDGETED</TableCell>
-                  <TableCell align="right" sx={{ width: '20%', whiteSpace: 'nowrap' }}>ACTUAL SPENDING</TableCell>
-                  <TableCell align="right" sx={{ width: '20%', whiteSpace: 'nowrap' }}>PROGRESS</TableCell>
+                  <TableCell>Category</TableCell>
+                  <TableCell align="right" sx={{ width: 250 }}>Budgeted</TableCell>
+                  <TableCell align="right" sx={{ width: 250 }}>Actual Spending</TableCell>
+                  <TableCell align="right" sx={{ width: 250 }}>Progress</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -2756,13 +2756,13 @@ function Reports() {
                 Other Activity
               </Typography>
               <Box sx={{ overflowX: 'auto' }}>
-                <Table size="small" sx={{ minWidth: 600, tableLayout: 'fixed' }}>
+                <Table size="small" sx={{ minWidth: 600, tableLayout: 'fixed', '& td, & th': { whiteSpace: 'nowrap' } }}>
                   <TableHead>
                     <TableRow>
-                      <TableCell sx={{ width: '40%', whiteSpace: 'nowrap' }}>CATEGORY</TableCell>
-                      <TableCell align="right" sx={{ width: '20%', whiteSpace: 'nowrap' }}>BUDGETED</TableCell>
-                      <TableCell align="right" sx={{ width: '20%', whiteSpace: 'nowrap' }}>ACTUAL</TableCell>
-                      <TableCell align="right" sx={{ width: '20%', whiteSpace: 'nowrap' }}>PROGRESS</TableCell>
+                      <TableCell>Category</TableCell>
+                      <TableCell align="right" sx={{ width: 250 }}>Budgeted</TableCell>
+                      <TableCell align="right" sx={{ width: 250 }}>Actual</TableCell>
+                      <TableCell align="right" sx={{ width: 250 }}>Progress</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
