@@ -32,10 +32,10 @@ export const transferSchema = z.object({
   ),
   categoryId: z.string().nullable().optional(),
   description: z.string().optional(),
-  // Why this conversion happened, kept on the exchange rate rather than on the
-  // transactions. Required for cross-currency transfers — enforced in the
-  // dialog, which is what knows the two accounts' currencies.
-  rateNote: z.string().optional(),
+  // Which service the money was converted through, kept on the exchange rate
+  // rather than on the transactions. Required for cross-currency transfers —
+  // enforced in the dialog, which is what knows the two accounts' currencies.
+  ratePlatform: z.string().optional(),
   status: z.enum(['Pending', 'Cleared', 'Reconciled', 'Cancelled']).optional(),
   date: z.string().optional(),
 }).refine(

@@ -212,7 +212,7 @@ function ExchangeRates() {
                   <TableCell>From Currency</TableCell>
                   <TableCell>To Currency</TableCell>
                   <TableCell align="right">Rate</TableCell>
-                  <TableCell>Description</TableCell>
+                  <TableCell>Platform</TableCell>
                   <TableCell align="right">From Amount</TableCell>
                   <TableCell align="right">To Amount</TableCell>
                 </TableRow>

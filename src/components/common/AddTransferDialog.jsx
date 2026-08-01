@@ -67,7 +67,7 @@ function AddTransferDialog({ open, onClose }) {
       toAmount: '',
       categoryId: '',
       description: '',
-      rateNote: '',
+      ratePlatform: '',
       status: 'Cleared',
       date: format(new Date(), 'yyyy-MM-dd'),
     },
@@ -121,7 +121,7 @@ function AddTransferDialog({ open, onClose }) {
         toAmount: '',
         categoryId: '',
         description: '',
-        rateNote: '',
+        ratePlatform: '',
         status: 'Cleared',
         date: format(new Date(), 'yyyy-MM-dd'),
       });
@@ -195,12 +195,12 @@ function AddTransferDialog({ open, onClose }) {
       }
 
       // A cross-currency transfer logs an exchange rate, and a rate with no
-      // context is unreadable months later on the Exchange Rates page (which is
-      // read-only, so this is the only chance to say why).
-      if (!sameCurrency && !String(cleanedData.rateNote || '').trim()) {
-        setError('rateNote', {
+      // provider against it is unreadable months later on the Exchange Rates
+      // page (which is read-only, so this is the only chance to record it).
+      if (!sameCurrency && !String(cleanedData.ratePlatform || '').trim()) {
+        setError('ratePlatform', {
           type: 'manual',
-          message: 'Tell us what this conversion was for',
+          message: 'Platform used is required',
         });
         setIsSubmitting(false);
         return;
@@ -211,7 +211,7 @@ function AddTransferDialog({ open, onClose }) {
         toAccountId: cleanedData.toAccountId,
         categoryId: cleanedData.categoryId || null,
         description: cleanedData.description || '',
-        rateNote: sameCurrency ? '' : cleanedData.rateNote.trim(),
+        ratePlatform: sameCurrency ? '' : cleanedData.ratePlatform.trim(),
         status: cleanedData.status || 'Cleared',
         date: cleanedData.date || format(new Date(), 'yyyy-MM-dd'),
       };
@@ -428,18 +428,16 @@ function AddTransferDialog({ open, onClose }) {
                     </Typography>
                   </Grid>
                 )}
-                {/* Belongs to the rate, not the transactions: it's what shows
-                    against this conversion on the Exchange Rates page */}
+                {/* Belongs to the rate, not the transactions: which service
+                    the money was converted through */}
                 <Grid item xs={12}>
                   <TextField
                     fullWidth
-                    label="What was this conversion for? *"
-                    {...register('rateNote')}
-                    error={!!errors.rateNote}
-                    helperText={
-                      errors.rateNote?.message ||
-                      'Shown with this rate on the Exchange Rates page'
-                    }
+                    label="Platform used *"
+                    placeholder="e.g. Wise, CBE"
+                    {...register('ratePlatform')}
+                    error={!!errors.ratePlatform}
+                    helperText={errors.ratePlatform?.message}
                   />
                 </Grid>
               </>
