@@ -739,10 +739,18 @@ function Reports() {
       true
     ).amount;
 
+    // Same for the plan itself (incl. descendants, matching how budgetAmount is
+    // rolled up above), so a row can show how the plan moved, not just spending
+    const previousBudget = calculateCategoryBudget(
+      category.category_id,
+      previousDateRange
+    ).amount;
+
     return {
       budget: budgetAmount,
       actual: actualAmount,
       previousActual,
+      previousBudget,
       difference,
       variance,
       currencies: Array.from(allCurrencies),
@@ -1344,6 +1352,7 @@ function Reports() {
       budget,
       actual,
       previousActual,
+      previousBudget,
       difference,
       variance,
       currencies,
@@ -1361,14 +1370,20 @@ function Reports() {
       previousActual,
       type === 'Income' ? 'up' : 'down'
     );
+    // How the plan itself moved vs the previous period, coloured like the
+    // spending delta: a bigger expense plan reads as loosening, a bigger income
+    // plan as aiming higher
+    const planDelta = getDelta(
+      budget,
+      previousBudget,
+      type === 'Income' ? 'up' : 'down'
+    );
     const ownBudget = findBudgetForCategory(category.category_id);
     const childBudgets =
       budget > 0 && hasChildren && descendantsHaveBudgets(category.category_id);
     // Aggregated purely from children (the common case): no label needed.
-    // A real parent-level budget is the rare case worth flagging.
     const budgetFromChildrenOnly = childBudgets && !ownBudget;
     const budgetIncludesChildren = childBudgets && !!ownBudget;
-    const budgetParentOnly = !!ownBudget && hasChildren && !childBudgets;
 
     // Difference is shown in a single currency — the one it was budgeted in
     const diffForeign = getForeignCurrencyDisplay(
@@ -1468,15 +1483,17 @@ function Reports() {
                     alignItems: 'flex-end',
                   }}
                 >
+                  {/* Meta (share, plan trend, edit affordance) sits to the LEFT
+                      so the amount is always the last element and every row's
+                      number ends on the same right edge */}
                   <Box
-                    sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'flex-end',
+                      gap: 0.5,
+                    }}
                   >
-                    {renderCurrencyCell(budget, budgetOriginalAmounts, true)}
-                    {!budgetFromChildrenOnly && (
-                      <EditIcon
-                        sx={{ fontSize: 12, color: 'text.secondary' }}
-                      />
-                    )}
                     {sectionBudget > 0 && budget > 0 && (
                       <Typography
                         component="span"
@@ -1489,8 +1506,19 @@ function Reports() {
                         {Math.round((budget / sectionBudget) * 100)}%
                       </Typography>
                     )}
+                    {planDelta && (
+                      <Box sx={{ fontSize: '0.6875rem' }}>
+                        {renderDelta(planDelta)}
+                      </Box>
+                    )}
+                    {!budgetFromChildrenOnly && (
+                      <EditIcon
+                        sx={{ fontSize: 12, color: 'text.secondary' }}
+                      />
+                    )}
+                    {renderCurrencyCell(budget, budgetOriginalAmounts, true)}
                   </Box>
-                  {(budgetParentOnly || budgetIncludesChildren) && (
+                  {budgetIncludesChildren && (
                     <Typography
                       variant="caption"
                       sx={{
@@ -1499,7 +1527,7 @@ function Reports() {
                         fontStyle: 'italic',
                       }}
                     >
-                      {budgetParentOnly ? 'Parent only' : 'Incl. subcategories'}
+                      Incl. subcategories
                     </Typography>
                   )}
                 </Box>
@@ -1518,13 +1546,8 @@ function Reports() {
           </TableCell>
           <TableCell align="right">
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.625 }}>
-              {isMixed && <MixedCurrencyChip currencies={currencies} />}
-              {spendDelta && (
-                <Box sx={{ fontSize: '0.6875rem' }}>
-                  {renderDelta(spendDelta)}
-                </Box>
-              )}
-              {renderCurrencyCell(actual, actualOriginalAmounts, false)}
+              {/* Share, currency chip and trend all lead; the amount closes the
+                  cell so the numbers line up down the column */}
               {sectionActual > 0 && actual > 0 && (
                 <Typography
                   component="span"
@@ -1537,6 +1560,13 @@ function Reports() {
                   {Math.round((actual / sectionActual) * 100)}%
                 </Typography>
               )}
+              {isMixed && <MixedCurrencyChip currencies={currencies} />}
+              {spendDelta && (
+                <Box sx={{ fontSize: '0.6875rem' }}>
+                  {renderDelta(spendDelta)}
+                </Box>
+              )}
+              {renderCurrencyCell(actual, actualOriginalAmounts, false)}
             </Box>
           </TableCell>
           <TableCell align="right">
@@ -1685,6 +1715,7 @@ function Reports() {
       budget,
       actual,
       previousActual,
+      previousBudget,
       difference,
       currencies,
       isMixed,
@@ -1699,6 +1730,12 @@ function Reports() {
     const spendDelta = getDelta(
       actual,
       previousActual,
+      type === 'Income' ? 'up' : 'down'
+    );
+    // Same trend for the plan, shown beside it (see renderCategoryRow)
+    const planDelta = getDelta(
+      budget,
+      previousBudget,
       type === 'Income' ? 'up' : 'down'
     );
     const overBudget = type === 'Expense' && budget > 0 && actual > budget;
@@ -1730,21 +1767,15 @@ function Reports() {
           : 'left'
         : '';
 
-    // Budgets aggregated purely from children (the common case) get no
-    // label; a real parent-level budget is the rare case worth flagging.
-    // A parent can also have its own budget plus budgeted children (tapping
-    // edits the own record, smaller than the shown sum) — kept honest.
+    // Only one case needs a label: a parent with its own budget AND budgeted
+    // children, where tapping edits the own record — smaller than the shown
+    // sum. A budget that lives only on the parent needs no caveat.
     const ownBudget = findBudgetForCategory(category.category_id);
     const childBudgets =
       budget > 0 && hasChildren && descendantsHaveBudgets(category.category_id);
     const budgetFromChildrenOnly = childBudgets && !ownBudget;
     const budgetIncludesChildren = childBudgets && !!ownBudget;
-    const budgetParentOnly = !!ownBudget && hasChildren && !childBudgets;
-    const budgetLabel = budgetParentOnly
-      ? ' · parent only'
-      : budgetIncludesChildren
-      ? ' · incl. subs'
-      : '';
+    const budgetLabel = budgetIncludesChildren ? ' · incl. subs' : '';
 
     return (
       <Fragment key={category.category_id}>
@@ -1946,6 +1977,11 @@ function Reports() {
                       />
                     )}
                   </Box>
+                  {planDelta && (
+                    <Box sx={{ fontSize: '0.6875rem', flexShrink: 0 }}>
+                      {renderDelta(planDelta)}
+                    </Box>
+                  )}
                 </>
               ) : (
                 <Typography
