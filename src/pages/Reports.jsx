@@ -1223,8 +1223,6 @@ function Reports() {
 
   // "Off budget only" filter — expenses over their budget, income short of plan
   const [attentionOnly, setAttentionOnly] = useState(false);
-  // Biggest-changes section stays collapsed until asked for
-  const [moversExpanded, setMoversExpanded] = useState(false);
   const attentionCount = useMemo(
     () =>
       expenseReportData.filter((i) => i.budget > 0 && i.actual > i.budget)
@@ -1246,24 +1244,6 @@ function Reports() {
         : expenseReportData,
     [attentionOnly, expenseReportData]
   );
-
-  // Biggest expense changes vs the previous period — the "what moved?" cue.
-  // Only meaningful once there's prior-period data to compare against.
-  const biggestMovers = useMemo(() => {
-    const hasPrior = expenseReportDataFull.some(
-      (i) => (i.previousActual || 0) > 0
-    );
-    if (!hasPrior) return [];
-    return expenseReportDataFull
-      .map((i) => ({
-        categoryId: i.category.category_id,
-        name: i.category.name,
-        delta: i.actual - (i.previousActual || 0),
-      }))
-      .filter((m) => Math.abs(m.delta) >= 1)
-      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
-      .slice(0, 3);
-  }, [expenseReportDataFull]);
 
   const incomeTotals = useMemo(
     () => calculateSectionTotals(incomeReportData),
@@ -2666,7 +2646,17 @@ function Reports() {
               overflowX: 'auto',
             }}
           >
-            <Table size="small" sx={{ minWidth: 600, tableLayout: 'fixed', '& td, & th': { whiteSpace: 'nowrap' } }}>
+            <Table
+              size="small"
+              sx={{
+                minWidth: 600,
+                tableLayout: 'fixed',
+                '& td, & th': { whiteSpace: 'nowrap' },
+                // Keep Progress off the window edge — the last column is the
+                // one that would otherwise sit flush against it
+                '& td:last-of-type, & th:last-of-type': { pr: 8 },
+              }}
+            >
               <TableHead>
                 <TableRow>
                   <TableCell>Category</TableCell>
@@ -2729,7 +2719,17 @@ function Reports() {
               overflowX: 'auto',
             }}
           >
-            <Table size="small" sx={{ minWidth: 600, tableLayout: 'fixed', '& td, & th': { whiteSpace: 'nowrap' } }}>
+            <Table
+              size="small"
+              sx={{
+                minWidth: 600,
+                tableLayout: 'fixed',
+                '& td, & th': { whiteSpace: 'nowrap' },
+                // Keep Progress off the window edge — the last column is the
+                // one that would otherwise sit flush against it
+                '& td:last-of-type, & th:last-of-type': { pr: 8 },
+              }}
+            >
               <TableHead>
                 <TableRow>
                   <TableCell>Category</TableCell>
@@ -2849,7 +2849,17 @@ function Reports() {
                 Other Activity
               </Typography>
               <Box sx={{ overflowX: 'auto' }}>
-                <Table size="small" sx={{ minWidth: 600, tableLayout: 'fixed', '& td, & th': { whiteSpace: 'nowrap' } }}>
+                <Table
+                  size="small"
+                  sx={{
+                    minWidth: 600,
+                    tableLayout: 'fixed',
+                    '& td, & th': { whiteSpace: 'nowrap' },
+                    // Keep Progress off the window edge — the last column is the
+                    // one that would otherwise sit flush against it
+                    '& td:last-of-type, & th:last-of-type': { pr: 8 },
+                  }}
+                >
                   <TableHead>
                     <TableRow>
                       <TableCell>Category</TableCell>
@@ -2899,90 +2909,6 @@ function Reports() {
             </>
           )}
         </Box>
-      )}
-
-      {/* Biggest changes vs the previous period — a trends footer at the very
-          bottom, so it no longer interrupts the summary → category-detail flow. */}
-      {biggestMovers.length > 0 && (
-        <>
-
-          <Box sx={{ mb: { xs: 2.5, sm: 3 } }}>
-            <Box
-              onClick={() => setMoversExpanded((v) => !v)}
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                cursor: 'pointer',
-                py: 0.25,
-                ...tappableRowSx,
-              }}
-            >
-              <Typography
-                sx={{
-                  fontSize: '0.6875rem',
-                  fontWeight: 700,
-                  letterSpacing: 0.6,
-                  textTransform: 'uppercase',
-                  color: 'text.secondary',
-                }}
-              >
-                Biggest changes vs {periodWord}
-              </Typography>
-              <ExpandMoreIcon
-                sx={{
-                  fontSize: 20,
-                  color: 'text.secondary',
-                  transition: 'transform 0.2s',
-                  transform: moversExpanded ? 'none' : 'rotate(-90deg)',
-                }}
-              />
-            </Box>
-            <Collapse in={moversExpanded}>
-              <Box sx={{ display: 'flex', flexDirection: 'column', mt: 0.5 }}>
-                {biggestMovers.map((m) => {
-                  const up = m.delta > 0;
-                  const Arrow = up ? ArrowDropUpIcon : ArrowDropDownIcon;
-                  return (
-                    <Box
-                      key={m.categoryId}
-                      onClick={() => handleRowClick(m.categoryId, 'Expense')}
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: 1,
-                        py: 0.75,
-                        '&:not(:last-of-type)': {
-                          borderBottom: '1px solid',
-                          borderColor: 'divider',
-                        },
-                        ...tappableRowSx,
-                      }}
-                    >
-                      <Typography noWrap sx={{ fontSize: '0.875rem', minWidth: 0 }}>
-                        {m.name}
-                      </Typography>
-                      <Box
-                        sx={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          flexShrink: 0,
-                          color: up ? 'google.red' : 'google.green',
-                        }}
-                      >
-                        <Arrow sx={{ fontSize: 20 }} />
-                        <Typography sx={{ fontSize: '0.8125rem', fontWeight: 600 }}>
-                          {fmt(Math.abs(m.delta), baseCurrency)}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  );
-                })}
-              </Box>
-            </Collapse>
-          </Box>
-        </>
       )}
 
       {/* Transaction Modal */}
