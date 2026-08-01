@@ -8,51 +8,54 @@ import { deduplicatedRequest } from '../../lib/api/requestDeduplication';
 // Apply client-side filters + sort to produce the visible transactions list
 // (exported for selectFilteredTransactions in store/selectors)
 export function applyTransactionFilters(allTransactions, filters = {}) {
-  let filtered = [...allTransactions];
+  const { accountId, categoryId, type, status, startDate, endDate } = filters;
+  const needsDateCompare = !!startDate || !!endDate;
 
-  // Always filter out deleted transactions
-  filtered = filtered.filter(t => !t.deleted_at);
-
-  if (filters.accountId) {
-    filtered = filtered.filter(t => t.account_id === filters.accountId);
-  }
-  if (filters.categoryId) {
-    filtered = filtered.filter(t => t.category_id === filters.categoryId);
-  }
-  if (filters.type) {
-    filtered = filtered.filter(t => t.type === filters.type);
-  }
-  if (filters.status) {
-    filtered = filtered.filter(t => t.status === filters.status);
-  }
-  // Date filtering: extract date portion from TIMESTAMPTZ for comparison
-  // t.date may be a full ISO timestamp like "2025-12-30T12:00:00+00:00"
-  // filters use date-only strings like "2025-12-30"
-  if (filters.startDate) {
-    filtered = filtered.filter(t => {
+  // One pass rather than seven. Every predicate is an AND, so the sequential
+  // .filter() chain only existed to allocate six throwaway arrays.
+  //
+  // Sort keys are computed here too, once per row. The comparator used to build
+  // two Date objects per comparison — at n log n that was hundreds of thousands
+  // of allocations for a list this size, and it dominated the whole function.
+  const decorated = [];
+  for (const t of allTransactions) {
+    // Always filter out deleted transactions
+    if (t.deleted_at) continue;
+    if (accountId && t.account_id !== accountId) continue;
+    if (categoryId && t.category_id !== categoryId) continue;
+    if (type && t.type !== type) continue;
+    if (status && t.status !== status) continue;
+    if (needsDateCompare) {
+      // t.date may be a full ISO timestamp like "2025-12-30T12:00:00+00:00"
+      // filters use date-only strings like "2025-12-30"
       const txnDate = t.date ? t.date.split('T')[0] : '';
-      return txnDate >= filters.startDate;
-    });
-  }
-  if (filters.endDate) {
-    filtered = filtered.filter(t => {
-      const txnDate = t.date ? t.date.split('T')[0] : '';
-      return txnDate <= filters.endDate;
-    });
-  }
-
-  // Sort by date descending, then by created_at if available (newest first)
-  filtered.sort((a, b) => {
-    const dateDiff = new Date(b.date) - new Date(a.date);
-    if (dateDiff !== 0) return dateDiff;
-    // If same date, sort by created_at descending (newest first)
-    if (a.created_at && b.created_at) {
-      return new Date(b.created_at) - new Date(a.created_at);
+      if (startDate && !(txnDate >= startDate)) continue;
+      if (endDate && !(txnDate <= endDate)) continue;
     }
+    decorated.push({
+      txn: t,
+      // Matches `new Date(x) - new Date(y)` exactly, NaN propagation included:
+      // an unparseable date yields NaN, the comparator returns NaN, and the
+      // engine treats that as 0 — leaving such rows in their original order.
+      date: new Date(t.date).getTime(),
+      // Truthiness of the raw value decides whether created_at breaks the tie,
+      // exactly as before — not whether it parses.
+      hasCreated: !!t.created_at,
+      created: t.created_at ? new Date(t.created_at).getTime() : 0,
+    });
+  }
+
+  // Sort by date descending, then by created_at if available (newest first).
+  // Array.prototype.sort is stable, so rows that compare equal keep their
+  // original relative order, as they did before.
+  decorated.sort((a, b) => {
+    const dateDiff = b.date - a.date;
+    if (dateDiff !== 0) return dateDiff;
+    if (a.hasCreated && b.hasCreated) return b.created - a.created;
     return 0;
   });
 
-  return filtered;
+  return decorated.map((d) => d.txn);
 }
 
 // How long fetched copies of locally-deleted transactions are ignored.
