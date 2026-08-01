@@ -28,13 +28,15 @@ Return ONLY valid JSON:
       "amount": 0.00,
       "suggestedCategoryId": "CAT_XXX",
       "suggestedCategoryName": "Category Name",
-      "type": "Income" or "Expense"
+      "type": "Income" or "Expense",
+      "entityName": "Person or organisation, or empty string"
     }
   ]
 }
 
 Rules:
 - Parse multiple transactions if mentioned (e.g., "groceries $50 and coffee $5" = 2 transactions)
+- entityName: the person or organisation the money was lent to or borrowed from ("lent 2000 to Abebe" = "Abebe"). Required whenever the category is about lending or borrowing; use an empty string for every other transaction
 - Infer type from context: spending/bought/paid = Expense, received/earned/got paid = Income
 - ALWAYS prefer the most specific subcategory over a parent category; never assign a parent category if subcategories exist beneath it
 - If no specific subcategory matches an item, use the one whose name contains "General" (e.g. "General: groceries") rather than the parent
@@ -251,6 +253,9 @@ Deno.serve(async (req: Request) => {
         Description = '',
         Type = 'Expense',
         Date: dateField,
+        // Who a lending/borrowing transaction is with. The database turns this
+        // into the borrowings_lendings record (migration 016).
+        EntityName = null,
       } = body;
 
       // Validate required fields
@@ -321,6 +326,7 @@ Deno.serve(async (req: Request) => {
         status: 'Cleared',
         transfer_id: null,
         linked_transaction_id: null,
+        entity_name: EntityName ? String(EntityName).trim() || null : null,
         created_at: now.toISOString(),
       };
 
@@ -385,6 +391,7 @@ Deno.serve(async (req: Request) => {
           Description = '',
           Type = 'Expense',
           Date: dateField,
+          EntityName = null,
         } = txn;
 
         const errors = [];
@@ -447,6 +454,7 @@ Deno.serve(async (req: Request) => {
           status: 'Cleared',
           transfer_id: null,
           linked_transaction_id: null,
+          entity_name: EntityName ? String(EntityName).trim() || null : null,
           created_at: now.toISOString(),
         });
       }
@@ -583,6 +591,7 @@ Deno.serve(async (req: Request) => {
           status: 'Cleared',
           transfer_id: null,
           linked_transaction_id: null,
+          entity_name: (txn.entityName || '').trim() || null,
           created_at: now.toISOString(),
         });
       }

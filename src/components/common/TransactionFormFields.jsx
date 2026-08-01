@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import { useSelector } from 'react-redux';
 import {
+  Autocomplete,
   Box,
   Button,
   Chip,
@@ -20,6 +22,11 @@ import AccountAutocomplete from './AccountAutocomplete';
 import BudgetInlineCue from './BudgetInlineCue';
 import { flattenCategoryTree } from '../../utils/categoryHierarchy';
 import { currencyLabel } from '../../utils/currencyConversion';
+import { isEntityNameRequired } from '../../utils/borrowingLendingParser';
+import {
+  selectBorrowingLendingCategoryIds,
+  selectEntityNameSuggestions,
+} from '../../store/selectors';
 import {
   TRANSACTION_TYPES,
   TRANSACTION_STATUSES,
@@ -69,6 +76,18 @@ export default function TransactionFormFields({
   const watchedCategoryId = watch('categoryId');
   const watchedType = watch('type');
   const watchedStatus = watch('status');
+
+  // Lending/borrowing transactions become a record on the Borrowings & Lendings
+  // page, filed under whoever the money went to or came from — so ask for that
+  // name here rather than parsing it out of the description afterwards.
+  const borrowingLendingCategoryIds = useSelector(
+    selectBorrowingLendingCategoryIds
+  );
+  const entityNameSuggestions = useSelector(selectEntityNameSuggestions);
+  const showEntityName = isEntityNameRequired(
+    watchedCategoryId,
+    borrowingLendingCategoryIds
+  );
 
   // Filter categories by type and flatten with hierarchy
   const getFilteredCategories = () => {
@@ -238,6 +257,32 @@ export default function TransactionFormFields({
           excludeTransactionId={excludeTransactionId}
         />
       </Grid>
+      {showEntityName && (
+        <Grid item xs={12}>
+          <Autocomplete
+            freeSolo
+            options={entityNameSuggestions}
+            value={watch('entityName') || ''}
+            onChange={(event, value) =>
+              setValue('entityName', value || '', { shouldValidate: true })
+            }
+            onInputChange={(event, value) =>
+              setValue('entityName', value || '', { shouldValidate: true })
+            }
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Who is this with? *"
+                error={!!errors.entityName}
+                helperText={
+                  errors.entityName?.message ||
+                  'Names the borrowing/lending record this creates'
+                }
+              />
+            )}
+          />
+        </Grid>
+      )}
       <Grid item xs={12}>
         <TextField
           fullWidth

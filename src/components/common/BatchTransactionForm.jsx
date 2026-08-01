@@ -14,6 +14,11 @@ import {
 import { format } from 'date-fns';
 import { transactionSchema } from '../../schemas/transactionSchema';
 import TransactionFormFields from './TransactionFormFields';
+import { selectBorrowingLendingCategoryIds } from '../../store/selectors';
+import {
+  ENTITY_NAME_REQUIRED_MESSAGE,
+  isEntityNameRequired,
+} from '../../utils/borrowingLendingParser';
 
 /**
  * Batch Transaction Form Component
@@ -33,6 +38,9 @@ function BatchTransactionForm({
   const { accounts } = useSelector((state) => state.accounts);
   const { categories } = useSelector((state) => state.categories);
   const { settings } = useSelector((state) => state.settings);
+  const borrowingLendingCategoryIds = useSelector(
+    selectBorrowingLendingCategoryIds
+  );
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [actionError, setActionError] = useState(null);
@@ -58,6 +66,7 @@ function BatchTransactionForm({
     handleSubmit,
     formState: { errors },
     reset,
+    setError,
     setValue,
     watch,
   } = useForm({
@@ -68,6 +77,7 @@ function BatchTransactionForm({
       amount: '',
       currency: '',
       description: '',
+      entityName: '',
       type: 'Expense',
       status: 'Cleared',
       date: format(new Date(), 'yyyy-MM-dd'),
@@ -92,6 +102,7 @@ function BatchTransactionForm({
           amount: editingTransaction.amount,
           currency: editingTransaction.currency,
           description: editingTransaction.description || '',
+          entityName: editingTransaction.entityName || '',
           type: editingTransaction.type,
           status: editingTransaction.status,
           date: editingTransaction.date,
@@ -104,6 +115,7 @@ function BatchTransactionForm({
           amount: '',
           currency: '',
           description: '',
+          entityName: '',
           type: 'Expense',
           status: 'Cleared',
           date: format(new Date(), 'yyyy-MM-dd'),
@@ -131,8 +143,26 @@ function BatchTransactionForm({
     }
   }, [watchedAccountId, accounts, setValue]);
 
+  // A borrowing/lending row needs the counterparty its record is filed under.
+  // Checked here rather than in the zod schema, which doesn't know which
+  // categories those are.
+  const missingEntityName = (data) => {
+    if (
+      isEntityNameRequired(data.categoryId, borrowingLendingCategoryIds) &&
+      !String(data.entityName || '').trim()
+    ) {
+      setError('entityName', {
+        type: 'manual',
+        message: ENTITY_NAME_REQUIRED_MESSAGE,
+      });
+      return true;
+    }
+    return false;
+  };
+
   // Handle Next button - save and create new
   const handleNext = handleSubmit((data) => {
+    if (missingEntityName(data)) return;
     setIsProcessing(true);
     try {
       if (editingTransaction) {
@@ -148,6 +178,7 @@ function BatchTransactionForm({
         amount: '',
         currency: '',
         description: '',
+        entityName: '',
         type: 'Expense',
         status: 'Cleared',
         date: format(new Date(), 'yyyy-MM-dd'),
@@ -171,6 +202,7 @@ function BatchTransactionForm({
   const handleDone = handleSubmit(
     (data) => {
       // Valid form data
+      if (missingEntityName(data)) return;
       onDone(data);
     },
     () => {

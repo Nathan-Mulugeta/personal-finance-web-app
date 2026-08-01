@@ -15,6 +15,10 @@ export async function createTransfer(transferData) {
     toAmount, // For multi-currency
     categoryId = null,
     description = '',
+    // Context for the logged exchange rate. Separate from `description`, which
+    // belongs to the two transactions — the Exchange Rates page needs to say
+    // why a conversion happened, not what moved.
+    rateNote = '',
     status = 'Cleared',
     date,
   } = transferData
@@ -127,7 +131,7 @@ export async function createTransfer(transferData) {
       rate,
       fromAmount: finalFromAmount,
       toAmount: finalToAmount,
-      description: description || null,
+      description: rateNote || null,
       date: transferDate.toISOString(),
     })
   }

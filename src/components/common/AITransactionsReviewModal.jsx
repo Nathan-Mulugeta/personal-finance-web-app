@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
+  Autocomplete,
   Box,
   Button,
   Chip,
@@ -29,7 +30,15 @@ import {
   getParentCategoryIds,
 } from '../../utils/categoryHierarchy';
 import { batchCreateTransactions } from '../../store/slices/transactionsSlice';
-import { selectPrefixReceiptMerchant } from '../../store/selectors';
+import {
+  selectBorrowingLendingCategoryIds,
+  selectEntityNameSuggestions,
+  selectPrefixReceiptMerchant,
+} from '../../store/selectors';
+import {
+  ENTITY_NAME_REQUIRED_MESSAGE,
+  isEntityNameRequired,
+} from '../../utils/borrowingLendingParser';
 import { format } from 'date-fns';
 import { formatCurrency } from '../../utils/currencyConversion';
 import { useAutoDismissError } from '../../hooks/useAutoDismissError';
@@ -60,6 +69,10 @@ function AITransactionsReviewModal({
   const { accounts } = useSelector((state) => state.accounts);
   const { settings } = useSelector((state) => state.settings);
   const prefixMerchant = useSelector(selectPrefixReceiptMerchant);
+  const borrowingLendingCategoryIds = useSelector(
+    selectBorrowingLendingCategoryIds
+  );
+  const entityNameSuggestions = useSelector(selectEntityNameSuggestions);
 
   // Get default account from settings
   const defaultAccountId = useMemo(() => {
@@ -128,6 +141,8 @@ function AITransactionsReviewModal({
             categoryId: txn.suggestedCategoryId || '',
             categoryName: txn.suggestedCategoryName || '',
             type: txn.type || 'Expense',
+            // Who the money was lent to / borrowed from, when the text said so
+            entityName: (txn.entityName || '').trim(),
             applyTax: applyTax,
           };
         },
@@ -250,6 +265,7 @@ function AITransactionsReviewModal({
       categoryId: '',
       categoryName: '',
       type: 'Expense',
+      entityName: '',
       applyTax: applyTax,
     };
     setTransactions((prev) => [...prev, newTransaction]);
@@ -292,6 +308,17 @@ function AITransactionsReviewModal({
       return;
     }
 
+    // Lending/borrowing rows create a record filed under a counterparty
+    const missingEntity = validTransactions.filter(
+      (txn) =>
+        isEntityNameRequired(txn.categoryId, borrowingLendingCategoryIds) &&
+        !String(txn.entityName || '').trim(),
+    ).length;
+    if (missingEntity > 0) {
+      setError(ENTITY_NAME_REQUIRED_MESSAGE);
+      return;
+    }
+
     setIsSubmitting(true);
     setError(null);
 
@@ -306,6 +333,7 @@ function AITransactionsReviewModal({
         type: txn.type,
         status: 'Cleared',
         date: selectedDate,
+        entityName: (txn.entityName || '').trim() || null,
       }));
 
       // Use batch create
@@ -519,6 +547,47 @@ function AITransactionsReviewModal({
                     <DeleteOutlineIcon fontSize="small" />
                   </IconButton>
                 </Box>
+
+                {/* Counterparty — only for the lending/borrowing categories,
+                    where saving files a record under this name */}
+                {isEntityNameRequired(
+                  txn.categoryId,
+                  borrowingLendingCategoryIds,
+                ) && (
+                  <Autocomplete
+                    freeSolo
+                    options={entityNameSuggestions}
+                    value={txn.entityName || ''}
+                    onChange={(event, value) =>
+                      handleTransactionChange(
+                        txn.id,
+                        'entityName',
+                        value || '',
+                      )
+                    }
+                    onInputChange={(event, value) =>
+                      handleTransactionChange(
+                        txn.id,
+                        'entityName',
+                        value || '',
+                      )
+                    }
+                    size="small"
+                    sx={{ mt: 1.5 }}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Who is this with?"
+                        error={!String(txn.entityName || '').trim()}
+                        helperText={
+                          !String(txn.entityName || '').trim()
+                            ? 'Required for borrowing and lending'
+                            : ''
+                        }
+                      />
+                    )}
+                  />
+                )}
 
                 {/* Tax toggle (receipts only) — compact chip */}
                 {isReceipt && (

@@ -1,6 +1,4 @@
 import { supabase, generateId, getCurrentUser } from '../supabase';
-import { parseEntityName } from '../../utils/borrowingLendingParser';
-import * as settingsApi from './settings';
 
 // Transaction types enum
 export const TRANSACTION_TYPES = [
@@ -56,6 +54,9 @@ export async function createTransaction(transactionData) {
     date,
     transferId = null,
     linkedTransactionId = null,
+    // Counterparty for a borrowing/lending transaction. The database turns this
+    // into the borrowings_lendings record (migration 016).
+    entityName = null,
   } = transactionData;
 
   // Basic client-side validation
@@ -116,6 +117,7 @@ export async function createTransaction(transactionData) {
     p_status: status,
     p_transfer_id: transferId,
     p_linked_transaction_id: linkedTransactionId,
+    p_entity_name: entityName || null,
   });
 
   if (error) {
@@ -124,150 +126,7 @@ export async function createTransaction(transactionData) {
     throw new Error(message);
   }
 
-  // Auto-create borrowing/lending record if category matches
-  try {
-    await autoCreateBorrowingLending(data);
-  } catch (err) {
-    // Log error but don't fail transaction creation
-    console.error('Failed to create borrowing/lending record:', err);
-  }
-
   return data;
-}
-
-// Auto-create borrowing/lending record
-async function autoCreateBorrowingLending(transaction) {
-  // Get settings
-  const settings = await settingsApi.getSettings();
-  const borrowingCategoryId = settings.find(
-    (s) => s.setting_key === 'BorrowingCategoryID'
-  )?.setting_value;
-  const lendingCategoryId = settings.find(
-    (s) => s.setting_key === 'LendingCategoryID'
-  )?.setting_value;
-
-  // Check if transaction category matches borrowing or lending category
-  // Handle empty strings and null values
-  const hasBorrowingCategory =
-    borrowingCategoryId && borrowingCategoryId.trim() !== '';
-  const hasLendingCategory =
-    lendingCategoryId && lendingCategoryId.trim() !== '';
-
-  if (!hasBorrowingCategory && !hasLendingCategory) {
-    return; // No categories configured
-  }
-
-  // Skip if transaction has no category
-  if (!transaction.category_id) {
-    return;
-  }
-
-  let recordType = null;
-  // Compare category IDs (both should be strings)
-  const transactionCategoryId = String(transaction.category_id);
-
-  if (
-    hasBorrowingCategory &&
-    transactionCategoryId === String(borrowingCategoryId)
-  ) {
-    recordType = 'Borrowing';
-  } else if (
-    hasLendingCategory &&
-    transactionCategoryId === String(lendingCategoryId)
-  ) {
-    recordType = 'Lending';
-  }
-
-  if (!recordType) {
-    return; // Category doesn't match
-  }
-
-  // Check if a borrowing/lending record already exists for this transaction
-  // This prevents duplicate records if this function is called multiple times
-  const { getBorrowingLendingRecords } = await import('./borrowingsLendings');
-  const existingRecords = await getBorrowingLendingRecords({});
-  const existingRecord = existingRecords.find(
-    (r) => r.original_transaction_id === transaction.transaction_id
-  );
-  
-  if (existingRecord) {
-    // Record already exists, don't create a duplicate
-    return;
-  }
-
-  // Parse entity name from description
-  const { entityName, notes } = parseEntityName(transaction.description);
-
-  // Create borrowing/lending record
-  const { createBorrowingLendingRecord } = await import('./borrowingsLendings');
-  await createBorrowingLendingRecord({
-    type: recordType,
-    originalTransactionId: transaction.transaction_id,
-    entityName,
-    originalAmount: Math.abs(transaction.amount),
-    currency: transaction.currency,
-    notes,
-  });
-}
-
-// Batch variant of auto-creating borrowing/lending records. The per-row
-// autoCreateBorrowingLending() re-fetches settings AND every borrowing/lending
-// record for each transaction, which turns a batch import into O(N) extra
-// round-trips. This fetches both once, then creates only the matching records.
-async function batchAutoCreateBorrowingLending(transactions) {
-  if (!transactions || transactions.length === 0) return;
-
-  const settings = await settingsApi.getSettings();
-  const borrowingCategoryId = settings.find(
-    (s) => s.setting_key === 'BorrowingCategoryID'
-  )?.setting_value;
-  const lendingCategoryId = settings.find(
-    (s) => s.setting_key === 'LendingCategoryID'
-  )?.setting_value;
-
-  const hasBorrowing = borrowingCategoryId && borrowingCategoryId.trim() !== '';
-  const hasLending = lendingCategoryId && lendingCategoryId.trim() !== '';
-  if (!hasBorrowing && !hasLending) return;
-
-  // Which transactions map to a borrowing/lending record?
-  const matches = [];
-  for (const txn of transactions) {
-    if (!txn.category_id) continue;
-    const catId = String(txn.category_id);
-    let recordType = null;
-    if (hasBorrowing && catId === String(borrowingCategoryId)) {
-      recordType = 'Borrowing';
-    } else if (hasLending && catId === String(lendingCategoryId)) {
-      recordType = 'Lending';
-    }
-    if (recordType) matches.push({ txn, recordType });
-  }
-  if (matches.length === 0) return;
-
-  const { getBorrowingLendingRecords, createBorrowingLendingRecord } =
-    await import('./borrowingsLendings');
-
-  // Fetch existing records once to skip transactions that already have one
-  const existingRecords = await getBorrowingLendingRecords({});
-  const existingTxnIds = new Set(
-    existingRecords.map((r) => r.original_transaction_id)
-  );
-
-  await Promise.allSettled(
-    matches
-      .filter(({ txn }) => !existingTxnIds.has(txn.transaction_id))
-      .map(({ txn, recordType }) => {
-        const { entityName, notes } = parseEntityName(txn.description);
-        return createBorrowingLendingRecord({
-          type: recordType,
-          originalTransactionId: txn.transaction_id,
-          entityName,
-          originalAmount: Math.abs(txn.amount),
-          currency: txn.currency,
-          notes,
-        });
-      })
-  );
 }
 
 // Batch create transactions
@@ -394,25 +253,19 @@ export async function batchCreateTransactions(transactionsArray) {
       status: txn.status || 'Cleared',
       transfer_id: txn.transferId || null,
       linked_transaction_id: txn.linkedTransactionId || null,
+      entity_name: txn.entityName || null,
       created_at: now.toISOString(),
     };
   });
 
-  // Insert all transactions
+  // Insert all transactions. Borrowing/lending records follow from the insert
+  // itself — see migration 016.
   const { data, error } = await supabase
     .from('transactions')
     .insert(transactionsToInsert)
     .select();
 
   if (error) throw error;
-
-  // Auto-create borrowing/lending records (non-blocking), fetching settings
-  // and existing records once for the whole batch instead of per row
-  try {
-    await batchAutoCreateBorrowingLending(data);
-  } catch (err) {
-    console.error('Failed to create borrowing/lending records for batch:', err);
-  }
 
   return data;
 }
@@ -639,6 +492,10 @@ export async function updateTransaction(transactionId, updates) {
   if (updates.status !== undefined) updateData.status = updates.status;
   if (updates.linkedTransactionId !== undefined)
     updateData.linked_transaction_id = updates.linkedTransactionId;
+  // Renaming the counterparty follows through to the borrowing/lending record
+  // it created — a trigger keeps the two in step (migration 016)
+  if (updates.entityName !== undefined)
+    updateData.entity_name = updates.entityName || null;
 
   // If no fields to update, return the existing transaction
   if (Object.keys(updateData).length === 0) {

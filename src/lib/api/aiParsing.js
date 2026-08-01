@@ -119,13 +119,15 @@ Return ONLY valid JSON:
       "amount": 0.00,
       "suggestedCategoryId": "CAT_XXX",
       "suggestedCategoryName": "Category Name",
-      "type": "Income" or "Expense"
+      "type": "Income" or "Expense",
+      "entityName": "Person or organisation, or empty string"
     }
   ]
 }
 
 Rules:
 - Parse multiple transactions if mentioned (e.g., "groceries $50 and coffee $5" = 2 transactions)
+- entityName: the person or organisation the money was lent to or borrowed from ("lent 2000 to Abebe" = "Abebe"). Required whenever the category is about lending or borrowing; use an empty string for every other transaction
 - Infer type from context: spending/bought/paid = Expense, received/earned/got paid = Income
 - ALWAYS prefer the most specific subcategory over a parent category; never assign a parent category if subcategories exist beneath it
 - If no specific subcategory matches an item, use the one whose name contains "General" (e.g. "General: groceries") rather than the parent
@@ -302,16 +304,20 @@ function buildResponseSchema(type) {
     'type',
   ];
 
+  // Receipts have a merchant, not a counterparty; entityName is only asked for
+  // on free-text entry, where "lent 2000 to Abebe" is the thing to capture.
+  // Strict mode requires every declared property to be required, so the model
+  // returns an empty string when it doesn't apply.
   const transactionSchema = {
     type: 'object',
     properties:
       type === 'receipt'
         ? { ...baseProperties, taxable: { type: 'boolean' } }
-        : baseProperties,
+        : { ...baseProperties, entityName: { type: 'string' } },
     required:
       type === 'receipt'
         ? [...baseRequired, 'taxable']
-        : baseRequired,
+        : [...baseRequired, 'entityName'],
     additionalProperties: false,
   };
 

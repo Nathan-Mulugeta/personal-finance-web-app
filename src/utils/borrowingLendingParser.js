@@ -1,7 +1,28 @@
 /**
+ * Does this transaction need a counterparty? True when its category is one of
+ * the configured borrowing/lending categories (or a subcategory of one), since
+ * saving it creates a borrowing/lending record that is filed under that name.
+ *
+ * @param {string} categoryId
+ * @param {Set<string>} borrowingLendingCategoryIds - see
+ *   selectBorrowingLendingCategoryIds
+ * @returns {boolean}
+ */
+export function isEntityNameRequired(categoryId, borrowingLendingCategoryIds) {
+  if (!categoryId || !borrowingLendingCategoryIds) return false
+  return borrowingLendingCategoryIds.has(categoryId)
+}
+
+export const ENTITY_NAME_REQUIRED_MESSAGE =
+  'Who this is with is required for borrowing and lending'
+
+/**
  * Parse entity name from transaction description
  * Format: "Description @EntityName" or "@EntityName Description"
  * Returns: { entityName: string, notes: string }
+ *
+ * Superseded by the explicit entity_name field — kept because the database
+ * still falls back to this convention for descriptions that use it.
  */
 export function parseEntityName(description) {
   if (!description || typeof description !== 'string') {

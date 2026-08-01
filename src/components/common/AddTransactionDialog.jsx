@@ -9,6 +9,11 @@ import { transactionSchema } from '../../schemas/transactionSchema';
 import AppDialog from './AppDialog';
 import TransactionFormFields from './TransactionFormFields';
 import { useAutoDismissError } from '../../hooks/useAutoDismissError';
+import { selectBorrowingLendingCategoryIds } from '../../store/selectors';
+import {
+  ENTITY_NAME_REQUIRED_MESSAGE,
+  isEntityNameRequired,
+} from '../../utils/borrowingLendingParser';
 
 /**
  * Global Add Transaction Dialog component.
@@ -20,7 +25,10 @@ function AddTransactionDialog({ open, onClose, initialValues = null }) {
   const { accounts } = useSelector((state) => state.accounts);
   const { categories } = useSelector((state) => state.categories);
   const { settings } = useSelector((state) => state.settings);
-  
+  const borrowingLendingCategoryIds = useSelector(
+    selectBorrowingLendingCategoryIds
+  );
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionError, setActionError] = useState(null);
   
@@ -50,6 +58,7 @@ function AddTransactionDialog({ open, onClose, initialValues = null }) {
     handleSubmit,
     formState: { errors },
     reset,
+    setError,
     setValue,
     watch,
   } = useForm({
@@ -60,6 +69,7 @@ function AddTransactionDialog({ open, onClose, initialValues = null }) {
       amount: '',
       currency: '',
       description: '',
+      entityName: '',
       type: 'Expense',
       status: 'Cleared',
       // Date-only format for HTML date input; API will add current time when saving
@@ -99,6 +109,7 @@ function AddTransactionDialog({ open, onClose, initialValues = null }) {
         amount: '',
         currency: '',
         description: '',
+        entityName: '',
         type: prefilledType,
         status: 'Cleared',
         // Date-only format for HTML date input; API will add current time when saving
@@ -162,12 +173,26 @@ function AddTransactionDialog({ open, onClose, initialValues = null }) {
   };
 
   const onSubmit = async (data) => {
+    // A borrowing/lending transaction files a record under a counterparty, so
+    // it can't be saved nameless (checked here rather than in the zod schema,
+    // which doesn't know which categories those are)
+    if (
+      isEntityNameRequired(data.categoryId, borrowingLendingCategoryIds) &&
+      !String(data.entityName || '').trim()
+    ) {
+      setError('entityName', {
+        type: 'manual',
+        message: ENTITY_NAME_REQUIRED_MESSAGE,
+      });
+      return;
+    }
+
     // Synchronous guard to prevent double submissions
     if (isSubmittingRef.current) {
       return;
     }
     isSubmittingRef.current = true;
-    
+
     setIsSubmitting(true);
     setActionError(null);
     try {

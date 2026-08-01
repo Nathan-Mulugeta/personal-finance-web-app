@@ -55,6 +55,7 @@ import ErrorMessage from '../components/common/ErrorMessage';
 import EmptyState from '../components/common/EmptyState';
 import ConfirmDeleteDialog from '../components/common/ConfirmDeleteDialog';
 import PageHeader from '../components/common/PageHeader';
+import { parseEntityName } from '../utils/borrowingLendingParser';
 import HeaderActionButton from '../components/common/HeaderActionButton';
 import { usePageRefresh } from '../hooks/usePageRefresh';
 import {
@@ -186,10 +187,16 @@ function BorrowingsLendings() {
         (txn) => txn.transaction_id === watchedTransactionId
       );
       if (transaction) {
-        // Extract entity name from description or use a default
-        const entityName = transaction.description
+        // Same order the database uses when it creates a record on its own
+        // (migration 016): the counterparty field first, then the legacy
+        // "@Name" in the description, then a guess at the first word.
+        const parsed = parseEntityName(transaction.description);
+        const fallback = transaction.description
           ? transaction.description.split(' ')[0]
           : 'Unknown';
+        const entityName =
+          (transaction.entity_name || '').trim() ||
+          (parsed.entityName !== 'Unknown' ? parsed.entityName : fallback);
         setValueCreate('entityName', entityName);
       }
     }

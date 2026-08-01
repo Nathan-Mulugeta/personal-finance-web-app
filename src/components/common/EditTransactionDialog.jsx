@@ -13,6 +13,11 @@ import { transactionSchema } from '../../schemas/transactionSchema';
 import ConfirmDeleteDialog from './ConfirmDeleteDialog';
 import AppDialog from './AppDialog';
 import TransactionFormFields from './TransactionFormFields';
+import { selectBorrowingLendingCategoryIds } from '../../store/selectors';
+import {
+  ENTITY_NAME_REQUIRED_MESSAGE,
+  isEntityNameRequired,
+} from '../../utils/borrowingLendingParser';
 
 /**
  * Reusable Edit Transaction Dialog component.
@@ -28,6 +33,9 @@ function EditTransactionDialog({ open, onClose, transaction }) {
 
   const { accounts } = useSelector((state) => state.accounts);
   const { categories } = useSelector((state) => state.categories);
+  const borrowingLendingCategoryIds = useSelector(
+    selectBorrowingLendingCategoryIds
+  );
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionError, setActionError] = useState(null);
@@ -43,6 +51,7 @@ function EditTransactionDialog({ open, onClose, transaction }) {
     handleSubmit,
     formState: { errors },
     reset,
+    setError,
     setValue,
     watch,
   } = useForm({
@@ -53,6 +62,7 @@ function EditTransactionDialog({ open, onClose, transaction }) {
       amount: '',
       currency: '',
       description: '',
+      entityName: '',
       type: 'Expense',
       status: 'Cleared',
       date: format(new Date(), 'yyyy-MM-dd'),
@@ -77,6 +87,7 @@ function EditTransactionDialog({ open, onClose, transaction }) {
         amount: transaction.amount,
         currency: transaction.currency,
         description: transaction.description || '',
+        entityName: transaction.entity_name || '',
         type: transaction.type,
         status: transaction.status,
         date: dateForInput,
@@ -122,6 +133,19 @@ function EditTransactionDialog({ open, onClose, transaction }) {
 
   const onSubmit = async (data) => {
     if (!transaction) return;
+
+    // Same rule as the Add dialog: a borrowing/lending transaction needs the
+    // counterparty its record is filed under
+    if (
+      isEntityNameRequired(data.categoryId, borrowingLendingCategoryIds) &&
+      !String(data.entityName || '').trim()
+    ) {
+      setError('entityName', {
+        type: 'manual',
+        message: ENTITY_NAME_REQUIRED_MESSAGE,
+      });
+      return;
+    }
 
     setIsSubmitting(true);
     setActionError(null);

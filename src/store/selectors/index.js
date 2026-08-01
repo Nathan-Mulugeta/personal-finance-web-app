@@ -1,5 +1,6 @@
 import { createSelector } from '@reduxjs/toolkit';
 import { applyTransactionFilters } from '../slices/transactionsSlice';
+import { getCategoryDescendants } from '../../utils/categoryHierarchy';
 
 // ============================================
 // Base Selectors (simple state accessors)
@@ -246,6 +247,29 @@ export const selectLendingPaymentCategoryId = createSelector(
   (settingsMap) => settingsMap.get('LendingPaymentCategoryID') || null
 );
 
+/**
+ * Category IDs that stand for borrowing or lending — the two configured in
+ * Settings plus every subcategory beneath them. Transactions post to leaves, so
+ * a "Lending > Friends" child has to count as lending too; the database trigger
+ * that creates the borrowing/lending record matches the same way.
+ */
+export const selectBorrowingLendingCategoryIds = createSelector(
+  [selectBorrowingCategoryId, selectLendingCategoryId, selectAllCategories],
+  (borrowingCategoryId, lendingCategoryId, categories) => {
+    const ids = new Set();
+    [borrowingCategoryId, lendingCategoryId]
+      .map((id) => (id == null ? '' : String(id).trim()))
+      .filter(Boolean)
+      .forEach((rootId) => {
+        ids.add(rootId);
+        getCategoryDescendants(rootId, categories).forEach((d) =>
+          ids.add(d.category_id)
+        );
+      });
+    return ids;
+  }
+);
+
 // ============================================
 // Composite Selectors (combining multiple slices)
 // ============================================
@@ -291,6 +315,22 @@ export const selectTotalBalanceInBaseCurrency = createSelector(
   }
 );
 
+
+/**
+ * Counterparties already on record, for the "Who is this with?" suggestions.
+ * Reusing an existing spelling keeps one ledger per person instead of two.
+ */
+export const selectEntityNameSuggestions = createSelector(
+  [(state) => state.borrowingsLendings.records],
+  (records) =>
+    Array.from(
+      new Set(
+        (records || [])
+          .map((r) => (r.entity_name || '').trim())
+          .filter((name) => name && name !== 'Unknown')
+      )
+    ).sort((a, b) => a.localeCompare(b))
+);
 
 /**
  * The visible (filtered) transactions list, derived from the single
