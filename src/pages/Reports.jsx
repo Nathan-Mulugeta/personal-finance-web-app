@@ -357,8 +357,23 @@ function Reports() {
     return count;
   };
 
+  // Per-render memo for the two scanning primitives below. Building a row for a
+  // parent already computes each child, and buildReportData's hasChildrenData
+  // check then asks for those same children again — so the same (category,
+  // range, type) scan runs several times over the whole transaction list.
+  //
+  // Deliberately a plain object rather than a useMemo: it is rebuilt on every
+  // render, so it can never serve a stale value, and the callers that matter
+  // (the report useMemos) all run within a single render.
+  const calcCache = { actual: new Map(), budget: new Map() };
+  const rangeKey = (range) =>
+    `${range.start.getTime()}|${range.end.getTime()}`;
+
   // Calculate budget for a category in a given date range (converted to base currency)
   const calculateCategoryBudget = (categoryId, dateRange) => {
+    const cacheKey = `${categoryId}|${rangeKey(dateRange)}`;
+    const cached = calcCache.budget.get(cacheKey);
+    if (cached) return cached;
     const categoryIds = getCategoryAndDescendantIds(categoryId);
     const { start: rangeStart, end: rangeEnd } = dateRange;
 
@@ -440,12 +455,14 @@ function Reports() {
       }
     });
 
-    return {
+    const result = {
       amount: totalBudget,
       currencies: Array.from(currencies),
       isMixed: currencies.size > 1,
       originalAmountsByCurrency,
     };
+    calcCache.budget.set(cacheKey, result);
+    return result;
   };
 
   // Calculate actual transactions for a category in a given date range (including descendants, converted to base currency)
@@ -455,6 +472,11 @@ function Reports() {
     type,
     includeDescendants = true
   ) => {
+    const cacheKey = `${categoryId}|${type}|${includeDescendants}|${rangeKey(
+      dateRange
+    )}`;
+    const cached = calcCache.actual.get(cacheKey);
+    if (cached) return cached;
     const categoryIds = includeDescendants
       ? getCategoryAndDescendantIds(categoryId)
       : [categoryId];
@@ -510,13 +532,15 @@ function Reports() {
       transactions.push(txn);
     });
 
-    return {
+    const result = {
       amount: totalActual,
       currencies: Array.from(currencies),
       isMixed: currencies.size > 1,
       transactions,
       originalAmountsByCurrency,
     };
+    calcCache.actual.set(cacheKey, result);
+    return result;
   };
 
   // Organize categories by type and build tree. Borrowing/lending categories
