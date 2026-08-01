@@ -291,10 +291,56 @@ function Reports() {
     });
   };
 
-  // Get all category IDs including descendants
+  // Borrowing/lending categories configured in Settings. These are reported in
+  // their own "Other Activity" section rather than as ordinary income/expense:
+  // lending money out isn't spending, and getting it back isn't income.
+  // `excludedRootIds` are the configured categories themselves (minus any that
+  // sit inside another one, which are already covered by their ancestor);
+  // `excludedCategoryIds` also holds every descendant.
+  const { excludedRootIds, excludedCategoryIds } = useMemo(() => {
+    const configured = [
+      borrowingCategoryId,
+      lendingCategoryId,
+      borrowingPaymentCategoryId,
+      lendingPaymentCategoryId,
+    ]
+      .map((id) => (id == null ? '' : String(id).trim()))
+      .filter(Boolean);
+    const descendantsOf = new Map(
+      configured.map((id) => [
+        id,
+        getCategoryDescendants(id, categories).map((d) => d.category_id),
+      ])
+    );
+    const ids = new Set();
+    const roots = [];
+    configured.forEach((id) => {
+      ids.add(id);
+      descendantsOf.get(id).forEach((d) => ids.add(d));
+      const nestedInAnother = configured.some(
+        (other) => other !== id && descendantsOf.get(other).includes(id)
+      );
+      if (!nestedInAnother && !roots.includes(id)) roots.push(id);
+    });
+    return { excludedRootIds: roots, excludedCategoryIds: ids };
+  }, [
+    borrowingCategoryId,
+    lendingCategoryId,
+    borrowingPaymentCategoryId,
+    lendingPaymentCategoryId,
+    categories,
+  ]);
+
+  // Get all category IDs including descendants. A borrowing/lending subtree is
+  // reported on its own, so it never rolls up into an ordinary ancestor's
+  // totals — only into its own row (where categoryId is itself excluded).
   const getCategoryAndDescendantIds = (categoryId) => {
     const descendants = getCategoryDescendants(categoryId, categories);
-    return [categoryId, ...descendants.map((d) => d.category_id)];
+    const ids = [categoryId, ...descendants.map((d) => d.category_id)];
+    if (excludedCategoryIds.size === 0 || excludedCategoryIds.has(categoryId)) {
+      return ids;
+    }
+    return ids.filter((id) => !excludedCategoryIds.has(id));
   };
 
   // Helper function to count months between two dates (inclusive)
@@ -473,14 +519,20 @@ function Reports() {
     };
   };
 
-  // Organize categories by type and build tree
+  // Organize categories by type and build tree. Borrowing/lending categories
+  // are left out entirely — including when they sit under an ordinary parent,
+  // where they would otherwise be folded into that parent's totals instead of
+  // showing up in Other Activity.
   const organizeCategoriesByType = (type) => {
     const categoryMap = new Map();
     const rootCategories = [];
 
     // Filter by type and status
     const filteredCategories = categories.filter(
-      (cat) => cat.type === type && cat.status === 'Active'
+      (cat) =>
+        cat.type === type &&
+        cat.status === 'Active' &&
+        !excludedCategoryIds.has(cat.category_id)
     );
 
     // Create map
@@ -505,6 +557,27 @@ function Reports() {
     });
 
     return rootCategories;
+  };
+
+  // One category as a tree node, same shape organizeCategoriesByType produces.
+  // Used for the borrowing/lending roots, which the tree above leaves out. The
+  // root is kept whatever its status — it is configured in Settings, so hiding
+  // an archived one would drop its activity from the report entirely.
+  const buildCategorySubtree = (categoryId) => {
+    const root = categories.find((c) => c.category_id === categoryId);
+    if (!root) return null;
+    const attach = (node) => ({
+      ...node,
+      children: categories
+        .filter(
+          (c) =>
+            c.parent_category_id === node.category_id &&
+            c.status === 'Active' &&
+            c.type === node.type
+        )
+        .map(attach),
+    });
+    return attach(root);
   };
 
   // Calculate category data (budget, actual, difference, variance)
@@ -1060,32 +1133,10 @@ function Reports() {
     }
   };
 
-  // Set of category IDs (including descendants) that belong to borrowings,
-  // lending, and adjustment categories configured in settings. These are
-  // excluded from the main Income/Expense sections and shown separately.
-  const excludedCategoryIds = useMemo(() => {
-    const ids = new Set();
-    [borrowingCategoryId, lendingCategoryId, borrowingPaymentCategoryId, lendingPaymentCategoryId]
-      .filter(Boolean)
-      .forEach((id) => {
-        ids.add(id);
-        getCategoryDescendants(id, categories).forEach((d) =>
-          ids.add(d.category_id)
-        );
-      });
-    return ids;
-  }, [
-    borrowingCategoryId,
-    lendingCategoryId,
-    borrowingPaymentCategoryId,
-    lendingPaymentCategoryId,
-    categories,
-  ]);
-
   // Memoized report data
   // Build the (expensive) report data independent of the search text, so a
   // keystroke never triggers a full recompute — only the cheap filter re-runs.
-  const incomeReportDataFullRaw = useMemo(
+  const incomeReportDataFull = useMemo(
     () => buildReportData('Income'),
     [
       categories,
@@ -1097,10 +1148,11 @@ function Reports() {
       filterAccount,
       filterType,
       filterStatus,
+      excludedCategoryIds,
     ]
   );
 
-  const expenseReportDataFullRaw = useMemo(
+  const expenseReportDataFull = useMemo(
     () => buildReportData('Expense'),
     [
       categories,
@@ -1112,36 +1164,41 @@ function Reports() {
       filterAccount,
       filterType,
       filterStatus,
+      excludedCategoryIds,
     ]
   );
 
-  // Partition into regular categories vs excluded (borrowings/lending/adjustments)
-  const {
-    incomeReportDataFull,
-    expenseReportDataFull,
-    otherActivityData,
-  } = useMemo(() => {
-    if (excludedCategoryIds.size === 0) {
-      return {
-        incomeReportDataFull: incomeReportDataFullRaw,
-        expenseReportDataFull: expenseReportDataFullRaw,
-        otherActivityData: [],
-      };
-    }
-    const isExcluded = (item) =>
-      excludedCategoryIds.has(item.category.category_id);
-    const incRegular = incomeReportDataFullRaw.filter((i) => !isExcluded(i));
-    const expRegular = expenseReportDataFullRaw.filter((i) => !isExcluded(i));
-    const excluded = [
-      ...incomeReportDataFullRaw.filter(isExcluded).map((i) => ({ ...i, _type: 'Income' })),
-      ...expenseReportDataFullRaw.filter(isExcluded).map((i) => ({ ...i, _type: 'Expense' })),
-    ].filter((i) => i.actual > 0 || i.budget > 0);
-    return {
-      incomeReportDataFull: incRegular,
-      expenseReportDataFull: expRegular,
-      otherActivityData: excluded,
-    };
-  }, [incomeReportDataFullRaw, expenseReportDataFullRaw, excludedCategoryIds]);
+  // Borrowings and lending, reported on their own. Built straight from the
+  // configured categories rather than by filtering the sections above, so a
+  // lending category nested under an ordinary parent still lands here.
+  const otherActivityData = useMemo(
+    () =>
+      excludedRootIds
+        .map((id) => {
+          const category = buildCategorySubtree(id);
+          if (!category) return null;
+          const type = category.type === 'Income' ? 'Income' : 'Expense';
+          return {
+            category,
+            _type: type,
+            ...calculateCategoryData(category, type),
+          };
+        })
+        .filter((item) => item && (item.actual > 0 || item.budget > 0))
+        .sort((a, b) => b.actual - a.actual),
+    [
+      excludedRootIds,
+      categories,
+      budgets,
+      allTransactions,
+      dateRange,
+      exchangeRates,
+      baseCurrency,
+      filterAccount,
+      filterType,
+      filterStatus,
+    ]
+  );
 
   const incomeReportData = useMemo(
     () => filterReportBySearch(incomeReportDataFull, debouncedReportSearch),
