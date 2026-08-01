@@ -512,7 +512,6 @@ function Reports() {
 
     let totalActual = 0;
     const currencies = new Set();
-    const transactions = [];
     const originalAmountsByCurrency = {}; // Track original amounts by currency
 
     const rangeStartTime = rangeStart.getTime();
@@ -559,14 +558,12 @@ function Reports() {
       if (txnCurrency) {
         currencies.add(txnCurrency);
       }
-      transactions.push(txn);
     });
 
     const result = {
       amount: totalActual,
       currencies: Array.from(currencies),
       isMixed: currencies.size > 1,
-      transactions,
       originalAmountsByCurrency,
     };
     calcCache.actual.set(cacheKey, result);
