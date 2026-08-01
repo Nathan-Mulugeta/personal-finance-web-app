@@ -331,6 +331,25 @@ function Reports() {
     categories,
   ]);
 
+  // Transaction dates, parsed once. The report scans the whole list for every
+  // category, and parsing happens before the date-range test — so the same
+  // handful of thousand ISO strings were re-parsed on every scan, which
+  // profiling showed to be the single largest cost on this page.
+  //
+  // Kept as wrappers around the original rows rather than copies, so nothing
+  // derived here can leak into the objects the rest of the app edits.
+  // parseISO of a missing/invalid date yields NaN, and every comparison
+  // against NaN is false — matching the previous behaviour, where such a row
+  // fell through the range test rather than being filtered out.
+  const transactionsWithTime = useMemo(
+    () =>
+      allTransactions.map((txn) => ({
+        txn,
+        ts: parseISO(txn.date).getTime(),
+      })),
+    [allTransactions]
+  );
+
   // Get all category IDs including descendants. A borrowing/lending subtree is
   // reported on its own, so it never rolls up into an ordinary ancestor's
   // totals — only into its own row (where categoryId is itself excluded).
@@ -487,7 +506,10 @@ function Reports() {
     const transactions = [];
     const originalAmountsByCurrency = {}; // Track original amounts by currency
 
-    allTransactions.forEach((txn) => {
+    const rangeStartTime = rangeStart.getTime();
+    const rangeEndTime = rangeEnd.getTime();
+
+    transactionsWithTime.forEach(({ txn, ts }) => {
       if (!categoryIds.includes(txn.category_id)) return;
       if (txn.status === 'Cancelled' || txn.deleted_at) return;
 
@@ -504,8 +526,7 @@ function Reports() {
       if (filterStatus && txn.status !== filterStatus) return;
 
       // Filter by date range
-      const txnDate = parseISO(txn.date);
-      if (txnDate < rangeStart || txnDate > rangeEnd) return;
+      if (ts < rangeStartTime || ts > rangeEndTime) return;
 
       const amount = Math.abs(parseFloat(txn.amount || 0));
       const txnCurrency = txn.currency || baseCurrency;
