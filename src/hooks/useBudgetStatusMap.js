@@ -3,7 +3,10 @@ import { useSelector } from 'react-redux';
 import {
   computeAllBudgetStatuses,
   computeAggregatedParentStatuses,
+  buildMonthlySpendIndex,
+  currentMonthKey,
 } from '../utils/budgetStatus';
+import { buildExchangeRateLookup } from '../utils/currencyConversion';
 import { selectBaseCurrency } from '../store/selectors';
 
 /**
@@ -28,6 +31,22 @@ export function useBudgetStatusMap() {
   const { exchangeRates } = useSelector((state) => state.exchangeRates);
   const baseCurrency = useSelector(selectBaseCurrency);
 
+  // Both sweeps below walk the same transactions and the same rates. Building
+  // these once and sharing them means the list is grouped a single time per
+  // change, instead of once per sweep.
+  //
+  // monthKey is pinned here and passed down with the index it was built from,
+  // so the two can never disagree — an index grouped for one month combined
+  // with a sweep asking about another would report every budget as unspent.
+  const shared = useMemo(() => {
+    const monthKey = currentMonthKey();
+    return {
+      monthKey,
+      spendIndex: buildMonthlySpendIndex(allTransactions, monthKey),
+      rateLookup: buildExchangeRateLookup(exchangeRates),
+    };
+  }, [allTransactions, exchangeRates]);
+
   const all = useMemo(
     () =>
       computeAllBudgetStatuses({
@@ -36,8 +55,9 @@ export function useBudgetStatusMap() {
         transactions: allTransactions,
         exchangeRates,
         baseCurrency,
+        ...shared,
       }),
-    [categories, budgets, allTransactions, exchangeRates, baseCurrency]
+    [categories, budgets, allTransactions, exchangeRates, baseCurrency, shared]
   );
 
   // Parents whose budget aggregates from their children — search-only, so the
@@ -50,8 +70,9 @@ export function useBudgetStatusMap() {
         transactions: allTransactions,
         exchangeRates,
         baseCurrency,
+        ...shared,
       }),
-    [categories, budgets, allTransactions, exchangeRates, baseCurrency]
+    [categories, budgets, allTransactions, exchangeRates, baseCurrency, shared]
   );
 
   return useMemo(

@@ -5,9 +5,12 @@ import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
 import {
   formatCurrency,
   convertAmountWithExchangeRates,
+  buildExchangeRateLookup,
 } from '../../utils/currencyConversion';
 import {
   computeCategoryBudgetStatus,
+  buildMonthlySpendIndex,
+  currentMonthKey,
   NEAR_BUDGET_THRESHOLD,
 } from '../../utils/budgetStatus';
 import {
@@ -45,6 +48,19 @@ function BudgetInlineCue({
   const { exchangeRates } = useSelector((state) => state.exchangeRates);
   const baseCurrency = useSelector(selectBaseCurrency);
 
+  // Grouped once per transaction list rather than per category, so changing the
+  // category in the form re-sums a single bucket instead of re-walking every
+  // transaction. monthKey travels with the index it was built from — the two
+  // disagreeing would report the category as unspent.
+  const shared = useMemo(() => {
+    const monthKey = currentMonthKey();
+    return {
+      monthKey,
+      spendIndex: buildMonthlySpendIndex(allTransactions, monthKey),
+      rateLookup: buildExchangeRateLookup(exchangeRates),
+    };
+  }, [allTransactions, exchangeRates]);
+
   const status = useMemo(() => {
     if (type !== 'Expense') return null;
     return computeCategoryBudgetStatus({
@@ -55,6 +71,7 @@ function BudgetInlineCue({
       exchangeRates,
       baseCurrency,
       excludeTransactionId,
+      ...shared,
     });
   }, [
     categoryId,
@@ -65,6 +82,7 @@ function BudgetInlineCue({
     exchangeRates,
     baseCurrency,
     excludeTransactionId,
+    shared,
   ]);
 
   if (!status) return null;

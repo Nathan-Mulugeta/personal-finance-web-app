@@ -1,5 +1,8 @@
 import { getCategoryDescendants } from './categoryHierarchy'
-import { convertAmountWithExchangeRates } from './currencyConversion'
+import {
+  convertAmountWithLookup,
+  buildExchangeRateLookup,
+} from './currencyConversion'
 import {
   findBudgetForCategoryMonth,
   budgetAppliesToMonth,
@@ -11,11 +14,53 @@ export const NEAR_BUDGET_THRESHOLD = 0.8
 
 /**
  * "YYYY-MM" for a Date (local time), matching how budgets store their month.
+ *
+ * Exported so a caller building a shared spend index can pin the month once and
+ * hand the same value to every sweep — an index built for one month and a sweep
+ * asking about another would silently report zero spending.
  */
-function currentMonthKey(date = new Date()) {
+export function currentMonthKey(date = new Date()) {
   const y = date.getFullYear()
   const m = String(date.getMonth() + 1).padStart(2, '0')
   return `${y}-${m}`
+}
+
+/**
+ * Group the month's spendable transactions by category, once.
+ *
+ * Every category-level check in spentForCategoryMonth below (status, deleted,
+ * type, month) is independent of which category is being asked about — so
+ * re-testing all of them for every budgeted category meant walking the whole
+ * transaction list dozens of times per render. Bucketing once turns that into
+ * a single pass.
+ *
+ * Rows keep their original array position so a subtree's transactions can be
+ * summed back in the order the flat scan visited them. Floating-point addition
+ * is not associative, so summing the same set in a different order can shift
+ * the last bits of the result — and `spent` decides whether a budget reads as
+ * over or under.
+ *
+ * @returns {Map<string, Array<{txn: Object, i: number}>>} keyed by category_id
+ */
+export function buildMonthlySpendIndex(
+  transactions,
+  monthKey = currentMonthKey()
+) {
+  const index = new Map()
+  ;(transactions || []).forEach((txn, i) => {
+    if (txn.status === 'Cancelled' || txn.deleted_at) return
+    // Expenses only (Transfer Out spends from a category too, matching Reports)
+    if (txn.type !== 'Expense' && txn.type !== 'Transfer Out') return
+    // Local-time month bucket, matching how Reports groups by date
+    if (!txn.date || currentMonthKey(new Date(txn.date)) !== monthKey) return
+    let rows = index.get(txn.category_id)
+    if (!rows) {
+      rows = []
+      index.set(txn.category_id, rows)
+    }
+    rows.push({ txn, i })
+  })
+  return index
 }
 
 /**
@@ -23,6 +68,10 @@ function currentMonthKey(date = new Date()) {
  * descendants (a leaf has none, so it's just itself), converted into
  * `targetCurrency` with the cached exchange rates — the same conversion the
  * Reports page uses so the numbers agree.
+ *
+ * `spendIndex` and `rateLookup` are optional; callers summing many categories
+ * build them once and pass them in. Omitted, they are derived here, so a
+ * one-off call costs exactly what it did before.
  */
 function spentForCategoryMonth({
   categoryId,
@@ -32,28 +81,37 @@ function spentForCategoryMonth({
   targetCurrency,
   monthKey,
   excludeTransactionId,
+  spendIndex,
+  rateLookup,
 }) {
-  const ids = new Set([
+  const index = spendIndex || buildMonthlySpendIndex(transactions, monthKey)
+  const lookup = rateLookup || buildExchangeRateLookup(exchangeRates)
+
+  const ids = [
     categoryId,
     ...getCategoryDescendants(categoryId, categories).map((c) => c.category_id),
-  ])
+  ]
+
+  // Gather the subtree's rows, then restore the original scan order — see the
+  // note on associativity above.
+  let rows = []
+  ids.forEach((id) => {
+    const bucket = index.get(id)
+    if (bucket) rows = rows.length === 0 ? bucket : rows.concat(bucket)
+  })
+  if (rows.length > 1) rows = rows.slice().sort((a, b) => a.i - b.i)
+
   let spent = 0
-  transactions.forEach((txn) => {
-    if (!ids.has(txn.category_id)) return
+  rows.forEach(({ txn }) => {
     if (excludeTransactionId && txn.transaction_id === excludeTransactionId)
       return
-    if (txn.status === 'Cancelled' || txn.deleted_at) return
-    // Expenses only (Transfer Out spends from a category too, matching Reports)
-    if (txn.type !== 'Expense' && txn.type !== 'Transfer Out') return
-    // Local-time month bucket, matching how Reports groups by date
-    if (!txn.date || currentMonthKey(new Date(txn.date)) !== monthKey) return
     const amount = Math.abs(parseFloat(txn.amount || 0))
     const txnCurrency = txn.currency || targetCurrency
-    const converted = convertAmountWithExchangeRates(
+    const converted = convertAmountWithLookup(
       amount,
       txnCurrency,
       targetCurrency,
-      exchangeRates
+      lookup
     )
     spent += converted !== null ? converted : amount
   })
@@ -75,6 +133,8 @@ export function computeCategoryBudgetStatus({
   baseCurrency,
   monthKey = currentMonthKey(),
   excludeTransactionId,
+  spendIndex,
+  rateLookup,
 }) {
   if (!categoryId) return null
   const cat = categories.find((c) => c.category_id === categoryId)
@@ -92,6 +152,8 @@ export function computeCategoryBudgetStatus({
     targetCurrency: currency,
     monthKey,
     excludeTransactionId,
+    spendIndex,
+    rateLookup,
   })
   return {
     budgetAmount,
@@ -119,7 +181,15 @@ export function computeAllBudgetStatuses({
   baseCurrency,
   monthKey = currentMonthKey(),
   nearThreshold = NEAR_BUDGET_THRESHOLD,
+  spendIndex: sharedSpendIndex,
+  rateLookup: sharedRateLookup,
 }) {
+  // Built once for the whole sweep rather than per category. Callers running
+  // both sweeps (useBudgetStatusMap) pass a shared one so the transaction list
+  // is walked once in total, not once per sweep.
+  const spendIndex =
+    sharedSpendIndex || buildMonthlySpendIndex(transactions, monthKey)
+  const rateLookup = sharedRateLookup || buildExchangeRateLookup(exchangeRates)
   const results = []
   categories.forEach((cat) => {
     if (cat.type !== 'Expense' || cat.status !== 'Active') return
@@ -131,6 +201,8 @@ export function computeAllBudgetStatuses({
       exchangeRates,
       baseCurrency,
       monthKey,
+      spendIndex,
+      rateLookup,
     })
     if (!status) return
     results.push({
@@ -176,7 +248,13 @@ export function computeAggregatedParentStatuses({
   baseCurrency,
   monthKey = currentMonthKey(),
   nearThreshold = NEAR_BUDGET_THRESHOLD,
+  spendIndex: sharedSpendIndex,
+  rateLookup: sharedRateLookup,
 }) {
+  // See computeAllBudgetStatuses: shared when both sweeps run together.
+  const spendIndex =
+    sharedSpendIndex || buildMonthlySpendIndex(transactions, monthKey)
+  const rateLookup = sharedRateLookup || buildExchangeRateLookup(exchangeRates)
   const results = []
   categories.forEach((cat) => {
     if (cat.type !== 'Expense' || cat.status !== 'Active') return
@@ -197,11 +275,11 @@ export function computeAggregatedParentStatuses({
       if (!(amount > 0)) return
       hasBudget = true
       const currency = budget.currency || baseCurrency
-      const converted = convertAmountWithExchangeRates(
+      const converted = convertAmountWithLookup(
         amount,
         currency,
         baseCurrency,
-        exchangeRates
+        rateLookup
       )
       budgetAmount += converted !== null ? converted : amount
     })
@@ -214,6 +292,8 @@ export function computeAggregatedParentStatuses({
       exchangeRates,
       targetCurrency: baseCurrency,
       monthKey,
+      spendIndex,
+      rateLookup,
     })
     const pct = budgetAmount > 0 ? spent / budgetAmount : 0
     results.push({
