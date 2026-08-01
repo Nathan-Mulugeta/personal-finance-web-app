@@ -52,7 +52,8 @@ import PageSkeleton from '../components/common/PageSkeleton';
 import ErrorMessage from '../components/common/ErrorMessage';
 import {
   formatCurrency,
-  convertAmountWithExchangeRates,
+  convertAmountWithLookup,
+  buildExchangeRateLookup,
 } from '../utils/currencyConversion';
 import {
   format,
@@ -331,6 +332,14 @@ function Reports() {
     categories,
   ]);
 
+  // Latest rate per currency pair, resolved once. The plain converter rescans
+  // the whole rate list twice per call, and this page converts once per
+  // transaction per category scan.
+  const exchangeRateLookup = useMemo(
+    () => buildExchangeRateLookup(exchangeRates),
+    [exchangeRates]
+  );
+
   // Transaction dates, parsed once. The report scans the whole list for every
   // category, and parsing happens before the date-range test — so the same
   // handful of thousand ISO strings were re-parsed on every scan, which
@@ -458,11 +467,11 @@ function Reports() {
         originalAmountsByCurrency[budgetCurrency] += budgetAmount;
 
         // Convert to base currency
-        const convertedAmount = convertAmountWithExchangeRates(
+        const convertedAmount = convertAmountWithLookup(
           budgetAmount,
           budgetCurrency,
           baseCurrency,
-          exchangeRates
+          exchangeRateLookup
         );
 
         // Use converted amount if available, otherwise use original
@@ -538,11 +547,11 @@ function Reports() {
       originalAmountsByCurrency[txnCurrency] += amount;
 
       // Convert to base currency
-      const convertedAmount = convertAmountWithExchangeRates(
+      const convertedAmount = convertAmountWithLookup(
         amount,
         txnCurrency,
         baseCurrency,
-        exchangeRates
+        exchangeRateLookup
       );
 
       // Use converted amount if available, otherwise use original
@@ -774,11 +783,11 @@ function Reports() {
           const monthlyBudgetAmount = parseFloat(budget.amount || 0);
           const budgetAmount = monthlyBudgetAmount * applicableMonths;
           const budgetCurrency = budget.currency || baseCurrency;
-          const convertedAmount = convertAmountWithExchangeRates(
+          const convertedAmount = convertAmountWithLookup(
             budgetAmount,
             budgetCurrency,
             baseCurrency,
-            exchangeRates
+            exchangeRateLookup
           );
           parentOwnBudget +=
             convertedAmount !== null ? convertedAmount : budgetAmount;

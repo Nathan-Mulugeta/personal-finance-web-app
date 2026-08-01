@@ -115,6 +115,75 @@ function findLatestRate(rates) {
 }
 
 /**
+ * Pre-resolve the latest rate for every currency pair, once.
+ *
+ * convertAmountWithExchangeRates below scans the whole rate list twice on every
+ * call. That is fine for one-off conversions, but the Reports page converts
+ * once per transaction per category scan, where it becomes a measurable share
+ * of the page's cost. Build this once (memoize on the rates array) and pass it
+ * to convertAmountWithLookup instead.
+ *
+ * Tie-breaking matches findLatestRate exactly: a later date wins, and an equal
+ * or unparseable date leaves the earlier entry in place.
+ *
+ * @param {Array} exchangeRates
+ * @returns {Map<string, {rate: number|string, time: number}>} keyed "FROM>TO"
+ */
+export function buildExchangeRateLookup(exchangeRates) {
+  const lookup = new Map()
+  ;(exchangeRates || []).forEach((er) => {
+    const key = `${er.from_currency}>${er.to_currency}`
+    const time = new Date(er.date || er.created_at || 0).getTime()
+    const existing = lookup.get(key)
+    // Strictly greater, so the first entry wins ties — and a NaN time never
+    // displaces an existing entry, mirroring the reduce in findLatestRate.
+    if (!existing || time > existing.time) lookup.set(key, { rate: er.rate, time })
+  })
+  return lookup
+}
+
+/**
+ * convertAmountWithExchangeRates using a prebuilt lookup. Same contract:
+ * direct rate wins, then the reverse rate (dividing), then null. A falsy
+ * amount and an unknown pair both return null; same-currency short-circuits
+ * before any lookup.
+ *
+ * @param {number} amount
+ * @param {string} fromCurrency
+ * @param {string} toCurrency
+ * @param {Map} lookup - from buildExchangeRateLookup
+ * @returns {number|null}
+ */
+export function convertAmountWithLookup(amount, fromCurrency, toCurrency, lookup) {
+  if (!amount || !fromCurrency || !toCurrency) {
+    return null
+  }
+
+  const from = fromCurrency.toUpperCase()
+  const to = toCurrency.toUpperCase()
+
+  if (from === to) {
+    return amount
+  }
+
+  if (!lookup || lookup.size === 0) {
+    return null
+  }
+
+  const direct = lookup.get(`${from}>${to}`)
+  if (direct) {
+    return amount * direct.rate
+  }
+
+  const reverse = lookup.get(`${to}>${from}`)
+  if (reverse) {
+    return amount / reverse.rate
+  }
+
+  return null
+}
+
+/**
  * Convert amount between currencies using exchange rates array
  * @param {number} amount - Amount to convert
  * @param {string} fromCurrency - Source currency code
