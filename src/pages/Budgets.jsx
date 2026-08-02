@@ -12,7 +12,6 @@ import {
   Grid,
   IconButton,
   InputLabel,
-  LinearProgress,
   MenuItem,
   Select,
   TextField,
@@ -511,6 +510,7 @@ function Budgets() {
       {filteredBudgets.length > 0 && (
         <Box sx={{ mb: { xs: 2, sm: 3 } }}>
           <SummaryTiles
+            align="center"
             tiles={[
               {
                 label: 'Income',
@@ -684,17 +684,6 @@ function Budgets() {
               budgetAmount > 0 ? (actualAmount / budgetAmount) * 100 : 0;
             const remaining = budgetAmount - actualAmount;
 
-            const progressColor = isIncome
-              ? percentage >= 100
-                ? 'success'
-                : percentage >= 80
-                ? 'info'
-                : 'warning'
-              : percentage > 100
-              ? 'error'
-              : percentage > 80
-              ? 'warning'
-              : 'success';
             const remainingColor = isIncome
               ? remaining <= 0
                 ? 'google.green'
@@ -805,17 +794,6 @@ function Budgets() {
                     {percentage.toFixed(0)}%
                   </Typography>
                 </Box>
-                <LinearProgress
-                  variant="determinate"
-                  value={Math.min(percentage, 100)}
-                  color={progressColor}
-                  sx={{
-                    mt: 0.75,
-                    height: 4,
-                    borderRadius: 2,
-                    backgroundColor: 'action.hover',
-                  }}
-                />
                 {budget.notes && (
                   <Typography
                     variant="caption"

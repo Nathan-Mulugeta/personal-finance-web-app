@@ -16,7 +16,6 @@ import {
   Grid,
   IconButton,
   InputLabel,
-  LinearProgress,
   MenuItem,
   Select,
   TextField,
@@ -957,18 +956,6 @@ function BorrowingsLendings() {
                     </IconButton>
                   </Box>
                 </Box>
-
-                <LinearProgress
-                  variant="determinate"
-                  value={Math.min(percentage, 100)}
-                  color={percentage >= 100 ? 'success' : 'primary'}
-                  sx={{
-                    mt: 0.75,
-                    height: 4,
-                    borderRadius: 2,
-                    backgroundColor: 'action.hover',
-                  }}
-                />
 
                 {record.notes && (
                   <Typography
