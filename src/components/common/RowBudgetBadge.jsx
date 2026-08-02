@@ -1,3 +1,4 @@
+import { Typography } from '@mui/material';
 import { parseISO, isSameMonth } from 'date-fns';
 import BudgetStatusInline from './BudgetStatusInline';
 
@@ -15,9 +16,18 @@ import BudgetStatusInline from './BudgetStatusInline';
  * @param {Object} transaction
  * @param {Object|undefined} status - resolved budget status for the category
  * @param {boolean} enabled - the ShowBudgetOnRows setting
+ * @param {boolean} [trailingSeparator] - emit a "·" after the badge, for rows
+ *   that place the date right next to it. Only rendered when the badge itself
+ *   renders, so a row without a budget never shows a stray separator.
  * @param {object} [sx]
  */
-export default function RowBudgetBadge({ transaction, status, enabled, sx }) {
+export default function RowBudgetBadge({
+  transaction,
+  status,
+  enabled,
+  trailingSeparator = false,
+  sx,
+}) {
   if (!enabled || !status) return null;
   if (transaction.type !== 'Expense') return null;
 
@@ -29,5 +39,26 @@ export default function RowBudgetBadge({ transaction, status, enabled, sx }) {
   }
   if (!inMonth) return null;
 
-  return <BudgetStatusInline status={status} variant="badge" sx={sx} />;
+  return (
+    <>
+      <BudgetStatusInline status={status} variant="badge" sx={sx} />
+      {trailingSeparator && (
+        <Typography
+          component="span"
+          aria-hidden="true"
+          sx={{
+            fontSize: '0.6875rem',
+            color: 'text.secondary',
+            flexShrink: 0,
+            // Both callers are flex rows with gap: 1 (8px); pulling 4px back on
+            // each side sits this "·" at the same rhythm as the ones inside the
+            // badge ("68% · 1,100 Br left") and the date ("Aug 02 · 3:15 PM").
+            mx: -0.5,
+          }}
+        >
+          ·
+        </Typography>
+      )}
+    </>
+  );
 }

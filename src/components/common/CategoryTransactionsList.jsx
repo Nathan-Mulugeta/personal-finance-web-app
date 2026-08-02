@@ -34,6 +34,7 @@ import {
 import {
   selectAccountNameGetter,
   selectCategoryDisplayNameGetter,
+  selectShowBudgetOnRows,
 } from '../../store/selectors';
 import {
   bulkDeleteTransactions,
@@ -51,7 +52,8 @@ import {
   rowAmountTextSx,
 } from './transactionRowStyles';
 import BulkEditTransactionsDialog from './BulkEditTransactionsDialog';
-
+import { useBudgetStatusMap } from '../../hooks/useBudgetStatusMap';
+import RowBudgetBadge from './RowBudgetBadge';
 
 const rowTapSx = {
   cursor: 'pointer',
@@ -89,6 +91,10 @@ const dateDisplay = (dateStr) => {
  *   (which hosts the multi-select toggle). Set false when the parent hosts the
  *   toggle in its own header and calls `enterSelection()` via ref, avoiding an
  *   empty toggle-only row above the list.
+ * @param {boolean} [showBudgetBadge=true] - render the per-row budget badge
+ *   (still subject to the ShowBudgetOnRows setting). Set false when every row
+ *   shares one category — the Reports drill-down modal — where the badge would
+ *   just repeat the same figure down the whole list.
  * @param {React.Ref} ref - exposes `{ enterSelection() }` so a parent-hosted
  *   toggle can start multi-select.
  */
@@ -98,6 +104,7 @@ function CategoryTransactionsList(
     pageSize,
     showSummary = true,
     showRestingHeader = true,
+    showBudgetBadge = true,
     onSelectionModeChange,
   },
   ref
@@ -107,7 +114,12 @@ function CategoryTransactionsList(
   const isDesktopView = useMediaQuery(theme.breakpoints.up('md'));
   const getAccountName = useSelector(selectAccountNameGetter);
   const getCategoryDisplayName = useSelector(selectCategoryDisplayNameGetter);
-
+  // Per-row budget badge (F1): one lookup map for the whole list, gated by the
+  // Settings toggle and by the caller's showBudgetBadge. RowBudgetBadge decides
+  // per row whether it applies.
+  const showBudgetOnRows =
+    useSelector(selectShowBudgetOnRows) && showBudgetBadge;
+  const { byCategoryId: budgetByCategoryId } = useBudgetStatusMap();
 
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -429,7 +441,8 @@ function CategoryTransactionsList(
                       {inline.isEditing('category', txn) ? (
                         <InlineFieldInput transaction={txn} field="category" onDone={inline.stop} textSx={rowCategoryTextSx} />
                       ) : (
-                        <Typography
+                        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, minWidth: 0 }}>
+                          <Typography
                             variant="body2"
                             component="span"
                             onClick={startEdit('category', txn)}
@@ -440,6 +453,13 @@ function CategoryTransactionsList(
                           >
                             {getCategoryDisplayName(txn.category_id)}
                           </Typography>
+                          <RowBudgetBadge
+                            transaction={txn}
+                            status={budgetByCategoryId.get(txn.category_id)}
+                            enabled={showBudgetOnRows}
+                            sx={{ flexShrink: 0 }}
+                          />
+                        </Box>
                       )}
                     </TableCell>
                     <TableCell>
@@ -646,6 +666,13 @@ function CategoryTransactionsList(
                     </Typography>
                   )}
 
+                  <RowBudgetBadge
+                    transaction={txn}
+                    status={budgetByCategoryId.get(txn.category_id)}
+                    enabled={showBudgetOnRows}
+                    trailingSeparator
+                    sx={{ flexShrink: 0 }}
+                  />
                   <Typography
                     variant="body2"
                     sx={{ fontSize: '0.6875rem', color: 'text.secondary', flexShrink: 0 }}

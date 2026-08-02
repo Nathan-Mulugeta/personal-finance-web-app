@@ -3008,7 +3008,13 @@ function Reports() {
           </IconButton>
         </DialogTitle>
         <DialogContent sx={{ p: { xs: 1, sm: 2 } }}>
-          <CategoryTransactionsList transactions={modalTransactions} />
+          {/* Every row here is the same category, so a per-row budget badge
+              would repeat one figure down the whole list — the footer button
+              covers the budget for this category instead. */}
+          <CategoryTransactionsList
+            transactions={modalTransactions}
+            showBudgetBadge={false}
+          />
         </DialogContent>
         <DialogActions
           sx={{

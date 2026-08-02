@@ -288,6 +288,7 @@ const MobileTransactionRow = memo(function MobileTransactionRow({
             transaction={transaction}
             status={budgetStatus}
             enabled={showBudgetOnRows}
+            trailingSeparator
             sx={{ flexShrink: 0 }}
           />
           <Typography
