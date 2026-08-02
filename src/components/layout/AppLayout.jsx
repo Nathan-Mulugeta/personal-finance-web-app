@@ -1,18 +1,12 @@
-import { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Box, Drawer, useMediaQuery, useTheme } from '@mui/material';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import BottomNav from './BottomNav';
 import AppSnackbar from '../common/AppSnackbar';
+import AddTransactionDialog from '../common/AddTransactionDialog';
 import { useDataRefresh } from '../../hooks/useDataRefresh';
-
-// Lazy: this dialog drags react-hook-form and the zod schemas in with it, and
-// AppLayout is eager, so a static import put all of that in the initial bundle
-// for a dialog most sessions never open.
-const AddTransactionDialog = lazy(() =>
-  import('../common/AddTransactionDialog')
-);
 
 const DRAWER_WIDTH = 240;
 const SWIPE_THRESHOLD = 50; // Minimum distance in pixels to trigger swipe
@@ -25,13 +19,6 @@ function AppLayout() {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
-  // Latches on first open. Mounting only when opened keeps the chunk out of
-  // startup; staying mounted afterwards preserves the closing animation, which
-  // unmounting on close would cut short.
-  const [quickAddMounted, setQuickAddMounted] = useState(false);
-  useEffect(() => {
-    if (quickAddOpen) setQuickAddMounted(true);
-  }, [quickAddOpen]);
   const touchStartRef = useRef(null);
   const touchEndRef = useRef(null);
 
@@ -196,14 +183,10 @@ function AppLayout() {
       </Box>
       <BottomNav onQuickAdd={() => setQuickAddOpen(true)} />
       {/* Global quick-add dialog, reachable from the bottom nav on any page */}
-      {quickAddMounted && (
-        <Suspense fallback={null}>
-          <AddTransactionDialog
-            open={quickAddOpen}
-            onClose={() => setQuickAddOpen(false)}
-          />
-        </Suspense>
-      )}
+      <AddTransactionDialog
+        open={quickAddOpen}
+        onClose={() => setQuickAddOpen(false)}
+      />
       <AppSnackbar />
     </Box>
   );
