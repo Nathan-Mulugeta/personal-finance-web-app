@@ -248,6 +248,24 @@ export const selectLendingPaymentCategoryId = createSelector(
 );
 
 /**
+ * Get income adjustment category ID from settings — the category used to true
+ * an account's balance UP when the app shows less money than really exists.
+ */
+export const selectAdjustmentIncomeCategoryId = createSelector(
+  [selectSettingsMap],
+  (settingsMap) => settingsMap.get('AdjustmentIncomeCategoryID') || null
+);
+
+/**
+ * Get expense adjustment category ID from settings — the mirror of the above,
+ * truing a balance DOWN. Reports pairs the two off against each other.
+ */
+export const selectAdjustmentExpenseCategoryId = createSelector(
+  [selectSettingsMap],
+  (settingsMap) => settingsMap.get('AdjustmentExpenseCategoryID') || null
+);
+
+/**
  * Category IDs that stand for borrowing or lending — the two configured in
  * Settings plus every subcategory beneath them. Transactions post to leaves, so
  * a "Lending > Friends" child has to count as lending too; the database trigger

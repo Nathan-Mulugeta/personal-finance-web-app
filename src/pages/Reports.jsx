@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef, Fragment } from 'react';
 import { useLocation } from 'react-router-dom';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import {
   Box,
   IconButton,
@@ -38,6 +38,7 @@ import ArrowDropUpIcon from '@mui/icons-material/ArrowDropUp';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import CloseIcon from '@mui/icons-material/Close';
+import CallMergeIcon from '@mui/icons-material/CallMerge';
 import BudgetDialog from '../components/common/BudgetDialog';
 import MixedCurrencyChip from '../components/common/MixedCurrencyChip';
 import CategoryTransactionsList from '../components/common/CategoryTransactionsList';
@@ -77,7 +78,13 @@ import {
   selectLendingCategoryId,
   selectBorrowingPaymentCategoryId,
   selectLendingPaymentCategoryId,
+  selectAdjustmentIncomeCategoryId,
+  selectAdjustmentExpenseCategoryId,
 } from '../store/selectors';
+import {
+  bulkDeleteTransactions,
+  createTransaction,
+} from '../store/slices/transactionsSlice';
 
 // Tappable mobile row: suppress the browser tap highlight (blue flash on
 // Android/Chrome) and sticky hover on touch; give explicit pressed feedback
@@ -115,6 +122,7 @@ function filterReportBySearch(reportData, query) {
 
 function Reports() {
   const theme = useTheme();
+  const dispatch = useDispatch();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   // Matches the md breakpoint previously used for the CSS card/table switch
   const isDesktopView = useMediaQuery(theme.breakpoints.up('md'));
@@ -132,6 +140,10 @@ function Reports() {
   const lendingCategoryId = useSelector(selectLendingCategoryId);
   const borrowingPaymentCategoryId = useSelector(selectBorrowingPaymentCategoryId);
   const lendingPaymentCategoryId = useSelector(selectLendingPaymentCategoryId);
+  const adjustmentIncomeCategoryId = useSelector(selectAdjustmentIncomeCategoryId);
+  const adjustmentExpenseCategoryId = useSelector(
+    selectAdjustmentExpenseCategoryId
+  );
 
   // Refresh data on navigation
   usePageRefresh({
@@ -292,9 +304,10 @@ function Reports() {
     });
   };
 
-  // Borrowing/lending categories configured in Settings. These are reported in
-  // their own "Other Activity" section rather than as ordinary income/expense:
-  // lending money out isn't spending, and getting it back isn't income.
+  // Borrowing/lending and adjustment categories configured in Settings. These
+  // are reported in their own "Other Activity" section rather than as ordinary
+  // income/expense: lending money out isn't spending, getting it back isn't
+  // income, and a balance correction is neither.
   // `excludedRootIds` are the configured categories themselves (minus any that
   // sit inside another one, which are already covered by their ancestor);
   // `excludedCategoryIds` also holds every descendant.
@@ -304,6 +317,8 @@ function Reports() {
       lendingCategoryId,
       borrowingPaymentCategoryId,
       lendingPaymentCategoryId,
+      adjustmentIncomeCategoryId,
+      adjustmentExpenseCategoryId,
     ]
       .map((id) => (id == null ? '' : String(id).trim()))
       .filter(Boolean);
@@ -329,6 +344,8 @@ function Reports() {
     lendingCategoryId,
     borrowingPaymentCategoryId,
     lendingPaymentCategoryId,
+    adjustmentIncomeCategoryId,
+    adjustmentExpenseCategoryId,
     categories,
   ]);
 
@@ -1271,6 +1288,302 @@ function Reports() {
     () => calculateSectionTotals(otherActivityShown),
     [otherActivityShown]
   );
+
+  // --- Cancelling out adjustments -----------------------------------------
+  //
+  // Income and expense adjustments mostly undo each other: a forgotten expense
+  // is patched over with one, the real transaction gets recorded later, and a
+  // second adjustment patches the balance back. Cancelling out replaces the
+  // whole pile with what it came to between them — every adjustment in the
+  // period is deleted, and the net is re-created as a single transaction, so
+  // no balance moves.
+
+  // The two configured categories plus their descendants — transactions post
+  // to leaves, so "Adjustment > Cash" has to count as an adjustment too.
+  const adjustmentCategoryIds = useMemo(() => {
+    const collect = (rootId) => {
+      const id = rootId == null ? '' : String(rootId).trim();
+      const ids = new Set();
+      if (!id) return ids;
+      ids.add(id);
+      getCategoryDescendants(id, categories).forEach((d) =>
+        ids.add(d.category_id)
+      );
+      return ids;
+    };
+    return {
+      income: collect(adjustmentIncomeCategoryId),
+      expense: collect(adjustmentExpenseCategoryId),
+    };
+  }, [adjustmentIncomeCategoryId, adjustmentExpenseCategoryId, categories]);
+
+  const round2 = (n) => Math.round(n * 100) / 100;
+
+  // What a set of adjustments comes to between them: the difference between
+  // the two sides, as one transaction on whichever side outweighs the other.
+  // Null when they cancel exactly, which is the case worth aiming for.
+  //
+  // Its category is the one carrying the most weight on the surviving side
+  // rather than the configured root — a transaction already posts to it, so
+  // it is certain to be a leaf, and the API rejects a category that has
+  // subcategories.
+  const buildReplacement = (entries) => {
+    let income = 0;
+    let expense = 0;
+    entries.forEach(({ amount, side }) => {
+      if (side === 'income') income = round2(income + amount);
+      else expense = round2(expense + amount);
+    });
+
+    const net = round2(expense - income);
+    if (Math.abs(net) < 0.005) return null;
+
+    const side = net > 0 ? 'expense' : 'income';
+    const byCategory = new Map();
+    entries
+      .filter((e) => e.side === side)
+      .forEach(({ txn, amount }) => {
+        const id = txn.category_id;
+        byCategory.set(id, round2((byCategory.get(id) || 0) + amount));
+      });
+
+    let categoryId = null;
+    let heaviest = -1;
+    byCategory.forEach((total, id) => {
+      if (total > heaviest) {
+        heaviest = total;
+        categoryId = id;
+      }
+    });
+
+    // Inherit the status when every row agrees on one, so a replacement made
+    // under a status filter doesn't come back as something the filter hides.
+    const statuses = new Set(entries.map((e) => e.txn.status).filter(Boolean));
+    const status = statuses.size === 1 ? [...statuses][0] : 'Cleared';
+
+    return {
+      type: net > 0 ? 'Expense' : 'Income',
+      amount: Math.abs(net),
+      categoryId,
+      status,
+    };
+  };
+
+  // The replacement is dated inside the period it was worked out from, so it
+  // lands in the same report — the last day of the period, or today while the
+  // period is still running.
+  const replacementDate = useMemo(() => {
+    const start = dateRange.start.getTime();
+    const end = dateRange.end.getTime();
+    return new Date(Math.max(start, Math.min(end, Date.now())));
+  }, [dateRange]);
+
+  // Grouped by account AND currency — the only grouping in which cancelling is
+  // balance-neutral. Netting a Cash adjustment against a Bank one would leave
+  // both accounts wrong, and netting across currencies would silently convert
+  // at whatever rate happens to be current.
+  const adjustmentCancelPlan = useMemo(() => {
+    const { income, expense } = adjustmentCategoryIds;
+    if (income.size === 0 || expense.size === 0) return [];
+
+    const startTime = dateRange.start.getTime();
+    const endTime = dateRange.end.getTime();
+    const groups = new Map();
+
+    transactionsWithTime.forEach(({ txn, ts }) => {
+      const side = income.has(txn.category_id)
+        ? 'income'
+        : expense.has(txn.category_id)
+          ? 'expense'
+          : null;
+      if (!side) return;
+      if (txn.status === 'Cancelled' || txn.deleted_at) return;
+      // Plain income/expense only. A transfer leg reads as an expense to the
+      // report, but deleting one deletes its counterpart on the other account.
+      if (txn.type !== (side === 'income' ? 'Income' : 'Expense')) return;
+      if (txn.transfer_id || txn.linked_transaction_id) return;
+      // Match what the report is currently showing
+      if (filterAccount && txn.account_id !== filterAccount) return;
+      if (filterType && txn.type !== filterType) return;
+      if (filterStatus && txn.status !== filterStatus) return;
+      if (ts < startTime || ts > endTime) return;
+
+      const amount = round2(Math.abs(parseFloat(txn.amount || 0)));
+      if (!(amount > 0)) return;
+
+      const currency = txn.currency || baseCurrency;
+      const accountId = txn.account_id || '';
+      const key = `${accountId}|${currency}`;
+      if (!groups.has(key)) {
+        groups.set(key, { accountId, currency, entries: [] });
+      }
+      groups.get(key).entries.push({ txn, amount, side });
+    });
+
+    return Array.from(groups.values())
+      .map((group) => {
+        const total = (side) =>
+          round2(
+            group.entries
+              .filter((e) => e.side === side)
+              .reduce((sum, e) => sum + e.amount, 0)
+          );
+        const incomeTotal = total('income');
+        const expenseTotal = total('expense');
+        // Only worth doing where both sides are present. A pile of expense
+        // adjustments with nothing to cancel against would just be merged into
+        // one, losing every date and note for no gain.
+        if (Math.min(incomeTotal, expenseTotal) <= 0.005) return null;
+        return {
+          accountId: group.accountId,
+          currency: group.currency,
+          incomeTotal,
+          expenseTotal,
+          entries: group.entries,
+          replacement: buildReplacement(group.entries),
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.entries.length - a.entries.length);
+  }, [
+    adjustmentCategoryIds,
+    transactionsWithTime,
+    dateRange,
+    baseCurrency,
+    filterAccount,
+    filterType,
+    filterStatus,
+  ]);
+
+  const [cancelOutOpen, setCancelOutOpen] = useState(false);
+  const [cancelOutBusy, setCancelOutBusy] = useState(false);
+  const [cancelOutError, setCancelOutError] = useState(null);
+
+  const cancelOutSummary = useMemo(
+    () => ({
+      removed: adjustmentCancelPlan.reduce((s, g) => s + g.entries.length, 0),
+      replacements: adjustmentCancelPlan.filter((g) => g.replacement).length,
+    }),
+    [adjustmentCancelPlan]
+  );
+
+  const accountName = (accountId) =>
+    accounts.find((a) => a.account_id === accountId)?.name || 'Unknown account';
+
+  const categoryName = (categoryId) =>
+    categories.find((c) => c.category_id === categoryId)?.name || 'Adjustment';
+
+  const handleCancelOutAdjustments = async () => {
+    setCancelOutBusy(true);
+    setCancelOutError(null);
+    try {
+      for (const group of adjustmentCancelPlan) {
+        const deleted = [];
+        let deleteError = null;
+
+        // bulkDeleteTransactions refuses more than 100 ids at a time. Each
+        // chunk is a single statement, so the ones that come back are exactly
+        // the rows the balance has moved by.
+        for (let i = 0; i < group.entries.length; i += 100) {
+          const chunk = group.entries.slice(i, i + 100);
+          try {
+            await dispatch(
+              bulkDeleteTransactions(chunk.map((e) => e.txn.transaction_id))
+            ).unwrap();
+            deleted.push(...chunk);
+          } catch (err) {
+            deleteError = err;
+            break;
+          }
+        }
+
+        // Worked out from what actually went, not from what was planned to go:
+        // a chunk that failed leaves its adjustments in place, and the balance
+        // has to answer for the deleted ones alone. Running the button again
+        // then picks up the remainder correctly.
+        const replacement = buildReplacement(deleted);
+        if (replacement) {
+          try {
+            await dispatch(
+              createTransaction({
+                accountId: group.accountId,
+                categoryId: replacement.categoryId,
+                amount: replacement.amount,
+                currency: group.currency,
+                type: replacement.type,
+                status: replacement.status,
+                date: replacementDate.toISOString(),
+                description: `Net of ${deleted.length} adjustments`,
+              })
+            ).unwrap();
+          } catch (err) {
+            throw new Error(
+              `${deleted.length} adjustments on ${accountName(
+                group.accountId
+              )} were deleted, but the ${fmt(
+                replacement.amount,
+                group.currency
+              )} left over could not be added back (${
+                err?.message || 'the change failed'
+              }). Add it by hand to put the balance right.`
+            );
+          }
+        }
+
+        if (deleteError) {
+          throw new Error(
+            `${deleteError?.message || 'The change failed'} — ${
+              deleted.length
+            } of ${group.entries.length} adjustments on ${accountName(
+              group.accountId
+            )} were cancelled out and the balance is right; the rest were left alone. Try again to finish them.`
+          );
+        }
+      }
+      setCancelOutOpen(false);
+    } catch (err) {
+      setCancelOutError(
+        err?.message || 'Could not cancel out the adjustments. Please retry.'
+      );
+    } finally {
+      setCancelOutBusy(false);
+    }
+  };
+
+  // Sits under the Other Activity rows, where the two adjustment lines are.
+  // Hidden while a search is active — the button acts on every adjustment in
+  // the period, not just the rows a search has left on screen.
+  const renderCancelOutButton = () => {
+    if (adjustmentCancelPlan.length === 0 || reportSearchActive) return null;
+    const { removed, replacements } = cancelOutSummary;
+    return (
+      <Box sx={{ mt: 1 }}>
+        <Button
+          size="small"
+          variant="outlined"
+          startIcon={<CallMergeIcon sx={{ fontSize: 18 }} />}
+          onClick={() => {
+            setCancelOutError(null);
+            setCancelOutOpen(true);
+          }}
+          sx={{ textTransform: 'none' }}
+        >
+          Cancel out {removed} adjustment{removed === 1 ? '' : 's'}
+        </Button>
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ display: 'block', mt: 0.5 }}
+        >
+          {replacements === 0
+            ? 'They cancel out exactly — nothing is left behind'
+            : `Replaced by ${replacements} transaction${
+                replacements === 1 ? '' : 's'
+              } for what is left over`}
+        </Typography>
+      </Box>
+    );
+  };
 
   // "Off budget only" filter — expenses over their budget, income short of plan
   const [attentionOnly, setAttentionOnly] = useState(false);
@@ -2883,6 +3196,7 @@ function Reports() {
                     )
                   )}
                 </Box>
+                {renderCancelOutButton()}
               </Box>
             );
           })()}
@@ -2957,10 +3271,96 @@ function Reports() {
                   </TableBody>
                 </Table>
               </Box>
+              {renderCancelOutButton()}
             </>
           )}
         </Box>
       )}
+
+      {/* Cancel out adjustments — confirmation */}
+      <Dialog
+        open={cancelOutOpen}
+        onClose={() => !cancelOutBusy && setCancelOutOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        <DialogTitle sx={{ pb: 1 }}>
+          <Typography sx={{ fontSize: '1.0625rem', fontWeight: 600 }}>
+            Cancel out adjustments
+          </Typography>
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            Every adjustment below is deleted and what they came to between them
+            comes back as one transaction, so no account balance moves. Deleted
+            transactions can&apos;t be brought back.
+          </Typography>
+          {adjustmentCancelPlan.map((group) => (
+            <Box
+              key={`${group.accountId}|${group.currency}`}
+              sx={{
+                px: 1.25,
+                py: 1,
+                mb: 0.75,
+                borderRadius: 1.5,
+                backgroundColor: 'action.hover',
+              }}
+            >
+              <Typography sx={{ fontSize: '0.9375rem', fontWeight: 600 }}>
+                {group.replacement
+                  ? `${fmt(group.replacement.amount, group.currency)} ${
+                      group.replacement.type === 'Expense' ? 'expense' : 'income'
+                    } left over`
+                  : 'Cancels out exactly'}
+              </Typography>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: 'block' }}
+              >
+                {accountName(group.accountId)} · {group.entries.length}{' '}
+                adjustments deleted
+              </Typography>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: 'block' }}
+              >
+                {fmt(group.expenseTotal, group.currency)} expense vs{' '}
+                {fmt(group.incomeTotal, group.currency)} income
+                {group.replacement &&
+                  ` · re-created under ${categoryName(
+                    group.replacement.categoryId
+                  )} on ${format(replacementDate, 'd MMM yyyy')}`}
+              </Typography>
+            </Box>
+          ))}
+          {cancelOutError && (
+            <Typography variant="body2" color="error.main" sx={{ mt: 1 }}>
+              {cancelOutError}
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 2, pb: 2 }}>
+          <Button
+            onClick={() => setCancelOutOpen(false)}
+            disabled={cancelOutBusy}
+            sx={{ textTransform: 'none' }}
+          >
+            Keep them
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleCancelOutAdjustments}
+            disabled={cancelOutBusy}
+            sx={{ textTransform: 'none' }}
+          >
+            {cancelOutBusy ? 'Working…' : 'Cancel out'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Transaction Modal */}
       <Dialog

@@ -270,6 +270,31 @@ function Settings() {
               },
             ],
           },
+          {
+            label: 'Adjustments',
+            rows: [
+              {
+                key: 'AdjustmentIncomeCategoryID',
+                type: 'category',
+                categoryType: 'Income',
+                label: 'Income Adjustment Category',
+                desc: 'Balance corrections upwards',
+                value: getCategoryName(
+                  getSettingValue('AdjustmentIncomeCategoryID')
+                ),
+              },
+              {
+                key: 'AdjustmentExpenseCategoryID',
+                type: 'category',
+                categoryType: 'Expense',
+                label: 'Expense Adjustment Category',
+                desc: 'Balance corrections downwards',
+                value: getCategoryName(
+                  getSettingValue('AdjustmentExpenseCategoryID')
+                ),
+              },
+            ],
+          },
         ];
 
         const isUnset = (v) =>
