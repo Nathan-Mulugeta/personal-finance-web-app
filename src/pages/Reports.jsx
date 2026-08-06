@@ -1289,6 +1289,25 @@ function Reports() {
     [otherActivityShown]
   );
 
+  // Money going out and money coming in sit side by side in this section, so
+  // the section total adds the two directions together — fine for the Total
+  // row, useless as the denominator of a row's share, which would then be a
+  // fraction of a figure that doesn't stand for anything. Each direction gets
+  // its own total, so a share reads against the rows it belongs with and the
+  // rows of one direction come to 100% between them.
+  const otherActivityTotalsByType = useMemo(() => {
+    const byType = {
+      Income: { actual: 0, budget: 0 },
+      Expense: { actual: 0, budget: 0 },
+    };
+    otherActivityShown.forEach((item) => {
+      const bucket = byType[item._type === 'Income' ? 'Income' : 'Expense'];
+      bucket.actual += item.actual;
+      bucket.budget += item.budget;
+    });
+    return byType;
+  }, [otherActivityShown]);
+
   // --- Cancelling out adjustments -----------------------------------------
   //
   // Income and expense adjustments mostly undo each other: a forgotten expense
@@ -1908,7 +1927,13 @@ function Reports() {
                       </Typography>
                     )}
                     {planDelta && (
-                      <Box sx={{ fontSize: '0.6875rem' }}>
+                      <Box
+                        sx={{
+                          fontSize: '0.6875rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                        }}
+                      >
                         {renderDelta(planDelta)}
                       </Box>
                     )}
@@ -1947,8 +1972,9 @@ function Reports() {
           </TableCell>
           <TableCell align="right">
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.625 }}>
-              {/* Share, currency chip and trend all lead; the amount closes the
-                  cell so the numbers line up down the column */}
+              {/* Share then trend lead, the currency chip sits against the
+                  amount, and the amount closes the cell so the numbers line up
+                  down the column. Same order in all three columns. */}
               {sectionActual > 0 && actual > 0 && (
                 <Typography
                   component="span"
@@ -1961,13 +1987,18 @@ function Reports() {
                   {Math.round((actual / sectionActual) * 100)}%
                 </Typography>
               )}
-              {isMixed && <MixedCurrencyChip currencies={currencies} />}
               {spendDelta && (
-                <Box sx={{ fontSize: '0.6875rem' }}>
+                <Box
+                  sx={{
+                    fontSize: '0.6875rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                  }}
+                >
                   {renderDelta(spendDelta)}
                 </Box>
               )}
-              {renderCurrencyCell(actual, actualOriginalAmounts, false)}
+              {renderCurrencyCell(actual, actualOriginalAmounts, true)}
             </Box>
           </TableCell>
           <TableCell align="right">
@@ -2076,7 +2107,8 @@ function Reports() {
           gap: 0.625,
         }}
       >
-        {isMixedFlag && <MixedCurrencyChip currencies={currencyList} />}
+        {/* Percentage first, chip against the amount — the order the Budget
+            and Actual columns use */}
         <Box
           component="span"
           sx={{
@@ -2095,6 +2127,7 @@ function Reports() {
         >
           {pctOfBudget}%
         </Box>
+        {isMixedFlag && <MixedCurrencyChip currencies={currencyList} />}
         <Typography
           variant="body2"
           sx={{
@@ -2140,9 +2173,11 @@ function Reports() {
       type === 'Income' ? 'up' : 'down'
     );
     const overBudget = type === 'Expense' && budget > 0 && actual > budget;
-    // Share of total spending (top-level expense rows) — "where the money goes"
+    // Share of the section total — "where the money goes". Shown on income
+    // rows and subcategory rows too, matching the desktop table, which has
+    // always shown it on every row with an amount.
     const share =
-      type === 'Expense' && level === 0 && sectionActual > 0 && actual > 0
+      sectionActual > 0 && actual > 0
         ? Math.round((actual / sectionActual) * 100)
         : null;
     // Original-currency-first money displays (see getMoneyDisplay)
@@ -2259,7 +2294,8 @@ function Reports() {
                   sx={{
                     ml: 0.75,
                     fontSize: '0.6875rem',
-                    color: 'text.secondary',
+                    // Subcategory shares step back, as they do on desktop
+                    color: level > 0 ? 'text.disabled' : 'text.secondary',
                     flexShrink: 0,
                     whiteSpace: 'nowrap',
                   }}
@@ -2278,7 +2314,13 @@ function Reports() {
                 }}
               >
                 {spendDelta && (
-                  <Box sx={{ fontSize: '0.6875rem' }}>
+                  <Box
+                    sx={{
+                      fontSize: '0.6875rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                  >
                     {renderDelta(spendDelta)}
                   </Box>
                 )}
@@ -2379,7 +2421,14 @@ function Reports() {
                     )}
                   </Box>
                   {planDelta && (
-                    <Box sx={{ fontSize: '0.6875rem', flexShrink: 0 }}>
+                    <Box
+                      sx={{
+                        fontSize: '0.6875rem',
+                        flexShrink: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                      }}
+                    >
                       {renderDelta(planDelta)}
                     </Box>
                   )}
@@ -2425,11 +2474,14 @@ function Reports() {
               .filter(({ data }) => data.budget > 0 || data.actual > 0)
               .sort((a, b) => b.data.actual - a.data.actual)
               .map(({ child, data }) =>
+                // A subcategory's share is of its parent, not of the section —
+                // "half of what Groceries came to", which is the reading that
+                // makes sense once a row is nested. Same on desktop.
                 renderMobileCategoryRow(
                   { category: child, ...data },
                   type,
                   level + 1,
-                  sectionActual
+                  actual
                 )
               )}
             <Box
@@ -3192,7 +3244,7 @@ function Reports() {
                       item,
                       item._type || 'Expense',
                       0,
-                      otherActivityTotals.actual
+                      otherActivityTotalsByType[item._type || 'Expense'].actual
                     )
                   )}
                 </Box>
@@ -3239,8 +3291,10 @@ function Reports() {
                         item,
                         item._type || 'Expense',
                         0,
-                        otherActivityTotals.actual,
-                        otherActivityTotals.budget
+                        otherActivityTotalsByType[item._type || 'Expense']
+                          .actual,
+                        otherActivityTotalsByType[item._type || 'Expense']
+                          .budget
                       )
                     )}
                     {/* Total Row */}
