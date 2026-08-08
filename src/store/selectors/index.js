@@ -1,6 +1,10 @@
 import { createSelector } from '@reduxjs/toolkit';
 import { applyTransactionFilters } from '../slices/transactionsSlice';
 import { getCategoryDescendants } from '../../utils/categoryHierarchy';
+import {
+  DISMISSED_BUDGET_ALERTS_KEY,
+  parseDismissals,
+} from '../../utils/budgetDismissals';
 
 // ============================================
 // Base Selectors (simple state accessors)
@@ -193,6 +197,16 @@ export const selectShowBudgetOnRows = createSelector(
 export const selectPrefixReceiptMerchant = createSelector(
   [selectSettingsMap],
   (settingsMap) => settingsMap.get('PrefixReceiptMerchant') !== 'false'
+);
+
+/**
+ * Budget alerts silenced for the rest of the month, by month then category.
+ * Parsed here (memoized on the settings map) so the JSON is read once per
+ * settings change rather than on every render of the Home cue.
+ */
+export const selectDismissedBudgetAlerts = createSelector(
+  [selectSettingsMap],
+  (settingsMap) => parseDismissals(settingsMap.get(DISMISSED_BUDGET_ALERTS_KEY))
 );
 
 /**

@@ -7,19 +7,29 @@ import {
   currentMonthKey,
 } from '../utils/budgetStatus';
 import { buildExchangeRateLookup } from '../utils/currencyConversion';
-import { selectBaseCurrency } from '../store/selectors';
+import {
+  selectBaseCurrency,
+  selectDismissedBudgetAlerts,
+} from '../store/selectors';
+import { isDismissed, statusSeverity } from '../utils/budgetDismissals';
 
 /**
  * This month's budget status for every budgeted expense category, computed once
  * from the store. The single source the Home cue, the row badge and the budget
  * search all read from — so they can never disagree.
  *
+ * Dismissals filter the attention lists only. A dismissed category still shows
+ * its badge on a transaction row and still answers a budget search: silencing
+ * an alert means "stop calling me about this", not "hide the number".
+ *
  * @returns {{
  *   all: Array,                       // every directly-budgeted expense category, worst-first
  *   byCategoryId: Map<string, object>,// quick lookup for a transaction row
- *   over: Array,                      // exceeded budget
- *   near: Array,                      // >= NEAR_BUDGET_THRESHOLD, not over
+ *   over: Array,                      // exceeded budget, not dismissed
+ *   near: Array,                      // >= NEAR_BUDGET_THRESHOLD, not over, not dismissed
+ *   dismissed: Array,                 // near/over, silenced for this month
  *   searchable: Array,                // `all` + parents whose budget rolls up from children
+ *   monthKey: string,                 // the month all of the above was computed for
  * }}
  */
 export function useBudgetStatusMap() {
@@ -30,6 +40,7 @@ export function useBudgetStatusMap() {
   );
   const { exchangeRates } = useSelector((state) => state.exchangeRates);
   const baseCurrency = useSelector(selectBaseCurrency);
+  const dismissals = useSelector(selectDismissedBudgetAlerts);
 
   // Both sweeps below walk the same transactions and the same rates. Building
   // these once and sharing them means the list is grouped a single time per
@@ -75,14 +86,19 @@ export function useBudgetStatusMap() {
     [categories, budgets, allTransactions, exchangeRates, baseCurrency, shared]
   );
 
-  return useMemo(
-    () => ({
+  return useMemo(() => {
+    const { monthKey } = shared;
+    const silenced = (s) =>
+      isDismissed(dismissals, monthKey, s.categoryId, statusSeverity(s));
+    const needsAttention = all.filter((s) => s.over || s.near);
+    return {
       all,
       byCategoryId: new Map(all.map((s) => [s.categoryId, s])),
-      over: all.filter((s) => s.over),
-      near: all.filter((s) => s.near),
+      over: all.filter((s) => s.over && !silenced(s)),
+      near: all.filter((s) => s.near && !silenced(s)),
+      dismissed: needsAttention.filter(silenced),
       searchable: [...all, ...aggregatedParents].sort((a, b) => b.pct - a.pct),
-    }),
-    [all, aggregatedParents]
-  );
+      monthKey,
+    };
+  }, [all, aggregatedParents, dismissals, shared]);
 }

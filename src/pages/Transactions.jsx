@@ -78,7 +78,7 @@ import {
 import AddTransferDialog from '../components/common/AddTransferDialog';
 import BulkEditTransactionsDialog from '../components/common/BulkEditTransactionsDialog';
 import HeaderActionButton from '../components/common/HeaderActionButton';
-import SwipeToDelete from '../components/common/SwipeToDelete';
+import SwipeAction from '../components/common/SwipeAction';
 import ConfirmDeleteDialog from '../components/common/ConfirmDeleteDialog';
 import RowBudgetBadge from '../components/common/RowBudgetBadge';
 import { useBudgetStatusMap } from '../hooks/useBudgetStatusMap';
@@ -136,7 +136,7 @@ const MobileTransactionRow = memo(function MobileTransactionRow({
   })();
 
   return (
-    <SwipeToDelete
+    <SwipeAction
       onSwipe={() => onDelete(transaction)}
       disabled={selectionMode || isBulkDeleting}
     >
@@ -304,7 +304,7 @@ const MobileTransactionRow = memo(function MobileTransactionRow({
         </Box>
       </Box>
     </Box>
-    </SwipeToDelete>
+    </SwipeAction>
   );
 });
 

@@ -71,6 +71,22 @@ const settingsSlice = createSlice({
     clearError: (state) => {
       state.error = null
     },
+    // Write a setting into the cache before the server confirms it, so an
+    // interaction whose whole effect is a settings change — dismissing a budget
+    // alert — lands immediately instead of after a round trip. The server row
+    // replaces it on the next fetch or realtime event.
+    optimisticSetSetting: (state, action) => {
+      const { key, value } = action.payload
+      const index = state.settings.findIndex((s) => s.setting_key === key)
+      if (index !== -1) {
+        state.settings[index] = {
+          ...state.settings[index],
+          setting_value: value,
+        }
+      } else {
+        state.settings.push({ setting_key: key, setting_value: value })
+      }
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -148,6 +164,6 @@ const settingsSlice = createSlice({
   },
 })
 
-export const { clearError } = settingsSlice.actions
+export const { clearError, optimisticSetSetting } = settingsSlice.actions
 export default settingsSlice.reducer
 

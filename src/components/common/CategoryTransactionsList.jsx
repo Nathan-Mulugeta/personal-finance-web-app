@@ -41,7 +41,7 @@ import {
   deleteTransaction,
 } from '../../store/slices/transactionsSlice';
 import EditTransactionDialog from './EditTransactionDialog';
-import SwipeToDelete from './SwipeToDelete';
+import SwipeAction from './SwipeAction';
 import ConfirmDeleteDialog from './ConfirmDeleteDialog';
 import { useInlineEdit, InlineFieldInput } from './InlineFieldEditor';
 import { editableTextSx } from './inlineEditStyles';
@@ -546,7 +546,7 @@ function CategoryTransactionsList(
           const isSelected = selectedIds.has(txn.transaction_id);
           const description = txn.description || '';
           return (
-            <SwipeToDelete
+            <SwipeAction
               key={txn.transaction_id}
               onSwipe={() => setDeleteTarget(txn)}
               disabled={selectionMode}
@@ -682,7 +682,7 @@ function CategoryTransactionsList(
                 </Box>
               </Box>
             </Box>
-            </SwipeToDelete>
+            </SwipeAction>
           );
         })}
       </Box>
