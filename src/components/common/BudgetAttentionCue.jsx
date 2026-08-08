@@ -6,7 +6,7 @@ import NotificationsOffOutlinedIcon from '@mui/icons-material/NotificationsOffOu
 import UndoIcon from '@mui/icons-material/Undo';
 import { useBudgetStatusMap } from '../../hooks/useBudgetStatusMap';
 import { selectDismissedBudgetAlerts } from '../../store/selectors';
-import { updateSetting, optimisticSetSetting } from '../../store/slices/settingsSlice';
+import { updateSetting } from '../../store/slices/settingsSlice';
 import {
   DISMISSED_BUDGET_ALERTS_KEY,
   addDismissal,
@@ -65,13 +65,16 @@ function BudgetAttentionCue() {
   const openCategory = (name) =>
     navigate('/reports', { state: { categorySearch: name } });
 
-  // Optimistic first so the row goes immediately, then persist — the setting
-  // syncs, so silencing on the phone silences on every other device too.
-  const persist = (next) => {
-    const value = JSON.stringify(next);
-    dispatch(optimisticSetSetting({ key: DISMISSED_BUDGET_ALERTS_KEY, value }));
-    dispatch(updateSetting({ key: DISMISSED_BUDGET_ALERTS_KEY, value }));
-  };
+  // updateSetting applies optimistically and reverts on failure, so the row
+  // goes immediately. The setting syncs, so silencing on the phone silences on
+  // every other device too.
+  const persist = (next) =>
+    dispatch(
+      updateSetting({
+        key: DISMISSED_BUDGET_ALERTS_KEY,
+        value: JSON.stringify(next),
+      })
+    );
   const dismiss = (item) =>
     persist(
       addDismissal(dismissals, monthKey, item.categoryId, statusSeverity(item))

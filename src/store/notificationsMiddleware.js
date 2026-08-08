@@ -11,10 +11,16 @@ const plural = (count, noun) =>
   count === 1 ? `1 ${noun}` : `${count} ${noun}s`
 
 // Maps fulfilled thunk action types to snackbar messages. Values are either
-// a string or a function of the action returning a string (or null to skip).
+// a string, a function of the action returning a string, or null.
+//
+// null means "say nothing on success, but still report failure": these paths
+// apply optimistically, so the change is on screen before the request even
+// leaves — a toast would only confirm what you just watched happen. The key has
+// to stay listed either way, because ERROR_ELIGIBLE below is derived from these
+// keys, and dropping one would take its error toast down with it.
 const SUCCESS_MESSAGES = {
   'transactions/createTransaction/fulfilled': 'Transaction added',
-  'transactions/updateTransaction/fulfilled': 'Transaction updated',
+  'transactions/updateTransaction/fulfilled': null,
   'transactions/deleteTransaction/fulfilled': 'Transaction deleted',
   'transactions/batchCreateTransactions/fulfilled': (action) => {
     const count = countOf(action.payload)
@@ -49,9 +55,19 @@ const SUCCESS_MESSAGES = {
   'borrowingsLendings/deleteBorrowingLendingRecord/fulfilled': 'Record deleted',
   'borrowingsLendings/recordPayment/fulfilled': 'Payment recorded',
   'borrowingsLendings/markAsFullyPaid/fulfilled': 'Marked as fully paid',
-  'settings/updateSetting/fulfilled': 'Saved',
+  'settings/updateSetting/fulfilled': null,
+  // Kept: the bulk save is an explicit action whose result isn't a single
+  // control moving, so there's nothing on screen to stand in for the toast.
   'settings/updateSettings/fulfilled': 'Settings saved',
 }
+
+// Optimistic paths. Their failure has already been undone on screen, so the
+// toast says so — a bare backend reason would leave you wondering whether the
+// edit half-landed.
+const REVERTED_ON_FAILURE = new Set([
+  'transactions/updateTransaction/rejected',
+  'settings/updateSetting/rejected',
+])
 
 // Mutations we surface feedback for. Their `/rejected` counterparts are the
 // only failures we toast — so background fetch failures (flaky network, sync)
@@ -77,7 +93,10 @@ export const notificationsMiddleware = (storeApi) => (next) => (action) => {
     // rejectWithValue(error.message) puts the reason in action.payload (a
     // string); fall back to action.error for non-rejectWithValue rejections.
     const reason = getErrorMessage(action.payload || action.error?.message)
-    storeApi.dispatch(showNotification({ message: reason, severity: 'error' }))
+    const message = REVERTED_ON_FAILURE.has(action.type)
+      ? `Not saved. ${reason}`
+      : reason
+    storeApi.dispatch(showNotification({ message, severity: 'error' }))
   }
   return result
 }

@@ -36,10 +36,24 @@ export const fetchSettings = createAsyncThunk(
 
 export const updateSetting = createAsyncThunk(
   'settings/updateSetting',
-  async ({ key, value }, { rejectWithValue }) => {
+  async ({ key, value }, { rejectWithValue, dispatch, getState }) => {
+    // Applied before the round trip so the switch (or the budget alert being
+    // silenced) moves under the finger instead of half a second later. That
+    // visible change is the feedback, which is why this path doesn't toast on
+    // success — see notificationsMiddleware.
+    const before = getState().settings.settings.find(
+      (s) => s.setting_key === key
+    )
+    dispatch(optimisticSetSetting({ key, value }))
     try {
       return await settingsApi.updateSetting(key, value)
     } catch (error) {
+      // Put back the old value, or drop the row entirely if we invented it.
+      dispatch(
+        before
+          ? optimisticSetSetting({ key, value: before.setting_value })
+          : forgetSettingLocally(key)
+      )
       return rejectWithValue(error.message)
     }
   }
@@ -86,6 +100,12 @@ const settingsSlice = createSlice({
       } else {
         state.settings.push({ setting_key: key, setting_value: value })
       }
+    },
+    // Undo an optimistic write that invented a row the server never accepted.
+    forgetSettingLocally: (state, action) => {
+      state.settings = state.settings.filter(
+        (s) => s.setting_key !== action.payload
+      )
     },
   },
   extraReducers: (builder) => {
@@ -164,6 +184,7 @@ const settingsSlice = createSlice({
   },
 })
 
-export const { clearError, optimisticSetSetting } = settingsSlice.actions
+export const { clearError, optimisticSetSetting, forgetSettingLocally } =
+  settingsSlice.actions
 export default settingsSlice.reducer
 

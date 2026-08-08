@@ -191,14 +191,81 @@ export const batchCreateTransactions = createAsyncThunk(
   }
 );
 
+// The API takes camelCase updates and writes snake_case columns; an optimistic
+// row has to make the same translation or it would tack a `categoryId` field
+// onto the row and leave the category the user just picked unchanged. Mirrors
+// the mapping in lib/api/transactions.js updateTransaction.
+const ROW_FIELD_BY_UPDATE_KEY = {
+  accountId: 'account_id',
+  categoryId: 'category_id',
+  amount: 'amount',
+  currency: 'currency',
+  description: 'description',
+  type: 'type',
+  status: 'status',
+  linkedTransactionId: 'linked_transaction_id',
+  entityName: 'entity_name',
+};
+
+function toRowFields(updates, before) {
+  const row = {};
+  Object.entries(updates || {}).forEach(([key, value]) => {
+    const field = ROW_FIELD_BY_UPDATE_KEY[key];
+    if (!field || value === undefined) return;
+    row[field] =
+      key === 'currency' && typeof value === 'string'
+        ? value.toUpperCase()
+        : value;
+  });
+  // A date-only string keeps the original row's time server-side, so predict
+  // the same thing here rather than letting the row jump to midnight and back.
+  if (updates?.date !== undefined) {
+    const parsed = new Date(updates.date);
+    if (
+      typeof updates.date === 'string' &&
+      /^\d{4}-\d{2}-\d{2}$/.test(updates.date) &&
+      before?.date
+    ) {
+      const original = new Date(before.date);
+      parsed.setHours(
+        original.getHours(),
+        original.getMinutes(),
+        original.getSeconds(),
+        original.getMilliseconds()
+      );
+    }
+    if (!Number.isNaN(parsed.getTime())) row.date = parsed.toISOString();
+  }
+  return row;
+}
+
 export const updateTransaction = createAsyncThunk(
   'transactions/updateTransaction',
-  async ({ transactionId, updates }, { rejectWithValue, dispatch }) => {
+  async ({ transactionId, updates }, { rejectWithValue, dispatch, getState }) => {
+    // Show the edit straight away and save behind it: the row is the feedback,
+    // which is why this path no longer toasts on success. Snapshot the whole
+    // row first so a failure restores exactly what was there, not just the
+    // fields we touched.
+    const before = getState().transactions.allTransactions.find(
+      (txn) => txn.transaction_id === transactionId
+    );
+    dispatch(
+      optimisticUpdateTransaction({
+        transactionId,
+        updates: toRowFields(updates, before),
+      })
+    );
     try {
       const result = await transactionsApi.updateTransaction(transactionId, updates);
       dispatch(fetchAccounts({ status: 'Active' }));
       return result;
     } catch (error) {
+      // Spreading the snapshot back over the row undoes every field we set.
+      if (before) {
+        dispatch(
+          optimisticUpdateTransaction({ transactionId, updates: before })
+        );
+      }
       return rejectWithValue(error.message);
     }
   }
@@ -283,6 +350,11 @@ const transactionsSlice = createSlice({
       if (allIndex !== -1) {
         state.allTransactions[allIndex] = { ...state.allTransactions[allIndex], ...updates };
       }
+      // Same guard the fulfilled cases set. Without it, a background refresh
+      // landing between the optimistic write and the server's reply would
+      // overwrite the row with server state that predates the edit — the value
+      // would snap back, then forward again a moment later.
+      state.lastLocalMutation = Date.now();
     },
     // Optimistic delete
     optimisticDeleteTransaction: (state, action) => {
@@ -506,9 +578,12 @@ const transactionsSlice = createSlice({
           state.currentTransaction = action.payload;
         }
       })
-      .addCase(updateTransaction.rejected, (state, action) => {
+      // Deliberately leaves state.error alone: Home and Transactions render a
+      // dismissable banner from it, and this path already reports itself twice
+      // over — the row visibly snaps back and the toast says why. A third
+      // notice you have to close is the clutter we were removing.
+      .addCase(updateTransaction.rejected, (state) => {
         state.loading = false;
-        state.error = action.payload;
       })
       // Delete transaction
       .addCase(deleteTransaction.pending, (state) => {
