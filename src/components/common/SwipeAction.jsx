@@ -12,6 +12,8 @@ const THRESHOLD_RATIO = 0.35;
 const REVEAL_RATIO = 0.5;
 // Ignore tiny moves and decide the gesture axis only once it's clearly one way.
 const AXIS_SLOP = 8;
+// How long after a horizontal drag its trailing click may still arrive.
+const TRAILING_CLICK_MS = 400;
 
 /**
  * Mobile swipe-to-act wrapper for a single row. Swiping a row left past the
@@ -47,8 +49,13 @@ export default function SwipeAction({
   // read while rendering a drag are always the ones this drag began with.
   const geometry = useRef({ threshold: MAX_THRESHOLD, reveal: MAX_REVEAL });
   // A horizontal drag emits a trailing click; swallow that one so it doesn't
-  // reach the row (which would fire whatever tapping the row does).
-  const didSwipe = useRef(false);
+  // reach the row (which would fire whatever tapping the row does). The guard
+  // expires on its own, because that click often never comes — the browser
+  // cancels it once the finger travels, and a swipe that opens a dialog gets
+  // the tap taken by the dialog instead. Waiting for a click to disarm left the
+  // guard standing indefinitely, so the row's next tap, whenever it came, was
+  // eaten and had to be repeated.
+  const swallowUntil = useRef(0);
 
   const reset = () => {
     setDx(0);
@@ -80,7 +87,7 @@ export default function SwipeAction({
     }
     // Only left swipes (ddx < 0) reveal the action; clamp the travel.
     if (axis.current === 'h') {
-      didSwipe.current = true;
+      swallowUntil.current = performance.now() + TRAILING_CLICK_MS;
       setDx(Math.max(-geometry.current.reveal, Math.min(0, ddx)));
     }
   };
@@ -93,10 +100,10 @@ export default function SwipeAction({
   };
 
   const onClickCapture = (e) => {
-    if (didSwipe.current) {
+    if (performance.now() < swallowUntil.current) {
       e.stopPropagation();
       e.preventDefault();
-      didSwipe.current = false;
+      swallowUntil.current = 0;
     }
   };
 
