@@ -4,7 +4,7 @@ import {
   buildExchangeRateLookup,
 } from './currencyConversion'
 import {
-  findBudgetForCategoryMonth,
+  findBudgetsForCategoryMonth,
   budgetAppliesToMonth,
 } from './budgetMatching'
 
@@ -122,6 +122,11 @@ function spentForCategoryMonth({
  * Budget health for a single expense category in a month, or null when it has
  * no budget for that month. Used by the entry-time cue in Add/Edit.
  *
+ * The plan is the sum of every Active budget the category holds for the month,
+ * matching how Reports rolls one up. Measuring against a single record instead
+ * would compare the category's whole spend against part of its budget, and read
+ * as over budget on a category Reports shows as healthy.
+ *
  * @returns {null | {budgetAmount, currency, spent, remaining, pct, over}}
  */
 export function computeCategoryBudgetStatus({
@@ -139,11 +144,31 @@ export function computeCategoryBudgetStatus({
   if (!categoryId) return null
   const cat = categories.find((c) => c.category_id === categoryId)
   if (!cat || cat.type !== 'Expense') return null
-  const budget = findBudgetForCategoryMonth(budgets, categoryId, monthKey)
-  if (!budget) return null
-  const budgetAmount = parseFloat(budget.amount || 0)
+  const applicable = findBudgetsForCategoryMonth(budgets, categoryId, monthKey)
+  if (applicable.length === 0) return null
+
+  const lookup = rateLookup || buildExchangeRateLookup(exchangeRates)
+
+  // Keep the budgets' shared currency when they all agree — the usual case,
+  // and it lets the badge read in the currency they were entered in rather
+  // than a conversion. Only a genuinely mixed set falls back to base.
+  const currencies = new Set(applicable.map((b) => b.currency || baseCurrency))
+  const currency = currencies.size === 1 ? [...currencies][0] : baseCurrency
+
+  let budgetAmount = 0
+  applicable.forEach((b) => {
+    const amount = parseFloat(b.amount || 0)
+    if (!(amount > 0)) return
+    const converted = convertAmountWithLookup(
+      amount,
+      b.currency || baseCurrency,
+      currency,
+      lookup
+    )
+    budgetAmount += converted !== null ? converted : amount
+  })
   if (!(budgetAmount > 0)) return null
-  const currency = budget.currency || baseCurrency
+
   const spent = spentForCategoryMonth({
     categoryId,
     categories,
@@ -153,7 +178,7 @@ export function computeCategoryBudgetStatus({
     monthKey,
     excludeTransactionId,
     spendIndex,
-    rateLookup,
+    rateLookup: lookup,
   })
   return {
     budgetAmount,
@@ -261,7 +286,10 @@ export function computeAggregatedParentStatuses({
     const descendants = getCategoryDescendants(cat.category_id, categories)
     if (descendants.length === 0) return
     // A direct budget means it's already covered by computeAllBudgetStatuses.
-    if (findBudgetForCategoryMonth(budgets, cat.category_id, monthKey)) return
+    // Same Active-only test that sweep uses, so a parent whose own budget is
+    // paused can't fall out of both and vanish from the search.
+    if (findBudgetsForCategoryMonth(budgets, cat.category_id, monthKey).length)
+      return
 
     // Sum the descendants' budgets that apply this month, in base currency.
     const descendantIds = new Set(descendants.map((d) => d.category_id))

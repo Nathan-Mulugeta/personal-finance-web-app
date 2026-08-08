@@ -40,8 +40,31 @@ export function budgetAppliesToMonth(budget, monthStr) {
 }
 
 /**
- * Find the budget record for a category that applies to a month,
- * preferring an Active one over paused/inactive matches.
+ * Every Active budget a category holds for a month.
+ *
+ * A category can carry more than one — "Wifi" and a phone line both budgeted
+ * under Internet, say — and its plan for that month is their sum, which is what
+ * the Reports page reports. Anything measuring spending against a plan must sum
+ * these rather than pick one record with findBudgetForCategoryMonth below, or
+ * it charges the category's whole spend against a fraction of its budget.
+ *
+ * @returns {Array<Object>}
+ */
+export function findBudgetsForCategoryMonth(budgets, categoryId, monthStr) {
+  return (budgets || []).filter(
+    (budget) =>
+      budget.category_id === categoryId &&
+      budget.status === 'Active' &&
+      budgetAppliesToMonth(budget, monthStr)
+  )
+}
+
+/**
+ * Find A budget record for a category that applies to a month, preferring an
+ * Active one over paused/inactive matches.
+ *
+ * For picking a single record to act on — the one an edit dialog opens. Not for
+ * measuring: see findBudgetsForCategoryMonth above.
  *
  * @returns {Object|null}
  */
