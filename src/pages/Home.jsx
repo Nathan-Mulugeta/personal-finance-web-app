@@ -52,7 +52,10 @@ import AITransactionsReviewModal from '../components/common/AITransactionsReview
 import ErrorMessage from '../components/common/ErrorMessage';
 import EmptyState from '../components/common/EmptyState';
 import { usePageRefresh } from '../hooks/usePageRefresh';
-import { clearError } from '../store/slices/transactionsSlice';
+import {
+  clearError,
+  sortTransactionsByDateDesc,
+} from '../store/slices/transactionsSlice';
 import { updateSetting } from '../store/slices/settingsSlice';
 
 const HOME_SHORTCUTS_SETTING_KEY = 'HomeCategoryShortcuts';
@@ -254,15 +257,28 @@ function Home({ quickAddExpense = false }) {
       return [];
     }
 
-    return allTransactions
-      .filter((txn) => !txn.deleted_at && txn.status !== 'Cancelled')
-      .sort((a, b) => {
-        // Sort by created_at or date, most recent first
-        const dateA = new Date(a.created_at || a.date);
-        const dateB = new Date(b.created_at || b.date);
-        return dateB - dateA;
-      })
-      .slice(0, 5);
+    // Same ordering as the Transactions page — by when the money moved, not by
+    // when the row was typed. Sorting on created_at put a back-dated entry
+    // (added today, dated last week) above everything that happened since.
+    //
+    // "Recent" is past tense, so a scheduled entry dated next week doesn't get
+    // to lead the list either. The cut-off is the end of today rather than this
+    // instant: anything dated today is today's activity, and a row just added
+    // on another device can't be hidden by a clock a few seconds ahead.
+    // Comparing with !(x > cutoff) keeps unparseable dates, whose comparisons
+    // are all false — the same way they survive the sort.
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+    const cutoff = endOfToday.getTime();
+
+    return sortTransactionsByDateDesc(
+      allTransactions.filter(
+        (txn) =>
+          !txn.deleted_at &&
+          txn.status !== 'Cancelled' &&
+          !(new Date(txn.date).getTime() > cutoff)
+      )
+    ).slice(0, 5);
   }, [allTransactions]);
 
   // Get date display with time (Today shows time only, Yesterday shows "Yesterday, time", older dates show "Dec 25, time")

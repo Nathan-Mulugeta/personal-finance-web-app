@@ -32,29 +32,52 @@ export function applyTransactionFilters(allTransactions, filters = {}) {
       if (startDate && !(txnDate >= startDate)) continue;
       if (endDate && !(txnDate <= endDate)) continue;
     }
-    decorated.push({
-      txn: t,
-      // Matches `new Date(x) - new Date(y)` exactly, NaN propagation included:
-      // an unparseable date yields NaN, the comparator returns NaN, and the
-      // engine treats that as 0 — leaving such rows in their original order.
-      date: new Date(t.date).getTime(),
-      // Truthiness of the raw value decides whether created_at breaks the tie,
-      // exactly as before — not whether it parses.
-      hasCreated: !!t.created_at,
-      created: t.created_at ? new Date(t.created_at).getTime() : 0,
-    });
+    decorated.push(decorateForSort(t));
   }
 
-  // Sort by date descending, then by created_at if available (newest first).
-  // Array.prototype.sort is stable, so rows that compare equal keep their
-  // original relative order, as they did before.
-  decorated.sort((a, b) => {
-    const dateDiff = b.date - a.date;
-    if (dateDiff !== 0) return dateDiff;
-    if (a.hasCreated && b.hasCreated) return b.created - a.created;
-    return 0;
-  });
+  decorated.sort(byDateDesc);
 
+  return decorated.map((d) => d.txn);
+}
+
+function decorateForSort(t) {
+  return {
+    txn: t,
+    // Matches `new Date(x) - new Date(y)` exactly, NaN propagation included:
+    // an unparseable date yields NaN, the comparator returns NaN, and the
+    // engine treats that as 0 — leaving such rows in their original order.
+    date: new Date(t.date).getTime(),
+    // Truthiness of the raw value decides whether created_at breaks the tie,
+    // exactly as before — not whether it parses.
+    hasCreated: !!t.created_at,
+    created: t.created_at ? new Date(t.created_at).getTime() : 0,
+  };
+}
+
+// Sort by date descending, then by created_at if available (newest first).
+// Array.prototype.sort is stable, so rows that compare equal keep their
+// original relative order, as they did before.
+function byDateDesc(a, b) {
+  const dateDiff = b.date - a.date;
+  if (dateDiff !== 0) return dateDiff;
+  if (a.hasCreated && b.hasCreated) return b.created - a.created;
+  return 0;
+}
+
+/**
+ * The one ordering every transaction list uses: newest first by the date the
+ * money moved, with created_at only breaking ties.
+ *
+ * Shared so a list that does its own sorting can't drift from the Transactions
+ * page. Ordering by created_at instead floats a back-dated row — entered today,
+ * dated last week — to the top of "recent", above things that happened since.
+ *
+ * Decorates before sorting for the same reason applyTransactionFilters does:
+ * the comparator would otherwise parse both dates on every comparison.
+ */
+export function sortTransactionsByDateDesc(transactions) {
+  const decorated = (transactions || []).map(decorateForSort);
+  decorated.sort(byDateDesc);
   return decorated.map((d) => d.txn);
 }
 
